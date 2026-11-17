@@ -30,6 +30,22 @@ const COPY = {
     stages: "ステージ", firstTouch: "初回流入", latestTouch: "最新流入",
     consent: "同意・情報共有", audit: "監査ログ", controls: "管理・統制",
     stores: "店舗", funnel: "店舗別ファネル", monthly: "月別着工数・報酬",
+    acquisitionFunnel: "相談から着工確認までのファネル", conversionRate: "前段階からの転換率",
+    last90Days: "直近90日・StageEvent件数",
+    exceptionCards: "業務例外・要対応", exception_overdue_followups: "期限超過フォロー",
+    exception_partner_feedback: "住宅会社フィードバック超過",
+    exception_unassigned_households: "担当者未割当の世帯",
+    exception_unassigned_introductions: "担当者未割当の紹介",
+    exception_construction_confirmation: "着工確認期限超過",
+    exception_open_disputes: "未解決の紹介争議", exception_invoice_unpaid: "請求済・未入金",
+    exceptionOpenRecord: "対象を開く",
+    specialReports: "業務レポート・印刷", reportOperations: "店舗運営状況",
+    reportFunnel: "相談・着工ファネル", reportAttribution: "流入経路",
+    reportPartnerQuality: "住宅会社別報酬処理品質", openPdfReport: "PDFを開く",
+    reportFailed: "PDFレポートを作成できませんでした。",
+    stage_new_reservation: "新規予約", stage_first_consult: "初回相談済",
+    stage_fp_diagnosis: "FP診断済", stage_introduction: "紹介済",
+    stage_negotiation: "訪問・商談中", stage_contract: "契約", stage_construction: "着工",
     roi: "集客チャネルROI", risk: "争議・既存顧客", ruleVersions: "報酬ルール履歴",
     demoWarning: "デモデータ（仮データ）は全て架空です。", prototype: "非公式プロトタイプ",
     roleAdvisor: "顧問", roleManager: "店長", roleFinance: "本社・経理",
@@ -99,6 +115,18 @@ const COPY = {
     projectMilestone: "工事マイルストーン", systemPreferences: "システム設定",
     household360: "世帯360°", activityLog: "活動記録", partnerIntroduction: "住宅会社紹介",
     appendOnlyAudit: "追記専用監査", l1Protected: "L1 保護",
+    referralLetters: "紹介状PDF", generateReferralLetter: "紹介状を作成",
+    referralConsentRequired: "住宅会社別の有効な紹介状作成同意が必要です。",
+    referralDocumentFailed: "紹介状を作成できませんでした。条件を確認して再試行してください。",
+    referralNoDocuments: "紹介状はまだありません。", referralPreview: "プレビュー",
+    referralDownload: "ダウンロード", referralExpires: "有効期限",
+    referralExpired: "期限切れ", referralUnavailable: "ファイル利用不可",
+    searchError: "検索を完了できませんでした。",
+    recordReferralConsent: "紹介状作成の同意を記録", referralConsentActive: "同意有効",
+    referralConsentRevoked: "同意取消済", referralConsentMethod: "同意方法",
+    consentEvidenceReference: "同意証跡の参照番号", consentConfirmed: "本人の同意を確認しました",
+    signedForm: "署名済み書面", webForm: "Webフォーム", recordedCall: "記録済み通話",
+    revokeReferralConsent: "同意を取り消す", revokeReason: "取消理由",
     settingsSub: "デモ環境の表示とデータを管理",
     householdsSub: "顧客情報・接点・商談状況を一元管理",
     introductionsSub: "一つの家庭に対する複数住宅会社との並行商談を追跡",
@@ -145,6 +173,8 @@ const COPY = {
     opsNotConfigured: "未設定", opsRefreshTime: "最終確認",
     expenses: "経費申請", expenseCategory: "経費区分", expenseAmount: "金額（円）",
     expenseDescription: "内容", expenseDate: "利用日", attachReceipt: "証憑（PDF・画像）",
+    appliedAt: "申請日", consumptionTax: "消費税額", taxCategory: "税区分",
+    recordedProof: "計上根拠", taxInclusive: "税込",
     createDraft: "下書きを作成", submitExpense: "承認申請", approveExpense: "承認",
     rejectExpense: "差し戻す", recordExpense: "経理記録", receipt: "証憑を開く",
     expenseStatusDRAFT: "下書き", expenseStatusSUBMITTED: "承認待ち",
@@ -189,6 +219,22 @@ const COPY = {
     declined: "未继续", stages: "业务阶段", firstTouch: "首次来源", latestTouch: "最近来源",
     consent: "授权与信息共享", audit: "审计日志", controls: "经营与管控", stores: "门店",
     funnel: "门店漏斗", monthly: "月度开工与报酬", roi: "获客渠道 ROI",
+    acquisitionFunnel: "从咨询到开工确认的转化漏斗", conversionRate: "相较上一阶段的转化率",
+    last90Days: "近90日・StageEvent数量",
+    exceptionCards: "业务异常・待处理", exception_overdue_followups: "已超期跟进",
+    exception_partner_feedback: "住宅公司反馈超期",
+    exception_unassigned_households: "未分配负责人的家庭",
+    exception_unassigned_introductions: "未分配负责人的介绍",
+    exception_construction_confirmation: "开工确认超期",
+    exception_open_disputes: "未解决的介绍争议", exception_invoice_unpaid: "已请款·未入金",
+    exceptionOpenRecord: "打开对象",
+    specialReports: "业务报告・打印", reportOperations: "门店运营情况",
+    reportFunnel: "咨询・开工漏斗", reportAttribution: "来源渠道",
+    reportPartnerQuality: "按住宅公司划分的报酬处理质量", openPdfReport: "打开 PDF",
+    reportFailed: "无法生成 PDF 报告。",
+    stage_new_reservation: "新预约", stage_first_consult: "首次咨询完成",
+    stage_fp_diagnosis: "FP 诊断完成", stage_introduction: "已介绍",
+    stage_negotiation: "访问・洽谈中", stage_contract: "已签约", stage_construction: "已开工",
     risk: "争议与既有客户", ruleVersions: "报酬规则版本", demoWarning: "演示数据（假数据）全部为虚构。",
     prototype: "非正式原型", roleAdvisor: "顾问", roleManager: "店长", roleFinance: "总部·财务",
     roleExecutive: "社长", taskQueues: "优先处理", overdueLabel: "超期",
@@ -256,6 +302,18 @@ const COPY = {
     projectMilestone: "项目节点", systemPreferences: "系统设置",
     household360: "家庭360°", activityLog: "活动记录", partnerIntroduction: "住宅公司介绍",
     appendOnlyAudit: "仅追加审计记录", l1Protected: "L1 已保护",
+    referralLetters: "介绍函 PDF", generateReferralLetter: "生成介绍函",
+    referralConsentRequired: "需要有效的、针对该住宅公司的介绍函生成授权。",
+    referralDocumentFailed: "无法生成介绍函，请检查条件后重试。",
+    referralNoDocuments: "暂无介绍函。", referralPreview: "预览",
+    referralDownload: "下载", referralExpires: "有效期至",
+    referralExpired: "已过期", referralUnavailable: "文件不可用",
+    searchError: "搜索失败，请稍后重试。",
+    recordReferralConsent: "记录介绍函生成授权", referralConsentActive: "授权有效",
+    referralConsentRevoked: "授权已撤销", referralConsentMethod: "授权方式",
+    consentEvidenceReference: "授权凭证引用编号", consentConfirmed: "已确认本人授权",
+    signedForm: "已签署书面文件", webForm: "Web 表单", recordedCall: "已记录通话",
+    revokeReferralConsent: "撤销授权", revokeReason: "撤销原因",
     settingsSub: "管理演示环境的显示与数据",
     householdsSub: "统一管理客户信息、接点和洽谈状态",
     introductionsSub: "追踪同一家庭与多家住宅公司的并行洽谈",
@@ -302,6 +360,8 @@ const COPY = {
     opsNotConfigured: "未配置", opsRefreshTime: "最近检查",
     expenses: "费用申请", expenseCategory: "费用类别", expenseAmount: "金额（日元）",
     expenseDescription: "内容", expenseDate: "发生日期", attachReceipt: "凭证（PDF/图片）",
+    appliedAt: "申请日期", consumptionTax: "消费税额", taxCategory: "税区分",
+    recordedProof: "记账依据", taxInclusive: "含税",
     createDraft: "创建草稿", submitExpense: "提交审批", approveExpense: "批准",
     rejectExpense: "退回", recordExpense: "财务记账", receipt: "查看凭证",
     expenseStatusDRAFT: "草稿", expenseStatusSUBMITTED: "待审批",
@@ -358,6 +418,9 @@ const CONFIG_LABELS = {
     "expense.max_receipt_mb": "領収書ファイル上限（MB）",
     "export.max_csv_mb": "CSV出力サイズ上限（MB）", "export.max_pdf_mb": "PDF出力サイズ上限（MB）",
     "export.max_rows": "一覧出力の最大行数", "export.expiry_hours": "出力ファイル有効期間（時間）",
+    "pdf.render_concurrency": "PDFレンダリング同時実行数",
+    "pdf.render_max_pending": "PDFレンダリング待機上限", "pdf.render_timeout_seconds": "PDF生成タイムアウト（秒）",
+    "pdf.referral_validity_days": "紹介状の有効期間（仮設定・日）",
   },
   zh: {
     "fee_rule.applicability_basis": "报酬规则适用依据", "fee.bank_fee_tolerance_yen": "转账手续费容差",
@@ -383,6 +446,9 @@ const CONFIG_LABELS = {
     "month_close.lock_working_day": "月结锁定工作日", "expense.max_receipt_mb": "收据文件大小上限（MB）",
     "export.max_csv_mb": "CSV 导出大小上限（MB）", "export.max_pdf_mb": "PDF 导出大小上限（MB）",
     "export.max_rows": "列表导出最大行数", "export.expiry_hours": "导出文件有效期（小时）",
+    "pdf.render_concurrency": "PDF 渲染并发数",
+    "pdf.render_max_pending": "PDF 渲染排队上限", "pdf.render_timeout_seconds": "PDF 生成超时（秒）",
+    "pdf.referral_validity_days": "介绍函有效期（暂定·天）",
   },
 };
 
@@ -422,9 +488,20 @@ function App() {
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState("");
   const [query, setQuery] = useState("");
+  const [searchMatches, setSearchMatches] = useState(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const t = (key) => COPY[locale][key] || key;
+
+  async function refreshNotifications() {
+    const requestId = ++notificationRequestId.current;
+    const response = await fetch(`${API_BASE}/api/notifications`, { credentials: "include" });
+    if (!response.ok) return;
+    const result = await response.json();
+    if (requestId !== notificationRequestId.current) return;
+    setNotifications(result.items || []);
+    setNotificationUnreadCount(result.unread_count || 0);
+  }
 
   async function load() {
     const identityResponse = await fetch(`${API_BASE}/api/bootstrap`, { credentials: "include" });
@@ -441,15 +518,6 @@ function App() {
       setPage("change-password");
       setAuthenticated(true);
       return identity;
-    }
-    async function refreshNotifications() {
-      const requestId = ++notificationRequestId.current;
-      const response = await fetch(`${API_BASE}/api/notifications`, { credentials: "include" });
-      if (!response.ok) return;
-      const result = await response.json();
-      if (requestId !== notificationRequestId.current) return;
-      setNotifications(result.items || []);
-      setNotificationUnreadCount(result.unread_count || 0);
     }
     let result;
     if (identity.account_role === "hr") {
@@ -501,7 +569,7 @@ function App() {
         setDemoAccounts(Array.isArray(result.accounts) ? result.accounts : []);
         setDemoAvailable(Array.isArray(result.accounts) && result.accounts.length > 0);
       }).catch(() => {});
-  }, [userId]);
+  }, []);
   useEffect(() => {
     if (page !== "management" || !["manager", "hq_finance", "executive"].includes(role)) return;
     fetch(`${API_BASE}/api/management/overview`, { credentials: "include" })
@@ -521,6 +589,31 @@ function App() {
     if (!authenticated || page === "change-password") return;
     refreshNotifications().catch(() => {});
   }, [authenticated, page]);
+  useEffect(() => {
+    const term = query.trim();
+    if (!authenticated || !term || role === "hr") {
+      setSearchMatches(null);
+      return undefined;
+    }
+    let active = true;
+    setSearchMatches(null);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/households/search?q=${encodeURIComponent(term)}`, {
+          credentials: "include",
+        });
+        if (!response.ok) throw new Error("search failed");
+        const result = await response.json();
+        if (active) setSearchMatches(new Set(result.household_ids || []));
+      } catch {
+        if (active) {
+          setSearchMatches(new Set());
+          setToast(t("searchError"));
+        }
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query, authenticated, role, locale]);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(""), 3000);
@@ -605,8 +698,11 @@ function App() {
   }
 
   const filtered = useMemo(() => {
-    let rows = (data?.households || []).filter((h) =>
-      `${h.household_code || ""} ${h.representative_name} ${h.area_pref}`.toLowerCase().includes(query.toLowerCase()));
+    let rows = data?.households || [];
+    if (query.trim()) {
+      if (!searchMatches) return [];
+      rows = rows.filter((household) => searchMatches.has(household.id));
+    }
     if (businessFilter === "unassigned") rows = rows.filter((h) => !h.advisor_id || h.introductions.some((item) => !item.advisor_id));
     if (businessFilter === "validity:due") {
       const limit = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
@@ -621,13 +717,14 @@ function App() {
         if (taskFilter === "today_followups") return task.task_type === "followup"
           && task.due_at.toString().slice(0, 10) === new Date().toISOString().slice(0, 10);
         if (taskFilter === "critical") return task.priority === "high" && task.days_overdue > 0;
+        if (taskFilter === "partner_feedback") return task.task_type === "partner_feedback" && task.days_overdue > 0;
         return task.task_type === "appointment"
           && task.due_at.toString().slice(0, 10) === new Date().toISOString().slice(0, 10);
-      }).filter((task) => task.related_type === "household").map((task) => task.related_id));
+      }).map((task) => task.household_id).filter(Boolean));
       rows = rows.filter((h) => relevantIds.has(h.id));
     }
     return rows;
-  }, [data, query, businessFilter, tasks]);
+  }, [data, query, searchMatches, businessFilter, tasks]);
   const openHousehold = (household) => { setSelected(household); setModal("household"); };
   if (!authenticated || !data) return <LoginPage locale={locale} setLocale={setLocale} t={t} accounts={demoAccounts}
     demoAvailable={demoAvailable} error={loginError} busy={busy} onLogin={login}/>;
@@ -694,7 +791,13 @@ function App() {
             onAdd={(household) => { setSelected(household); setModal("introduction"); }}/>}
           {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
           {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role}
-            onReminder={(item) => { setBusinessFilter(item.filter); setPage(item.target_page); }}/>}
+            onReminder={(item) => { setBusinessFilter(item.filter); setPage(item.target_page); }}
+            onException={(card, record) => {
+              setBusinessFilter(card.filter);
+              setPage(card.target_page);
+              const target = data.households?.find((household) => household.id === record.household_id);
+              if (target) openHousehold(target);
+            }}/>}
           {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async () => {
             if (window.confirm(t("resetConfirm"))) { await api("/api/reset"); setToast(t("resetDone")); }
           }} onConfigSaved={() => { load().catch(() => setToast("API connection failed")); setToast(t("configSaved")); }}
@@ -930,8 +1033,18 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
 }
 function localeLabel(locale, key) {
   const labels = {
-    ja: { inquiries: "問い合わせ数", visits: "来店相談数", introductions: "紹介数", contracts: "契約数", construction: "着工数" },
-    zh: { inquiries: "咨询数", visits: "到店咨询数", introductions: "介绍数", contracts: "签约数", construction: "开工数" },
+    ja: {
+      inquiries: "問い合わせ数", visits: "来店相談数", introductions: "紹介数", contracts: "契約数", construction: "着工数",
+      "新規予約": COPY.ja.stage_new_reservation, "初回相談済": COPY.ja.stage_first_consult,
+      "FP診断済": COPY.ja.stage_fp_diagnosis, "紹介済": COPY.ja.stage_introduction,
+      "訪問・商談中": COPY.ja.stage_negotiation, "契約": COPY.ja.stage_contract, "着工": COPY.ja.stage_construction,
+    },
+    zh: {
+      inquiries: "咨询数", visits: "到店咨询数", introductions: "介绍数", contracts: "签约数", construction: "开工数",
+      "新規予約": COPY.zh.stage_new_reservation, "初回相談済": COPY.zh.stage_first_consult,
+      "FP診断済": COPY.zh.stage_fp_diagnosis, "紹介済": COPY.zh.stage_introduction,
+      "訪問・商談中": COPY.zh.stage_negotiation, "契約": COPY.zh.stage_contract, "着工": COPY.zh.stage_construction,
+    },
   };
   return labels[locale]?.[key] || key;
 }
@@ -1085,22 +1198,50 @@ function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Invoiced") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "paid" })}>{t("paid")} <ChevronRight size={13}/></button>;
   return <span className="muted">—</span>;
 }
-function Management({ data, management, t, role, onReminder }) {
+function Management({ data, management, t, role, onReminder, onException }) {
   const [metric, setMetric] = useState("introductions");
   const [period, setPeriod] = useState("90d");
   const [trendData, setTrendData] = useState(null);
   const [focusedReminder, setFocusedReminder] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState("");
   useEffect(() => {
     fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
       .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
   }, [metric, period, role]);
   const stores = management?.stores || [];
+  const funnel = management?.funnel || [];
   const max = Math.max(...stores.map((item) => item.households || 0), 1);
   const dimensionLabels = [
     ["followup_rate", t("followupRate")], ["data_completeness", t("completeness")],
     ["next_action_rate", t("nextActionRate")], ["report_submission_rate", t("reportRate")],
     ["response_rate", t("responseQuality")],
   ];
+  async function openReport(reportType) {
+    const preview = window.open("about:blank", "_blank");
+    setReportBusy(true);
+    setReportError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/management/reports`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_type: reportType }),
+      });
+      if (!response.ok) throw new Error(t("reportFailed"));
+      const reportUrl = URL.createObjectURL(await response.blob());
+      if (preview) preview.location.href = reportUrl;
+      else {
+        const link = document.createElement("a");
+        link.href = reportUrl;
+        link.download = `mallboard_${reportType}.pdf`;
+        link.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(reportUrl), 60000);
+    } catch {
+      preview?.close();
+      setReportError(t("reportFailed"));
+    } finally { setReportBusy(false); }
+  }
   return <><PageTitle eyebrow={t("businessIntelligence")} title={t("management")} sub={t("managementSub")}/>
     <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeComparison")}</div><h2>{t("storeCompare")}</h2></div></div>
       <div className="store-bars">{stores.map((store) => <div className="store-bar-row store-comparison-row" key={store.id}>
@@ -1117,6 +1258,39 @@ function Management({ data, management, t, role, onReminder }) {
           title={`${point.date || point.start}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
         <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · 前期間 {trendData?.previous_total ?? 0}</span></div>
       </section></div>
+    {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
+      <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
+      <span className="muted">{t("conversionRate")}</span></div>
+      <div className="management-funnel-list">{funnel.map((item, index) => <div className="management-funnel-row" key={item.stage}>
+        <span>{String(index + 1).padStart(2, "0")} · {localeLabel(document.documentElement.lang, item.stage)}</span>
+        <div className="funnel-track"><i style={{ width: `${Math.min(100, item.count / Math.max(...funnel.map((entry) => entry.count), 1) * 100)}%` }}/></div>
+        <b>{item.count}</b><small>{item.conversion_rate == null ? "—" : `${(item.conversion_rate * 100).toFixed(1)}%`}</small>
+      </div>)}</div>
+    </section>}
+    {management?.exception_cards?.length > 0 && <section className="panel exception-panel">
+      <div className="panel-head"><div><div className="eyebrow">{t("exceptionCards")}</div><h2>{t("actionRequired")}</h2></div></div>
+      <div className="exception-card-grid">{management.exception_cards.map((card) => <article className="exception-card" key={card.key}>
+        <h3>{t(`exception_${card.key}`)}<strong>{card.count}</strong></h3>
+        {card.items.map((item) => <button key={`${card.key}-${item.record_id}`}
+          onClick={() => onException(card, item)}>
+          <span>{item.representative_name}</span><small>{item.title || item.due_at || t("exceptionOpenRecord")}</small>
+          <ChevronRight size={13}/>
+        </button>)}
+        {!card.items.length && <p className="muted">{t("noRows")}</p>}
+      </article>)}</div>
+    </section>}
+    {management && <section className="panel special-reports-panel">
+      <div className="panel-head"><div><div className="eyebrow">{t("specialReports")}</div><h2>{t("openPdfReport")}</h2></div></div>
+      {reportError && <p className="config-error" role="alert">{reportError}</p>}
+      <div className="special-report-actions">
+        {[["operations", "reportOperations"], ["funnel", "reportFunnel"],
+          ["attribution", "reportAttribution"], ["partner_quality", "reportPartnerQuality"]]
+          .map(([reportType, label]) => <button className="secondary-btn" key={reportType}
+            disabled={reportBusy} onClick={() => openReport(reportType)}>
+            <FileText size={14}/>{t(label)}
+          </button>)}
+      </div>
+    </section>}
     {management?.operations_dimensions?.length > 0 && <section className="panel operations-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeOperations")}</div><h2>{t("operationsStatus")}</h2></div><span className="pill pill-blue">{t("noScore")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("stores")}</th>{dimensionLabels.map(([,label]) => <th key={label}>{label}</th>)}<th>{t("sampleSize")}</th></tr></thead>
         <tbody>{management.operations_dimensions.map((row) => <tr key={row.store_id}><td>{stores.find((store) => store.id === row.store_id)?.name}</td>
@@ -1306,10 +1480,15 @@ function ExpensePanel({ data, t, role, accountRole, locale }) {
     {mayApprove && <label className="expense-reason">{t("expenseReason")}<input value={rejectReason}
       onChange={(event) => setRejectReason(event.target.value)}/></label>}
     <div className="table-scroll"><table><thead><tr><th>{t("userLabel")}</th><th>{t("expenseCategory")}</th>
-      <th>{t("expenseAmount")}</th><th>{t("expenseDate")}</th><th>{t("status")}</th><th>{t("actionLabel")}</th></tr></thead>
+      <th>{t("expenseAmount")}（{t("taxInclusive")}）</th><th>{t("consumptionTax")}</th>
+      <th>{t("expenseDate")} / {t("appliedAt")}</th><th>{t("status")}</th>
+      <th>{t("recordedProof")}</th><th>{t("actionLabel")}</th></tr></thead>
       <tbody>{items.map((item) => <tr key={item.id}><td>{item.applicant_name}</td><td>{categoryLabel(item.category)}</td>
-        <td>¥{Number(item.amount).toLocaleString()}</td><td>{item.expense_date?.toString().slice(0, 10)}</td>
-        <td>{t(`expenseStatus${item.status}`)}</td><td className="expense-actions">
+        <td>¥{Number(item.amount).toLocaleString()}</td><td>¥{Number(item.tax_amount || 0).toLocaleString()} · {item.tax_category}</td>
+        <td>{item.expense_date?.toString().slice(0, 10)}<br/>{t("appliedAt")}: {item.applied_at?.toString().slice(0, 10) || "—"}</td>
+        <td>{t(`expenseStatus${item.status}`)}{item.rejection_reason && <small className="text-danger"><br/>{item.rejection_reason}</small>}</td>
+        <td>{item.accounting_integration_id || item.recorded_reference || "—"}{item.recorded_confirmed_at && <small><br/>{item.recorded_confirmed_at.toString().slice(0, 10)}</small>}</td>
+        <td className="expense-actions">
           {item.receipt_filename && <a href={`${API_BASE}/api/expenses/${item.id}/receipt`} target="_blank" rel="noreferrer">{t("receipt")}</a>}
           {item.applicant_id === data.user.id && ["DRAFT", "REJECTED"].includes(item.status) && <>
             <input aria-label={t("attachReceipt")} type="file" accept=".pdf,.jpg,.jpeg,.png"
@@ -1759,9 +1938,12 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
           <DataCorrectionForm household={h} t={t} api={api}/>}
       </section>
     </div><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("negotiations")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("quickActivity")}</button></div>
-      {h.introductions.map((intro) => <div className="negotiation-mini" key={intro.id}><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{intro.status} / {intro.negotiation_status || "—"}</div>
-        {intro.contract_id && <small>契約 ¥{Number(intro.contract_amount).toLocaleString()} · 着工 {intro.actual_start_date || "未定"} · 確認 {intro.confirmed_start_date || "未確認"}</small>}</div>
-        {intro.existing_customer_flag ? <StateBadge state="Disputed" t={t}/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>既存顧客・争議</button>}</div>)}
+      {h.introductions.map((intro) => <div className="intro-detail-card" key={intro.id}>
+        <div className="negotiation-mini"><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{intro.status} / {intro.negotiation_status || "—"}</div>
+          {intro.contract_id && <small>契約 ¥{Number(intro.contract_amount).toLocaleString()} · 着工 {intro.actual_start_date || "未定"} · 確認 {intro.confirmed_start_date || "未確認"}</small>}</div>
+          {intro.existing_customer_flag ? <StateBadge state="Disputed" t={t}/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>既存顧客・争議</button>}</div>
+        <ReferralDocumentPanel introductionId={intro.id} t={t} api={api}/>
+      </div>)}
       {!h.introductions.length && <div className="empty-state">{t("noRows")}</div>}
       {disputeIntro && <DisputeForm introId={disputeIntro} t={t} api={api} onCancel={() => setDisputeIntro(null)}/>}
       </section>
@@ -1770,6 +1952,123 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
       <section className="modal-section touch-list"><div className="section-title"><h3>Touch history</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{touch.touch_at}</span><b>{touch.channel}</b><small>{touch.campaign_id || "—"} · {touch.capture_method}</small></div>)}</section>
     </div></div>
   </Modal>;
+}
+function ReferralDocumentPanel({ introductionId, t, api }) {
+  const [documents, setDocuments] = useState([]);
+  const [generations, setGenerations] = useState([]);
+  const [consent, setConsent] = useState(null);
+  const [consentLoaded, setConsentLoaded] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [consentFormOpen, setConsentFormOpen] = useState(false);
+  const [consentMethod, setConsentMethod] = useState("signed_form");
+  const [consentReference, setConsentReference] = useState("");
+  const [consentConfirmed, setConsentConfirmed] = useState(false);
+  const [revokeReason, setRevokeReason] = useState("");
+  const consentMethodLabel = {
+    signed_form: t("signedForm"), web_form: t("webForm"), recorded_call: t("recordedCall"),
+  };
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE}/api/introductions/${introductionId}/referral-documents`, { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(t("referralDocumentFailed"));
+        return response.json();
+      })
+      .then((result) => {
+        if (active) {
+          setDocuments(result.documents || []);
+          setGenerations(result.generations || []);
+          setConsent(result.consent || null);
+          setConsentLoaded(true);
+        }
+      })
+      .catch(() => { if (active) setError(t("referralDocumentFailed")); });
+    return () => { active = false; };
+  }, [introductionId, refresh]);
+  async function generate() {
+    setLoading(true);
+    setError("");
+    try {
+      await api(`/api/introductions/${introductionId}/referral-documents`, "POST");
+      setRefresh((value) => value + 1);
+    } catch (requestError) {
+      const message = requestError.message || "";
+      setError(message.includes("同意") ? t("referralConsentRequired") : t("referralDocumentFailed"));
+    } finally { setLoading(false); }
+  }
+  async function saveConsent(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await api(`/api/introductions/${introductionId}/referral-consent`, "POST", {
+        method: consentMethod, evidence_reference: consentReference, confirmed: consentConfirmed,
+      });
+      setConsentFormOpen(false);
+      setConsentReference("");
+      setConsentConfirmed(false);
+      setRefresh((value) => value + 1);
+    } catch { setError(t("referralConsentRequired")); }
+    finally { setLoading(false); }
+  }
+  async function revokeConsent(event) {
+    event.preventDefault();
+    if (!consent?.id) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api(`/api/consents/${consent.id}/revoke`, "POST", { reason: revokeReason });
+      setRevokeReason("");
+      setRefresh((value) => value + 1);
+    } catch { setError(t("referralDocumentFailed")); }
+    finally { setLoading(false); }
+  }
+  return <div className="referral-documents">
+    <div className="referral-documents-heading"><b>{t("referralLetters")}</b>
+      <button className="mini-action" onClick={generate} disabled={loading}>
+        {loading ? "…" : t("generateReferralLetter")}
+      </button>
+    </div>
+    {consentLoaded && <div className="referral-consent-row">
+      {consent?.active
+        ? <span>{t("referralConsentActive")} · {consentMethodLabel[consent.consent_method] || consent.consent_method} · {consent.expires_at}</span>
+        : <span>{t("referralConsentRequired")}</span>}
+      {!consent?.active && <button className="text-button compact-link" onClick={() => setConsentFormOpen((value) => !value)}>{t("recordReferralConsent")}</button>}
+    </div>}
+    {consentFormOpen && <form className="referral-consent-form" onSubmit={saveConsent}>
+      <label>{t("referralConsentMethod")}<select value={consentMethod} onChange={(event) => setConsentMethod(event.target.value)}>
+        <option value="signed_form">{t("signedForm")}</option><option value="web_form">{t("webForm")}</option>
+        <option value="recorded_call">{t("recordedCall")}</option>
+      </select></label>
+      <label>{t("consentEvidenceReference")}<input value={consentReference} onChange={(event) => setConsentReference(event.target.value)} minLength={3} maxLength={255} required/></label>
+      <label className="referral-consent-check"><input type="checkbox" checked={consentConfirmed} onChange={(event) => setConsentConfirmed(event.target.checked)} required/>{t("consentConfirmed")}</label>
+      <button className="mini-action" type="submit" disabled={loading || !consentConfirmed}>{t("record")}</button>
+    </form>}
+    {consent?.active && <form className="referral-consent-form" onSubmit={revokeConsent}>
+      <label>{t("revokeReason")}<input value={revokeReason} onChange={(event) => setRevokeReason(event.target.value)} minLength={5} maxLength={500} required/></label>
+      <button className="text-button compact-link" type="submit" disabled={loading || revokeReason.trim().length < 5}>{t("revokeReferralConsent")}</button>
+    </form>}
+    {error && <small role="alert" className="referral-error">{error}</small>}
+    {!documents.length && !generations.length && <small>{t("referralNoDocuments")}</small>}
+    {documents.map((document) => <div className="referral-document-row" key={document.id}>
+      <span><b>{document.document_number}</b><small>{t("referralExpires")}: {document.expires_at}</small>
+        {document.availability_reason && <small>{
+          document.availability === "EXPIRED" ? t("referralExpired") :
+            document.availability === "CONSENT_INACTIVE" ? t("referralConsentRevoked") : t("referralUnavailable")
+        }</small>}
+      </span>
+      {document.availability === "AVAILABLE" && <>
+        <a className="text-button compact-link" href={`${API_BASE}/api/referral-documents/${document.id}/file`} target="_blank" rel="noreferrer">{t("referralPreview")}</a>
+        <a className="text-button compact-link" href={`${API_BASE}/api/referral-documents/${document.id}/file?download=true`}>{t("referralDownload")}</a>
+      </>}
+    </div>)}
+    {generations.filter((item) => item.result !== "SUCCESS").slice(0, 3).map((item) =>
+      <small className="referral-error" key={item.id}>
+        {item.result === "REJECTED" ? t("referralConsentRequired") : t("referralDocumentFailed")}
+      </small>)}
+  </div>;
 }
 function DisclosureForm({ household, t, api }) {
   const partners = [...new Map(household.introductions.map((item) => [item.partner_id, item])).values()];

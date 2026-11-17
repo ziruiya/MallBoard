@@ -25,6 +25,9 @@ services:
       DB_USER: ${DB_USER:?Set DB_USER in .env}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DEMO_MODE: ${DEMO_MODE:-false}
+      REFERRAL_STORAGE_DIR: /app/private_storage/referral-documents
+    volumes:
+      - referral-documents:/app/private_storage/referral-documents
 
   mysql:
     image: mysql:8.0
@@ -49,3 +52,4 @@ services:
 
 volumes:
   mysql-data:
+  referral-documents:

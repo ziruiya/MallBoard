@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build"
+    "lint": "eslint src --max-warnings=0",
+    "build": "npm run lint && vite build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",
@@ -13,5 +14,9 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "vite": "6.4.6"
+  },
+  "devDependencies": {
+    "eslint": "9.39.1",
+    "globals": "16.5.0"
   }
 }

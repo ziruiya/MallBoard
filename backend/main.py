@@ -9,6 +9,7 @@ import os
 import re
 import secrets
 import time
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -23,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from backend.pdf_export import PDF_TEMPLATE_VERSION, build_pdf
+from backend.pdf_export import PDF_TEMPLATE_VERSION, build_pdf_isolated
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +39,9 @@ DB_CONFIG = {
     "connect_timeout": 10,
     "init_command": "SET time_zone = '+09:00'",
 }
+REFERRAL_STORAGE_DIR = Path(os.getenv(
+    "REFERRAL_STORAGE_DIR", "/app/private_storage/referral-documents"
+))
 
 app = FastAPI(title="MallBoard", version="0.1.0")
 LOGGER = logging.getLogger("mallboard")
@@ -115,7 +119,7 @@ CREATE TABLE IF NOT EXISTS introductions (
   id INT AUTO_INCREMENT PRIMARY KEY, household_id INT NOT NULL, partner_id INT NOT NULL,
   partner_staff_id INT, advisor_id INT, introduced_at DATETIME NOT NULL, reception_confirmed_at DATETIME,
   status VARCHAR(80) NOT NULL, existing_customer_flag TINYINT NOT NULL DEFAULT 0, evidence_note TEXT,
-  valid_until DATE NULL,
+  valid_until DATE NULL, referral_letter_id CHAR(36) NULL,
   FOREIGN KEY (household_id) REFERENCES households(id), FOREIGN KEY (partner_id) REFERENCES partners(id),
   FOREIGN KEY (partner_staff_id) REFERENCES partner_staff(id)
 );
@@ -154,6 +158,9 @@ CREATE TABLE IF NOT EXISTS referral_disputes (
 CREATE TABLE IF NOT EXISTS consents (
   id INT AUTO_INCREMENT PRIMARY KEY, household_id INT NOT NULL, purpose VARCHAR(255) NOT NULL,
   scope VARCHAR(40) NOT NULL, granted_at DATETIME NOT NULL, revoked_at DATETIME,
+  consent_method VARCHAR(80) NULL, content_version VARCHAR(40) NULL,
+  allowed_fields_json JSON NULL, partner_id INT NULL, expires_at DATETIME NULL,
+  evidence_reference VARCHAR(255) NULL,
   FOREIGN KEY (household_id) REFERENCES households(id)
 );
 CREATE TABLE IF NOT EXISTS data_disclosures (
@@ -161,6 +168,31 @@ CREATE TABLE IF NOT EXISTS data_disclosures (
   scope VARCHAR(40) NOT NULL, disclosed_by INT NOT NULL, disclosed_at DATETIME NOT NULL,
   consent_id INT, FOREIGN KEY (household_id) REFERENCES households(id),
   FOREIGN KEY (disclosed_by) REFERENCES users(id), FOREIGN KEY (consent_id) REFERENCES consents(id)
+);
+CREATE TABLE IF NOT EXISTS referral_document_files (
+  id CHAR(36) PRIMARY KEY, storage_key VARCHAR(255) NOT NULL, size_bytes BIGINT NOT NULL,
+  sha256 CHAR(64) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+  created_at DATETIME NOT NULL, deleted_at DATETIME NULL, deletion_reason VARCHAR(255) NULL
+);
+CREATE TABLE IF NOT EXISTS referral_documents (
+  id CHAR(36) PRIMARY KEY, document_number VARCHAR(80) NOT NULL UNIQUE,
+  introduction_id INT NOT NULL, household_id INT NOT NULL, partner_id INT NOT NULL,
+  partner_staff_id INT NULL, recipient_name VARCHAR(120) NOT NULL,
+  issuing_store_id INT NOT NULL, advisor_id INT NULL, issued_on DATE NOT NULL,
+  consent_id INT NOT NULL,
+  status VARCHAR(20) NOT NULL, template_version VARCHAR(40) NOT NULL,
+  generated_at DATETIME NOT NULL, expires_at DATETIME NOT NULL,
+  sha256 CHAR(64) NOT NULL, file_id CHAR(36) NOT NULL,
+  storage_reference VARCHAR(255) NOT NULL, generated_by INT NOT NULL,
+  generation_result VARCHAR(20) NOT NULL, failure_reason TEXT NULL,
+  audit_event_id BIGINT NULL, created_at DATETIME NOT NULL,
+  INDEX idx_referral_documents_intro(introduction_id,created_at)
+);
+CREATE TABLE IF NOT EXISTS referral_document_generations (
+  id CHAR(36) PRIMARY KEY, document_id CHAR(36) NULL, introduction_id INT NOT NULL,
+  generated_by INT NOT NULL, requested_at DATETIME NOT NULL,
+  result VARCHAR(20) NOT NULL, failure_reason TEXT NULL, audit_event_id BIGINT NULL,
+  INDEX idx_referral_generations_intro(introduction_id,requested_at)
 );
 CREATE TABLE IF NOT EXISTS data_correction_requests (
   id CHAR(36) PRIMARY KEY, household_id INT NOT NULL, field_name VARCHAR(80) NOT NULL,
@@ -187,8 +219,12 @@ CREATE TABLE IF NOT EXISTS expenses (
   receipt_size BIGINT NULL, receipt_sha256 CHAR(64) NULL, receipt_blob LONGBLOB NULL,
   status ENUM('DRAFT','SUBMITTED','APPROVED','REJECTED','RECORDED') NOT NULL DEFAULT 'DRAFT',
   rejection_reason TEXT NULL, version INT NOT NULL DEFAULT 1,
+  applied_at DATETIME NULL, tax_amount BIGINT NOT NULL DEFAULT 0,
+  tax_category VARCHAR(40) NOT NULL DEFAULT '課税10%%（税込）',
   reviewed_by INT NULL, reviewed_at DATETIME NULL, finance_recorded_by INT NULL,
-  finance_recorded_at DATETIME NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+  finance_recorded_at DATETIME NULL, accounting_integration_id VARCHAR(160) NULL,
+  recorded_reference VARCHAR(500) NULL, recorded_confirmed_at DATETIME NULL,
+  created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
   INDEX idx_expenses_applicant(applicant_id,status,expense_date),
   INDEX idx_expenses_store(store_id,status,expense_date)
 );
@@ -219,7 +255,7 @@ CREATE TABLE IF NOT EXISTS export_jobs (
   include_personal_data TINYINT NOT NULL DEFAULT 0, record_ids_json LONGTEXT NULL,
   filename VARCHAR(255) NOT NULL, row_count INT NOT NULL, content_sha256 CHAR(64) NOT NULL,
   content LONGBLOB NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'READY',
-  created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL, downloaded_at DATETIME NULL,
   INDEX idx_export_jobs_user(user_id,created_at)
 );
 CREATE TABLE IF NOT EXISTS month_closes (
@@ -328,6 +364,7 @@ CREATE TABLE IF NOT EXISTS sla_settings (
 TABLES = [
     "user_preferences", "audit_logs", "daily_report_drafts", "export_jobs", "import_row_results",
     "import_jobs", "external_record_mappings", "month_closes", "month_close_period_locks", "expenses",
+    "referral_document_generations", "referral_documents", "referral_document_files",
     "data_correction_requests", "tasks", "data_disclosures", "consents", "referral_disputes",
     "fee_entitlements", "construction_projects", "contracts", "negotiations", "introductions",
     "partner_agreements", "fee_rules", "partner_staff", "partners", "stage_events", "activities",
@@ -382,6 +419,11 @@ SYSTEM_CONFIG_DEFAULTS = {
     "export.max_csv_mb": 10,
     "export.max_pdf_mb": 10,
     "export.expiry_hours": 24,
+    "pdf.render_concurrency": 1,
+    "pdf.render_max_pending": 1,
+    "pdf.render_timeout_seconds": 45,
+    # Provisional demo policy; production validity and consent wording require company approval.
+    "pdf.referral_validity_days": 30,
     "construction.expected_start_months": 6,
     "search.alert_queries_per_minute": 30,
     "notification.email_retry_minutes": [1, 5, 15],
@@ -431,6 +473,10 @@ SYSTEM_CONFIG_RANGES = {
     "export.max_csv_mb": (1, 100),
     "export.max_pdf_mb": (1, 100),
     "export.expiry_hours": (1, 720),
+    "pdf.render_concurrency": (1, 4),
+    "pdf.render_max_pending": (0, 8),
+    "pdf.render_timeout_seconds": (5, 120),
+    "pdf.referral_validity_days": (1, 365),
     "construction.expected_start_months": (1, 24),
     "search.alert_queries_per_minute": (1, 10000),
     "calendar.max_retries": (1, 4),
@@ -718,7 +764,7 @@ def audit(db, user_id, action, target_type, target_id, detail):
            VALUES(?,?,?,?,?,?,?)""",
         (user_id, action, target_type, numeric_target_id, text_target_id, event_at, detail),
     )
-    db.execute(
+    event_row = db.execute(
         """INSERT INTO audit_events(actor_id,actor_role,action,object_type,object_id,reason,event_at,
            object_id_text,previous_hash,event_hash,event_type,result) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
         (user_id, event["actor_role"], action, target_type, numeric_target_id, detail, event_at,
@@ -736,6 +782,7 @@ def audit(db, user_id, action, target_type, target_id, detail):
            attempt_count,created_at) VALUES(?,?,?,?,?,'PENDING',0,?)""",
         (str(uuid.uuid4()), action.upper().replace(".", "_"), aggregate_id, sequence, event_hash, event_at),
     )
+    return event_row.lastrowid
 
 
 def audit_visibility_clause(actor):
@@ -1392,7 +1439,18 @@ def ensure_schema(db):
         "stores": {"opened_at": "DATE NULL"},
         "partner_staff": {"branch_name": "VARCHAR(120) NULL"},
         "fee_rules": {"effective_to": "DATE NULL"},
-        "introductions": {"advisor_id": "INT NULL", "valid_until": "DATE NULL"},
+        "introductions": {
+            "advisor_id": "INT NULL", "valid_until": "DATE NULL",
+            "referral_letter_id": "CHAR(36) NULL",
+        },
+        "consents": {
+            "consent_method": "VARCHAR(80) NULL",
+            "content_version": "VARCHAR(40) NULL",
+            "allowed_fields_json": "JSON NULL",
+            "partner_id": "INT NULL",
+            "expires_at": "DATETIME NULL",
+            "evidence_reference": "VARCHAR(255) NULL",
+        },
         "construction_projects": {
             "confirmation_due_date": "DATE NULL",
             "confirmation_status": "VARCHAR(40) NOT NULL DEFAULT 'pending_review'",
@@ -1418,6 +1476,15 @@ def ensure_schema(db):
             "scope_store_id": "INT NULL",
             "include_personal_data": "TINYINT NOT NULL DEFAULT 0",
             "record_ids_json": "LONGTEXT NULL",
+            "downloaded_at": "DATETIME NULL",
+        },
+        "expenses": {
+            "applied_at": "DATETIME NULL",
+            "tax_amount": "BIGINT NOT NULL DEFAULT 0",
+            "tax_category": "VARCHAR(40) NOT NULL DEFAULT '課税10%%（税込）'",
+            "accounting_integration_id": "VARCHAR(160) NULL",
+            "recorded_reference": "VARCHAR(500) NULL",
+            "recorded_confirmed_at": "DATETIME NULL",
         },
         "tasks": {
             "task_type": "VARCHAR(40) NOT NULL DEFAULT 'followup'",
@@ -1539,6 +1606,17 @@ def ensure_demo_accounts(db):
                 (display_name, role, store_id, employee_code, str(uuid.uuid4()), display_name,
                  hash_secret(secrets.token_urlsafe(32))),
             )
+    demo_employee_codes = [
+        *(f"AD-{store_id:02}-{slot}" for store_id in range(1, 13) for slot in (1, 2)),
+        *(f"SM-{store_id:02}" for store_id in range(1, 13)),
+        "EX-01", "FN-01", "AM-01", "FN-02", "HR-01", "HR-02",
+        *(f"HQ-{index:02}" for index in range(1, 5)),
+    ]
+    placeholders = ",".join("?" for _ in demo_employee_codes)
+    db.execute(
+        f"UPDATE users SET must_change_password=0 WHERE employee_code IN ({placeholders})",
+        demo_employee_codes,
+    )
     count = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
     if count != 46:
         raise RuntimeError(f"Expected 46 demo accounts; found {count}")
@@ -1590,6 +1668,34 @@ def valid_config_value(key, value):
         if any(v < 0 or v > 100000 for v in value):
             return False
     return True
+
+
+def demo_receipt_pdf():
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 360 200] "
+        b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length 108 >>\nstream\nBT /F1 12 Tf 25 150 Td "
+        b"(MallBoard DEMO receipt) Tj 0 -25 Td "
+        b"(FICTIONAL - NOT AN ACCOUNTING RECORD) Tj ET\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    content = bytearray(b"%PDF-1.4\n% Fictional MallBoard demo receipt\n")
+    offsets = [0]
+    for index, item in enumerate(objects, 1):
+        offsets.append(len(content))
+        content.extend(f"{index} 0 obj\n".encode("ascii") + item + b"\nendobj\n")
+    xref_offset = len(content)
+    content.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    content.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        content.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    content.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(content)
 
 
 def seed(db):
@@ -1716,15 +1822,28 @@ def seed(db):
                  f"DEMO-{number:03}-{touch_index}", "demo.example.test", store_id,
                  "UTM" if touch_index == 0 else "手入力"),
             )
-        stage_name = {
-            "相談中": "初回相談済", "紹介中": "紹介済", "契約済": "契約",
-            "着工確認待ち": "着工", "報酬承認待ち": "着工", "請求済": "着工",
-            "入金済": "完了・見送り", "争議中": "紹介済", "解約済": "完了・見送り",
-        }[status_name]
-        db.execute(
-            "INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at) VALUES(?,NULL,?,?,?)",
-            (household_id, stage_name, advisors[store_id - 1], intake_at),
-        )
+        stage_paths = {
+            "相談中": ["新規予約", "初回相談済"],
+            "紹介中": ["新規予約", "初回相談済", "FP診断済", "紹介済"],
+            "契約済": ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約"],
+            "着工確認待ち": ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工"],
+            "報酬承認待ち": ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工"],
+            "請求済": ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工"],
+            "入金済": ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"],
+            "争議中": ["新規予約", "初回相談済", "FP診断済", "紹介済"],
+        }
+        if status_name == "解約済":
+            reached = 2 + number % 5
+            stage_paths[status_name] = STAGES[:reached] + ["完了・見送り"]
+        previous_stage = None
+        for stage_index, stage_name in enumerate(stage_paths[status_name]):
+            changed_at = intake_at + timedelta(days=stage_index * 3)
+            db.execute(
+                """INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at)
+                   VALUES(?,?,?,?,?)""",
+                (household_id, previous_stage, stage_name, advisors[store_id - 1], changed_at),
+            )
+            previous_stage = stage_name
         db.execute(
             "INSERT INTO consents(household_id,purpose,scope,granted_at) VALUES(?,?,?,?)",
             (household_id, "住宅会社への希望条件共有", "L3", intake_at + timedelta(days=2)),
@@ -1759,6 +1878,17 @@ def seed(db):
                  introduced_at + timedelta(days=1) if status == "受付確認済" else None,
                  status, today + timedelta(days=5) if number == 11 else introduced_at.date() + timedelta(days=30)),
             ).lastrowid
+            db.execute(
+                """INSERT INTO consents(household_id,purpose,scope,granted_at,consent_method,
+                   content_version,allowed_fields_json,partner_id,expires_at)
+                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                (household["id"], "住宅会社への住宅紹介状作成", "L3",
+                 introduced_at - timedelta(days=1), "DEMO_WRITTEN",
+                 "referral-consent-v1",
+                 json.dumps(["household_code", "area_pref", "budget_band", "land_status",
+                             "family_summary"], ensure_ascii=False),
+                 partner_id, introduced_at + timedelta(days=90)),
+            )
             negotiation_id = db.execute(
                 "INSERT INTO negotiations(introduction_id,status,last_activity_at) VALUES(?,?,?)",
                 (intro_id, ("訪問予定", "商談中", "見積提示")[position % 3],
@@ -1974,6 +2104,70 @@ def seed(db):
              intro_id if task_type == "dispute" else entitlement["id"]),
         )
 
+    receipt_blob = demo_receipt_pdf()
+    expense_examples = [
+        ("DRAFT", 0, "交通費", 4800, "相談会場への移動費", None, None),
+        ("SUBMITTED", 1, "消耗品費", 13200, "面談資料の印刷費", None, None),
+        ("APPROVED", 2, "会議費", 37500, "店舗内の業務打合せ費", None, None),
+        ("REJECTED", 3, "交通費", 8900, "訪問同行の移動費", "申請内容の補足資料を確認してください。", None),
+        ("RECORDED", 4, "消耗品費", 129800, "デモ用の架空申請・備品購入", None, "DEMO-FICTION-ACC-001"),
+        ("RECORDED", 5, "会議費", 25100, "デモ用の架空申請・打合せ費", None, None),
+        ("DRAFT", 6, "会議費", 6800, "相談準備の会場費", None, None),
+        ("SUBMITTED", 7, "交通費", 15600, "住宅会社訪問の移動費", None, None),
+        ("APPROVED", 8, "消耗品費", 44800, "顧客説明用の資料費", None, None),
+        ("REJECTED", 9, "会議費", 52000, "相談会の会場費", "利用日と申請内容の確認が必要です。", None),
+    ]
+    for index, (status, store_index, category, amount, description, rejection, accounting_id) in enumerate(expense_examples):
+        applicant_id = advisors[store_index]
+        expense_date = today - timedelta(days=14 - index)
+        created_at = datetime.combine(expense_date + timedelta(days=1), datetime.min.time())
+        applied_at = None if status == "DRAFT" else created_at
+        reviewed_at = created_at + timedelta(days=1) if status in ("APPROVED", "REJECTED", "RECORDED") else None
+        recorded_at = reviewed_at if status == "RECORDED" else None
+        receipt_filename = "demo_receipt_fictional.pdf" if index in (0, 1) else None
+        receipt_reference = (f"架空の外部伝票 DEMO-REF-{index + 1:03}" if status == "RECORDED"
+                             and not accounting_id else None)
+        db.execute(
+            """INSERT INTO expenses(id,applicant_id,store_id,category,amount,description,expense_date,
+               receipt_filename,receipt_mime,receipt_size,receipt_sha256,receipt_blob,status,
+               rejection_reason,applied_at,tax_amount,tax_category,reviewed_by,reviewed_at,
+               finance_recorded_by,finance_recorded_at,accounting_integration_id,recorded_reference,
+               recorded_confirmed_at,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (str(uuid.uuid4()), applicant_id, store_index + 1, category, amount,
+             f"デモ用の架空申請です。{description}", expense_date, receipt_filename,
+             "application/pdf" if receipt_filename else None,
+             len(receipt_blob) if receipt_filename else None,
+             hashlib.sha256(receipt_blob).hexdigest() if receipt_filename else None,
+             receipt_blob if receipt_filename else None, status, rejection, applied_at,
+             round(amount / 11), "課税10%（税込）",
+             users["manager"] if reviewed_at else None, reviewed_at,
+             users["hq_finance"] if recorded_at else None, recorded_at,
+             accounting_id, receipt_reference, recorded_at, created_at, recorded_at or created_at),
+        )
+
+    previous_period = (today.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    current_period = today.strftime("%Y-%m")
+    for period, status, prepared_at, closed_at, snapshot in (
+        (previous_period, "CLOSED", now - timedelta(days=20), now - timedelta(days=19),
+         {"scope": ["expenses", "fee_entitlements", "contracts", "construction_projects"],
+          "reprocessing_count": 0, "reprocessing_reason": None,
+          "demo_note": "架空デモの月次締めサンプル"}),
+        (current_period, "PREPARED", now - timedelta(days=1), None,
+         {"scope": ["expenses", "fee_entitlements", "contracts", "construction_projects"],
+          "reprocessing_count": 0, "reprocessing_reason": None,
+          "demo_note": "架空デモの準備済み月次締めサンプル"}),
+    ):
+        snapshot_json = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+        db.execute(
+            """INSERT INTO month_closes(id,period,snapshot_version,status,snapshot_json,
+               snapshot_sha256,prepared_by,prepared_at,closed_by,closed_at,version)
+               VALUES(?,?,1,?,?,?,?,?,?,?,1)""",
+            (str(uuid.uuid4()), period, status, snapshot_json, digest, users["hq_finance"],
+             prepared_at, users["executive"] if closed_at else None, closed_at),
+        )
+
     for task_owner in db.execute(
         """SELECT assignee_id,MIN(id) AS task_id FROM tasks
            WHERE done=0 AND cancelled=0 GROUP BY assignee_id"""
@@ -2095,7 +2289,9 @@ def get_households(db, role, user):
                WHERE i.household_id=? ORDER BY i.id""", (household_id,)
         )]
         household["consents"] = [dict(row) for row in db.execute(
-            "SELECT * FROM consents WHERE household_id=? ORDER BY granted_at DESC", (household_id,)
+            """SELECT c.*,p.name AS partner_name FROM consents c
+               LEFT JOIN partners p ON p.id=c.partner_id
+               WHERE c.household_id=? ORDER BY c.granted_at DESC""", (household_id,)
         )]
         household["disclosures"] = [dict(row) for row in db.execute(
             "SELECT * FROM data_disclosures WHERE household_id=? ORDER BY disclosed_at DESC", (household_id,)
@@ -2178,6 +2374,42 @@ def household_index(x_demo_role: CurrentActor = Depends(require_actor)):
             "daily_report": dict(daily) if daily else None,
             "seed_batch": SEED_BATCH,
         }
+
+
+@app.get("/api/households/search")
+def search_households(q: str, x_demo_role: CurrentActor = Depends(require_actor)):
+    if x_demo_role == "hr":
+        raise HTTPException(403, "人事アカウントから業務データへアクセスできません")
+    normalized = unicodedata.normalize("NFKC", q).casefold().strip()
+    terms = [term for term in re.split(r"\s+", normalized) if term]
+    if not terms or len(normalized) > 128:
+        raise HTTPException(422, "検索語は1〜128文字で入力してください")
+    phone_search = bool(re.fullmatch(r"[+\d()\-\s]+", normalized))
+    phone_digits = re.sub(r"\D", "", normalized) if phone_search else ""
+    searchable_text = """LOWER(CONCAT_WS(' ',h.household_code,h.representative_name,
+        h.area_pref,h.budget_band,pe.name,pe.phone,pe.email,p.name,ps.name,ps.branch_name))"""
+    clauses = [f"LOCATE(?,{searchable_text})>0" for _ in terms]
+    args = list(terms)
+    if len(phone_digits) >= 4:
+        clauses.append(
+            """EXISTS(SELECT 1 FROM persons pp WHERE pp.household_id=h.id AND
+               LOCATE(?,REGEXP_REPLACE(COALESCE(pp.phone,''),'[^0-9]',''))>0)"""
+        )
+        args.append(phone_digits)
+    with connect() as db:
+        user = request_user(db, x_demo_role)
+        scope, scope_args = role_scope(x_demo_role, user)
+        rows = db.execute(
+            f"""SELECT DISTINCT h.id FROM households h
+                LEFT JOIN persons pe ON pe.household_id=h.id
+                LEFT JOIN introductions i ON i.household_id=h.id
+                LEFT JOIN partners p ON p.id=i.partner_id
+                LEFT JOIN partner_staff ps ON ps.id=i.partner_staff_id
+                WHERE {scope} AND ({' AND '.join(clauses)})
+                ORDER BY h.id LIMIT 101""",
+            (*scope_args, *args),
+        ).fetchall()
+    return {"household_ids": [row["id"] for row in rows[:100]], "truncated": len(rows) > 100}
 
 
 def request_user(db, role):
@@ -2391,6 +2623,33 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                LEFT JOIN contracts c ON c.negotiation_id=n.id
                {store_clause} GROUP BY s.id ORDER BY s.id""", store_clause_args,
         ).fetchall()
+        funnel_stages = [
+               "新規予約", "初回相談済", "FP診断済", "紹介済",
+               "訪問・商談中", "契約", "着工",
+        ]
+        funnel_start = date.today() - timedelta(days=89)
+        funnel_rows = db.execute(
+               f"""WITH cohort AS (
+                       SELECT h.id,MIN(e.changed_at) AS intake_at FROM households h
+                       JOIN stage_events e ON e.household_id=h.id AND e.to_stage='新規予約'
+                       WHERE e.changed_at>=? GROUP BY h.id
+                   )
+                   SELECT e.to_stage,COUNT(DISTINCT h.id) AS count FROM cohort c
+                   JOIN households h ON h.id=c.id
+                   JOIN stage_events e ON e.household_id=h.id AND e.changed_at>=c.intake_at
+                   WHERE 1=1{store_filter} GROUP BY e.to_stage""",
+               (funnel_start, *store_args),
+        ).fetchall()
+        funnel_counts = {row["to_stage"]: int(row["count"]) for row in funnel_rows}
+        funnel = []
+        prior_count = None
+        for stage_name in funnel_stages:
+               count = funnel_counts.get(stage_name, 0)
+               funnel.append({
+                   "stage": stage_name, "count": count,
+                   "conversion_rate": round(count / prior_count, 4) if prior_count else None,
+               })
+               prior_count = count
         dimensions = []
         if x_demo_role in ("hq_finance", "executive"):
             for row in db.execute(
@@ -2499,12 +2758,144 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                 item["tenure_months"] = None
             item["case_volume_band"] = f"{(item['households'] // 5) * 5}–{(item['households'] // 5) * 5 + 4}"
             store_results.append(item)
+        exception_specs = [
+            ("overdue_followups", "households", "tasks:overdue",
+             f"""SELECT t.id AS record_id,h.id AS household_id,h.representative_name,t.title,t.due_at
+                 FROM tasks t JOIN households h ON h.id=t.related_household_id
+                 WHERE t.task_type='followup' AND t.done=0 AND t.cancelled=0
+                 AND t.due_at<CURRENT_DATE{store_filter} ORDER BY t.due_at,t.id""", store_args),
+            ("partner_feedback", "introductions", "tasks:partner_feedback",
+             f"""SELECT t.id AS record_id,h.id AS household_id,h.representative_name,t.title,t.due_at
+                 FROM tasks t JOIN introductions i ON i.id=t.related_id
+                 JOIN households h ON h.id=i.household_id WHERE t.task_type='partner_feedback'
+                 AND t.done=0 AND t.cancelled=0 AND t.due_at<CURRENT_DATE{store_filter}
+                 ORDER BY t.due_at,t.id""", store_args),
+            ("unassigned_households", "households", "unassigned",
+             f"""SELECT h.id AS record_id,h.id AS household_id,h.representative_name,
+                 NULL AS title,NULL AS due_at FROM households h
+                 WHERE h.advisor_id IS NULL{store_filter} ORDER BY h.id""", store_args),
+            ("unassigned_introductions", "introductions", "unassigned",
+             f"""SELECT i.id AS record_id,h.id AS household_id,h.representative_name,
+                 p.name AS title,NULL AS due_at FROM introductions i
+                 JOIN households h ON h.id=i.household_id JOIN partners p ON p.id=i.partner_id
+                 WHERE i.advisor_id IS NULL{store_filter} ORDER BY i.id""", store_args),
+            ("construction_confirmation", "revenue", "construction:pending",
+             f"""SELECT cp.id AS record_id,h.id AS household_id,h.representative_name,
+                 cp.confirmation_status AS title,cp.confirmation_due_date AS due_at
+                 FROM construction_projects cp JOIN contracts c ON c.id=cp.contract_id
+                 JOIN negotiations n ON n.id=c.negotiation_id
+                 JOIN introductions i ON i.id=n.introduction_id
+                 JOIN households h ON h.id=i.household_id
+                 WHERE cp.confirmed_start_date IS NULL AND cp.confirmation_due_date<CURRENT_DATE
+                 AND cp.confirmation_status IN ('planned_due','evidence_missing','pending_review')
+                 {store_filter} ORDER BY cp.confirmation_due_date,cp.id""", store_args),
+            ("open_disputes", "introductions", "disputed",
+             f"""SELECT d.id AS record_id,h.id AS household_id,h.representative_name,
+                 d.dispute_type AS title,d.due_date AS due_at FROM referral_disputes d
+                 JOIN fee_entitlements fe ON fe.id=d.fee_entitlement_id
+                 JOIN introductions i ON i.id=fe.introduction_id
+                 JOIN households h ON h.id=i.household_id
+                 WHERE d.status IN ('Open','UnderReview'){store_filter}
+                 ORDER BY d.due_date,d.id""", store_args),
+            ("invoice_unpaid", "revenue", "state:Invoiced",
+             f"""SELECT fe.id AS record_id,h.id AS household_id,h.representative_name,
+                 fe.state AS title,fe.calculated_at AS due_at FROM fee_entitlements fe
+                 JOIN introductions i ON i.id=fe.introduction_id
+                 JOIN households h ON h.id=i.household_id
+                 WHERE fe.state='Invoiced'{store_filter} ORDER BY fe.calculated_at,fe.id""", store_args),
+        ]
+        exception_cards = []
+        for key, target_page, filter_value, query, query_args in exception_specs:
+            rows = [dict(row) for row in db.execute(query, query_args)]
+            exception_cards.append({
+                "key": key, "count": len(rows), "target_page": target_page,
+                "filter": filter_value, "items": rows[:20],
+            })
         return {
             "stores": store_results,
+            "funnel": funnel,
+            "exception_cards": exception_cards,
             "operations_dimensions": dimensions,
             "reminders": [{**item, "items": [dict(row) for row in item["items"]]} for item in reminders],
             "attribution": channels, "cohorts": cohorts, "partner_quality": partner_quality,
         }
+
+
+class ManagementReportInput(BaseModel):
+    report_type: str
+
+
+@app.post("/api/management/reports")
+def create_management_report(payload: ManagementReportInput,
+                             actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("manager", "hq_finance", "executive"))
+    report_type = payload.report_type
+    overview = management_overview(actor)
+    if report_type == "operations":
+        store_names = {item["id"]: item["name"] for item in overview["stores"]}
+        headers = ["店舗 / 门店", "対象数 / 样本数", "フォロー実行率 / 跟进执行率",
+                   "データ完全性 / 数据完整性", "次回アクション設定率 / 下次行动设置率",
+                   "日報提出率 / 日报提交率", "顧客対応品質 / 客户响应质量"]
+        rows = [[store_names.get(item["store_id"], ""), item["sample_size"],
+                 item["followup_rate"], item["data_completeness"], item["next_action_rate"],
+                 item["report_submission_rate"], item["response_rate"]]
+                for item in overview["operations_dimensions"]]
+        title = "店舗運営状況 / 门店运营情况"
+    elif report_type == "funnel":
+        headers = ["ステージ / 阶段", "世帯数 / 家庭数", "前段階からの転換率 / 相较上一阶段转化率"]
+        rows = [[item["stage"], item["count"], item["conversion_rate"]]
+                for item in overview["funnel"]]
+        title = "相談から着工確認までのファネル / 从咨询到开工确认的漏斗"
+    elif report_type == "attribution":
+        headers = ["チャネル / 渠道", "接点数 / 触点数", "世帯数 / 家庭数", "契約数 / 签约数"]
+        rows = [[item["channel"], item["touches"], item["households"], item["contracts"]]
+                for item in overview["attribution"]]
+        title = "流入経路レポート / 来源渠道报告"
+    elif report_type == "partner_quality":
+        headers = ["住宅会社 / 住宅公司", "紹介数 / 介绍数", "争議数 / 争议数",
+                   "入金済件数 / 已入金件数", "入金額 / 入金金额"]
+        rows = [[item["name"], item["introductions"], item["disputes"],
+                 item["paid"], item["paid_amount"]]
+                for item in overview["partner_quality"]]
+        title = "住宅会社別報酬処理品質 / 按住宅公司划分的报酬处理质量"
+    else:
+        raise HTTPException(422, "不明なレポートです")
+    now = now_jst()
+    with connect() as db:
+        user = request_user(db, actor)
+        actor_name = user.get("display_name") or user["name"]
+        max_bytes = config_value(db, "export.max_pdf_mb") * 1024 * 1024
+        render_settings = (
+            config_value(db, "pdf.render_timeout_seconds"),
+            config_value(db, "pdf.render_concurrency"),
+            config_value(db, "pdf.render_max_pending"),
+        )
+    try:
+        content = build_pdf_isolated(
+            headers, rows, "management_report", now.isoformat(timespec="seconds"),
+            actor_name, render_settings[0], render_settings[1], render_settings[2],
+            context={"title": title},
+        )
+    except RuntimeError as error:
+        LOGGER.warning("Management PDF report render failed: %s", error)
+        if str(error) == "PDF_RENDER_QUEUE_FULL":
+            raise HTTPException(503, "PDF出力が混雑しています。時間をおいて再度お試しください") from error
+        raise HTTPException(500, "業務レポートPDFの生成に失敗しました") from error
+    except TimeoutError as error:
+        raise HTTPException(504, "業務レポートPDFの生成がタイムアウトしました") from error
+    if len(content) > max_bytes:
+        raise HTTPException(413, "出力ファイルが設定サイズ上限を超えています")
+    content_hash = hashlib.sha256(content).hexdigest()
+    with connect() as db:
+        audit(
+            db, actor.user_id, "management.report_generated", "management_report",
+            report_type, f"rows={len(rows)}; sha256={content_hash}",
+        )
+    return Response(
+        content=content, media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="mallboard_{report_type}_{now:%Y%m%d}.pdf"',
+                 "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+    )
 
 
 @app.get("/api/preferences")
@@ -2615,6 +3006,483 @@ def create_introduction(payload: IntroductionInput, x_demo_role: CurrentActor = 
         audit(db, user_id, "introduction.created", "introduction", intro_id, f"partner={payload.partner_id}")
         db.commit()
     return {"ok": True, "introduction_id": intro_id}
+
+
+REFERRAL_CONSENT_PURPOSE = "住宅会社への住宅紹介状作成"
+REFERRAL_CONSENT_FIELDS = {
+    "household_code", "area_pref", "budget_band", "land_status", "family_summary",
+}
+REFERRAL_TEMPLATE_VERSION = "referral-letter-v1"
+
+
+class ReferralConsentInput(BaseModel):
+    method: str
+    evidence_reference: str
+    confirmed: bool
+
+
+class ConsentRevocationInput(BaseModel):
+    reason: str
+
+
+@app.post("/api/introductions/{introduction_id}/referral-consent")
+def grant_referral_consent(introduction_id: int, payload: ReferralConsentInput,
+                           actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    methods = {"signed_form", "web_form", "recorded_call"}
+    evidence_reference = payload.evidence_reference.strip()
+    if not payload.confirmed or payload.method not in methods:
+        raise HTTPException(422, "本人の同意確認と有効な同意方法が必要です")
+    if not 3 <= len(evidence_reference) <= 255:
+        raise HTTPException(422, "同意証跡の参照番号は3〜255文字で入力してください")
+    now = now_jst()
+    consent_id = None
+    with connect() as db:
+        user = request_user(db, actor)
+        intro = db.execute(
+            "SELECT id,household_id,partner_id FROM introductions WHERE id=?",
+            (introduction_id,),
+        ).fetchone()
+        if not intro:
+            raise HTTPException(404, "紹介記録が見つかりません")
+        require_household_access(db, actor, user, intro["household_id"])
+        active = db.execute(
+            """SELECT id FROM consents WHERE household_id=? AND partner_id=? AND purpose=?
+               AND scope='L3' AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)""",
+            (intro["household_id"], intro["partner_id"], REFERRAL_CONSENT_PURPOSE, now),
+        ).fetchone()
+        if active:
+            raise HTTPException(409, "有効な紹介状作成同意が既に登録されています")
+        consent_id = db.execute(
+            """INSERT INTO consents(household_id,purpose,scope,granted_at,consent_method,
+               content_version,allowed_fields_json,partner_id,expires_at,evidence_reference)
+               VALUES(?,?, 'L3',?,?,?,?,?,?,?)""",
+            (intro["household_id"], REFERRAL_CONSENT_PURPOSE, now, payload.method,
+             "referral-consent-v1",
+             json.dumps(sorted(REFERRAL_CONSENT_FIELDS), ensure_ascii=False),
+             intro["partner_id"],
+             now + timedelta(days=config_value(db, "pdf.referral_validity_days")),
+             evidence_reference),
+        ).lastrowid
+        audit(
+            db, actor.user_id, "referral_consent.granted", "consent", consent_id,
+            f"introduction_id={introduction_id}; partner_id={intro['partner_id']}; method={payload.method}",
+        )
+    return {"ok": True, "consent_id": consent_id}
+
+
+@app.post("/api/consents/{consent_id}/revoke")
+def revoke_consent(consent_id: int, payload: ConsentRevocationInput,
+                   actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    reason = payload.reason.strip()
+    if not 5 <= len(reason) <= 500:
+        raise HTTPException(422, "同意取消理由は5〜500文字で入力してください")
+    now = now_jst()
+    with connect() as db:
+        user = request_user(db, actor)
+        consent = db.execute(
+            "SELECT id,household_id,revoked_at,purpose FROM consents WHERE id=?",
+            (consent_id,),
+        ).fetchone()
+        if not consent:
+            raise HTTPException(404, "同意記録が見つかりません")
+        require_household_access(db, actor, user, consent["household_id"])
+        if consent["purpose"] != REFERRAL_CONSENT_PURPOSE:
+            raise HTTPException(409, "紹介状作成目的以外の同意はこの操作で取消できません")
+        if consent["revoked_at"]:
+            raise HTTPException(409, "この同意は既に取消されています")
+        db.execute("UPDATE consents SET revoked_at=? WHERE id=?", (now, consent_id))
+        audit(db, actor.user_id, "referral_consent.revoked", "consent", consent_id, reason)
+    return {"ok": True, "revoked_at": now}
+
+
+def record_referral_generation_failure(actor, introduction_id, reason, result="FAILED"):
+    generation_id = str(uuid.uuid4())
+    with connect() as db:
+        event_id = audit(
+            db, actor.user_id, "referral_document.generation_failed", "introduction",
+            introduction_id, reason,
+        )
+        db.execute(
+            """INSERT INTO referral_document_generations(id,document_id,introduction_id,
+               generated_by,requested_at,result,failure_reason,audit_event_id)
+               VALUES(?,NULL,?,?,?,?,?,?)""",
+            (generation_id, introduction_id, actor.user_id, now_jst(), result, reason, event_id),
+        )
+
+
+@app.get("/api/introductions/{introduction_id}/referral-documents")
+def list_referral_documents(introduction_id: int,
+                            actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    with connect() as db:
+        user = request_user(db, actor)
+        intro = db.execute(
+            "SELECT id,household_id FROM introductions WHERE id=?", (introduction_id,)
+        ).fetchone()
+        if not intro:
+            raise HTTPException(404, "紹介記録が見つかりません")
+        require_household_access(db, actor, user, intro["household_id"])
+        documents = [dict(row) for row in db.execute(
+            """SELECT d.id,d.document_number,d.introduction_id,d.partner_id,d.recipient_name,
+               d.issued_on,d.status,d.template_version,d.generated_at,d.expires_at,d.sha256,
+               d.consent_id,d.issuing_store_id,d.advisor_id,d.generated_by,d.audit_event_id,
+               f.status AS file_status,f.size_bytes,c.revoked_at AS consent_revoked_at,
+               c.expires_at AS consent_expires_at
+               FROM referral_documents d JOIN referral_document_files f ON f.id=d.file_id
+               JOIN consents c ON c.id=d.consent_id
+               WHERE d.introduction_id=? ORDER BY d.generated_at DESC""", (introduction_id,)
+        )]
+        generations = [dict(row) for row in db.execute(
+            """SELECT id,document_id,requested_at,result,failure_reason
+               FROM referral_document_generations WHERE introduction_id=?
+               ORDER BY requested_at DESC""", (introduction_id,)
+        )]
+        consent = db.execute(
+            """SELECT id,granted_at,expires_at,revoked_at,consent_method,evidence_reference
+               FROM consents WHERE household_id=? AND partner_id=? AND purpose=? AND scope='L3'
+               ORDER BY granted_at DESC,id DESC LIMIT 1""",
+            (intro["household_id"], intro["partner_id"], REFERRAL_CONSENT_PURPOSE),
+        ).fetchone()
+        consent = dict(consent) if consent else None
+        if consent:
+            consent["active"] = (
+                consent["revoked_at"] is None
+                and (consent["expires_at"] is None or consent["expires_at"] > now_jst())
+            )
+        now = now_jst()
+        for document in documents:
+            if document["consent_revoked_at"] or (
+                    document["consent_expires_at"] and document["consent_expires_at"] <= now):
+                document["availability"] = "CONSENT_INACTIVE"
+                document["availability_reason"] = "同意が取り消されたか、有効期限が切れています"
+            elif document["expires_at"] <= now:
+                document["availability"] = "EXPIRED"
+                document["availability_reason"] = "有効期限が切れています"
+            elif document["file_status"] != "AVAILABLE":
+                document["availability"] = "UNAVAILABLE"
+                document["availability_reason"] = "ファイルが保管されていません"
+            else:
+                document["availability"] = "AVAILABLE"
+                document["availability_reason"] = None
+    return {"documents": documents, "generations": generations, "consent": consent}
+
+
+@app.post("/api/introductions/{introduction_id}/referral-documents")
+def generate_referral_document(introduction_id: int,
+                               actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    now = now_jst()
+    rejection = None
+    context = None
+    consent_id = None
+    expires_at = None
+    with connect() as db:
+        user = request_user(db, actor)
+        intro = db.execute(
+            """SELECT i.id,i.household_id,i.partner_id,i.partner_staff_id,i.introduced_at,
+               h.household_code,h.store_id,h.advisor_id,h.area_pref,h.budget_band,h.land_status,
+               p.name AS partner_name,ps.name AS staff_name,ps.branch_name,
+               s.name AS store_name,COALESCE(ad.display_name,ad.name) AS advisor_name
+               FROM introductions i JOIN households h ON h.id=i.household_id
+               JOIN partners p ON p.id=i.partner_id
+               LEFT JOIN partner_staff ps ON ps.id=i.partner_staff_id
+               LEFT JOIN stores s ON s.id=h.store_id
+               LEFT JOIN users ad ON ad.id=COALESCE(i.advisor_id,h.advisor_id)
+               WHERE i.id=?""", (introduction_id,),
+        ).fetchone()
+        if not intro:
+            raise HTTPException(404, "紹介記録が見つかりません")
+        require_household_access(db, actor, user, intro["household_id"])
+        consent = db.execute(
+            """SELECT id,granted_at,consent_method,content_version,allowed_fields_json
+               FROM consents WHERE household_id=? AND partner_id=? AND purpose=? AND scope='L3'
+               AND revoked_at IS NULL AND granted_at<=? AND (expires_at IS NULL OR expires_at>?)
+               ORDER BY granted_at DESC,id DESC LIMIT 1""",
+            (intro["household_id"], intro["partner_id"], REFERRAL_CONSENT_PURPOSE, now, now),
+        ).fetchone()
+        allowed_fields = []
+        if consent and consent["allowed_fields_json"]:
+            raw_fields = consent["allowed_fields_json"]
+            allowed_fields = json.loads(raw_fields) if isinstance(raw_fields, str) else raw_fields
+        if (not consent or not consent["consent_method"] or not consent["content_version"]
+                or not REFERRAL_CONSENT_FIELDS.issubset(set(allowed_fields))):
+            rejection = "有効な住宅会社別・紹介状作成目的のL3同意がありません"
+        else:
+            consent_id = consent["id"]
+            document_id = str(uuid.uuid4())
+            document_number = f"MB-RL-{now:%Y%m%d}-{document_id[:8].upper()}"
+            family_rows = db.execute(
+                "SELECT relation FROM persons WHERE household_id=? ORDER BY id",
+                (intro["household_id"],),
+            ).fetchall()
+            relation_counts = {}
+            for person in family_rows:
+                relation = person["relation"] or "家族"
+                relation_counts[relation] = relation_counts.get(relation, 0) + 1
+            family_summary = "、".join(
+                f"{relation} {count}名" for relation, count in relation_counts.items()
+            )
+            context = {
+                "document_number": document_number,
+                "recipient_name": " ".join(
+                    part for part in (intro["partner_name"], intro["branch_name"], intro["staff_name"])
+                    if part
+                ),
+                "issued_on": now.date().isoformat(),
+                "introduced_at": str(intro["introduced_at"]),
+                "household_code": intro["household_code"],
+                "area_pref": intro["area_pref"],
+                "budget_band": intro["budget_band"],
+                "land_status": intro["land_status"],
+                "family_summary": family_summary,
+                "advisor_name": intro["advisor_name"] or "",
+                "store_name": intro["store_name"] or "",
+                "template_version": REFERRAL_TEMPLATE_VERSION,
+            }
+            expiry_days = config_value(db, "pdf.referral_validity_days")
+            expires_at = now + timedelta(days=expiry_days)
+            actor_name = user.get("display_name") or user["name"]
+            render_settings = (
+                config_value(db, "pdf.render_timeout_seconds"),
+                config_value(db, "pdf.render_concurrency"),
+                config_value(db, "pdf.render_max_pending"),
+            )
+    if rejection:
+        record_referral_generation_failure(actor, introduction_id, "CONSENT_REQUIRED", "REJECTED")
+        raise HTTPException(409, rejection)
+
+    try:
+        content = build_pdf_isolated(
+            [], [], "referral_letter", now.isoformat(timespec="seconds"), actor_name,
+            render_settings[0], render_settings[1], render_settings[2], context=context,
+        )
+    except RuntimeError as error:
+        failure = "PDF_RENDER_QUEUE_FULL" if str(error) == "PDF_RENDER_QUEUE_FULL" else "PDF_RENDER_FAILED"
+        record_referral_generation_failure(actor, introduction_id, failure)
+        if failure == "PDF_RENDER_QUEUE_FULL":
+            raise HTTPException(503, "PDF出力が混雑しています。時間をおいて再度お試しください") from error
+        raise HTTPException(500, "紹介状PDFの生成に失敗しました") from error
+    except TimeoutError as error:
+        record_referral_generation_failure(actor, introduction_id, "PDF_RENDER_TIMEOUT")
+        raise HTTPException(504, "紹介状PDFの生成がタイムアウトしました") from error
+
+    file_id = str(uuid.uuid4())
+    generation_id = str(uuid.uuid4())
+    storage_key = f"{file_id}.pdf"
+    final_path = REFERRAL_STORAGE_DIR / storage_key
+    temp_path = REFERRAL_STORAGE_DIR / f"{file_id}.tmp"
+    content_hash = hashlib.sha256(content).hexdigest()
+    try:
+        REFERRAL_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path.write_bytes(content)
+        temp_path.replace(final_path)
+        with connect() as db:
+            current_consent = db.execute(
+                """SELECT id,consent_method,content_version,allowed_fields_json
+                   FROM consents WHERE id=? AND household_id=? AND partner_id=?
+                   AND purpose=? AND scope='L3' AND revoked_at IS NULL AND granted_at<=?
+                   AND (expires_at IS NULL OR expires_at>?) FOR UPDATE""",
+                (consent_id, intro["household_id"],
+                 intro["partner_id"], REFERRAL_CONSENT_PURPOSE, now, now),
+            ).fetchone()
+            current_fields = []
+            if current_consent and current_consent["allowed_fields_json"]:
+                raw_fields = current_consent["allowed_fields_json"]
+                current_fields = json.loads(raw_fields) if isinstance(raw_fields, str) else raw_fields
+            if (not current_consent or not current_consent["consent_method"]
+                    or not current_consent["content_version"]
+                    or not REFERRAL_CONSENT_FIELDS.issubset(set(current_fields))):
+                event_id = audit(
+                    db, actor.user_id, "referral_document.generation_failed", "introduction",
+                    introduction_id, "CONSENT_REVOKED_DURING_GENERATION",
+                )
+                db.execute(
+                    """INSERT INTO referral_document_generations(id,document_id,introduction_id,
+                       generated_by,requested_at,result,failure_reason,audit_event_id)
+                       VALUES(?,NULL,?,?,?,?,?,?)""",
+                    (generation_id, introduction_id, actor.user_id, now, "REJECTED",
+                     "CONSENT_REVOKED_DURING_GENERATION", event_id),
+                )
+                rejection = "PDF生成中に同意が無効になりました。再度ご確認ください"
+            else:
+                event_id = audit(
+                    db, actor.user_id, "referral_document.generated", "referral_document",
+                    document_id, f"introduction_id={introduction_id}; consent_id={consent_id}; sha256={content_hash}",
+                )
+                db.execute(
+                    """INSERT INTO referral_document_files(id,storage_key,size_bytes,sha256,status,created_at)
+                       VALUES(?,?,?,?, 'AVAILABLE',?)""",
+                    (file_id, storage_key, len(content), content_hash, now),
+                )
+                db.execute(
+                    """INSERT INTO referral_documents(id,document_number,introduction_id,household_id,
+                       partner_id,partner_staff_id,recipient_name,issuing_store_id,advisor_id,issued_on,
+                       consent_id,status,template_version,generated_at,expires_at,sha256,file_id,
+                       storage_reference,generated_by,generation_result,audit_event_id,created_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (document_id, context["document_number"], introduction_id, intro["household_id"],
+                     intro["partner_id"], intro["partner_staff_id"], context["recipient_name"],
+                     intro["store_id"], intro["advisor_id"], now.date(), consent_id, "ACTIVE",
+                     REFERRAL_TEMPLATE_VERSION, now, expires_at, content_hash, file_id,
+                     f"private://referral-documents/{storage_key}", actor.user_id, "SUCCESS",
+                     event_id, now),
+                )
+                db.execute(
+                    """INSERT INTO referral_document_generations(id,document_id,introduction_id,
+                       generated_by,requested_at,result,audit_event_id)
+                       VALUES(?,?,?,?,?,'SUCCESS',?)""",
+                    (generation_id, document_id, introduction_id, actor.user_id, now, event_id),
+                )
+                disclosure_id = db.execute(
+                    """INSERT INTO data_disclosures(household_id,disclosed_to,scope,disclosed_by,
+                       disclosed_at,consent_id) VALUES(?,?,'L3',?,?,?)""",
+                    (intro["household_id"],
+                     f"partner:{intro['partner_id']}:{intro['partner_name']}",
+                     actor.user_id, now, consent_id),
+                ).lastrowid
+                audit(
+                    db, actor.user_id, "data_disclosure.created", "data_disclosure",
+                    disclosure_id, f"document_id={document_id}; consent_id={consent_id}; scope=L3",
+                )
+                db.execute(
+                    "UPDATE introductions SET referral_letter_id=? WHERE id=?",
+                    (document_id, introduction_id),
+                )
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        final_path.unlink(missing_ok=True)
+        raise
+    if rejection:
+        final_path.unlink(missing_ok=True)
+        raise HTTPException(409, rejection)
+    return {"ok": True, "document_id": document_id, "document_number": context["document_number"]}
+
+
+@app.get("/api/referral-documents/{document_id}")
+def get_referral_document(document_id: str, actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    with connect() as db:
+        user = request_user(db, actor)
+        row = db.execute(
+            """SELECT d.id,d.document_number,d.introduction_id,d.household_id,d.partner_id,
+               d.recipient_name,d.issued_on,d.status,d.template_version,d.generated_at,d.expires_at,
+               d.sha256,d.file_id,d.consent_id,d.issuing_store_id,d.advisor_id,d.generated_by,
+               d.audit_event_id,f.status AS file_status,f.size_bytes,
+               c.revoked_at AS consent_revoked_at,c.expires_at AS consent_expires_at
+               FROM referral_documents d JOIN referral_document_files f ON f.id=d.file_id
+               JOIN consents c ON c.id=d.consent_id
+               WHERE d.id=?""", (document_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "紹介状が見つかりません")
+        require_household_access(db, actor, user, row["household_id"])
+        result = dict(row)
+        consent_inactive = row["consent_revoked_at"] or (
+            row["consent_expires_at"] and row["consent_expires_at"] <= now_jst()
+        )
+        result["availability"] = (
+            "CONSENT_INACTIVE" if consent_inactive else
+            "EXPIRED" if row["expires_at"] <= now_jst() else
+            "AVAILABLE" if row["file_status"] == "AVAILABLE" else "UNAVAILABLE"
+        )
+        result["availability_reason"] = (
+            "同意が取り消されたか、有効期限が切れています" if result["availability"] == "CONSENT_INACTIVE" else
+            "有効期限が切れています" if result["availability"] == "EXPIRED" else
+            "ファイルが保管されていません" if result["availability"] == "UNAVAILABLE" else None
+        )
+        result.pop("file_id")
+        result.pop("file_status")
+    return result
+
+
+@app.get("/api/referral-documents/{document_id}/file")
+def retrieve_referral_document(document_id: str, download: bool = False,
+                               actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    integrity_error = None
+    access_error = None
+    with connect() as db:
+        user = request_user(db, actor)
+        row = db.execute(
+            """SELECT d.document_number,d.household_id,d.expires_at,d.sha256,f.storage_key,
+               f.size_bytes,f.status AS file_status,c.revoked_at AS consent_revoked_at,
+               c.expires_at AS consent_expires_at FROM referral_documents d
+               JOIN referral_document_files f ON f.id=d.file_id
+               JOIN consents c ON c.id=d.consent_id WHERE d.id=?""",
+            (document_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "紹介状が見つかりません")
+        require_household_access(db, actor, user, row["household_id"])
+        if row["consent_revoked_at"] or (
+                row["consent_expires_at"] and row["consent_expires_at"] <= now_jst()):
+            audit(db, actor.user_id, "referral_document.access_denied", "referral_document",
+                  document_id, "CONSENT_INACTIVE")
+            access_error = "同意が取り消されたか、有効期限が切れているため利用できません"
+        elif row["expires_at"] <= now_jst():
+            raise HTTPException(410, "紹介状の有効期限が切れています")
+        elif row["file_status"] != "AVAILABLE":
+            raise HTTPException(410, "紹介状ファイルは利用できません")
+        elif Path(row["storage_key"]).name != row["storage_key"]:
+            raise HTTPException(500, "紹介状ファイルの保管情報が不正です")
+        else:
+            file_path = REFERRAL_STORAGE_DIR / row["storage_key"]
+            try:
+                content = file_path.read_bytes()
+            except FileNotFoundError as error:
+                raise HTTPException(410, "紹介状ファイルが見つかりません") from error
+            if len(content) != row["size_bytes"] or not hmac.compare_digest(
+                    hashlib.sha256(content).hexdigest(), row["sha256"]):
+                db.execute(
+                    "UPDATE referral_document_files SET status='QUARANTINED' WHERE storage_key=?",
+                    (row["storage_key"],),
+                )
+                audit(db, actor.user_id, "referral_document.integrity_failed", "referral_document",
+                      document_id, "FILE_HASH_OR_SIZE_MISMATCH")
+                integrity_error = True
+            else:
+                audit(
+                    db, actor.user_id,
+                    "referral_document.downloaded" if download else "referral_document.previewed",
+                    "referral_document", document_id, f"sha256={row['sha256']}",
+                )
+    if access_error:
+        raise HTTPException(410, access_error)
+    if integrity_error:
+        raise HTTPException(410, "紹介状ファイルの整合性を確認できません")
+    safe_name = f"{row['document_number']}.pdf"
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=content, media_type="application/pdf",
+        headers={"Content-Disposition": f'{disposition}; filename="{safe_name}"',
+                 "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+    )
+
+
+@app.post("/api/referral-documents/cleanup")
+def cleanup_referral_document_files(actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("hq_finance", "executive"))
+    now = now_jst()
+    removed = 0
+    with connect() as db:
+        expired = db.execute(
+            """SELECT f.id,f.storage_key,d.id AS document_id FROM referral_document_files f
+               JOIN referral_documents d ON d.file_id=f.id
+               WHERE f.status='AVAILABLE' AND d.expires_at<=?""", (now,),
+        ).fetchall()
+        for row in expired:
+            file_path = REFERRAL_STORAGE_DIR / Path(row["storage_key"]).name
+            file_path.unlink(missing_ok=True)
+            db.execute(
+                """UPDATE referral_document_files SET status='EXPIRED',deleted_at=?,
+                   deletion_reason='RETENTION_EXPIRED' WHERE id=?""", (now, row["id"]),
+            )
+            audit(db, actor.user_id, "referral_document.file_expired", "referral_document",
+                  row["document_id"], "RETENTION_EXPIRED")
+            removed += 1
+    return {"ok": True, "removed_files": removed}
 
 
 class ConfirmInput(BaseModel):
@@ -3123,6 +3991,7 @@ def save_report(payload: ReportInput, x_demo_role: CurrentActor = Depends(requir
 @app.post("/api/reset")
 def reset_demo(request: Request, x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
+    referral_storage_keys = []
     with connect() as db:
         session_token = request.cookies.get(SESSION_COOKIE)
         if session_token:
@@ -3133,11 +4002,19 @@ def reset_demo(request: Request, x_demo_role: CurrentActor = Depends(require_act
         db.execute("DELETE FROM notification_deliveries")
         db.execute("DELETE FROM notifications")
         audit(db, x_demo_role.user_id, "DEMO_DATA_RESET", "seed", None, f"batch={SEED_BATCH}")
+        referral_storage_keys = [
+            row["storage_key"] for row in db.execute(
+                "SELECT storage_key FROM referral_document_files"
+            ).fetchall()
+        ]
         for table in TABLES:
             db.execute(f"DROP TABLE IF EXISTS `{table}`")
         seed(db)
         ensure_system_config(db)
         ensure_demo_accounts(db)
+    for storage_key in referral_storage_keys:
+        if Path(storage_key).name == storage_key:
+            (REFERRAL_STORAGE_DIR / storage_key).unlink(missing_ok=True)
     return {"ok": True}
 
 
@@ -3286,17 +4163,28 @@ def export_rows(db, actor, resource, include_personal_data, limit):
     elif resource == "expenses":
         scope, args = expense_visibility_clause(actor)
         rows = db.execute(
-            f"""SELECT e.id,e.applicant_id,u.display_name AS applicant_name,e.category,e.amount,
-                       e.expense_date,e.status,e.created_at
+            f"""SELECT e.id,e.applicant_id,u.display_name AS applicant_name,e.store_id,e.category,e.amount,
+                       e.tax_amount,e.tax_category,e.expense_date,e.applied_at,e.status,e.reviewed_by,
+                       e.reviewed_at,e.rejection_reason,e.receipt_filename,
+                       e.accounting_integration_id,e.recorded_reference,e.recorded_confirmed_at,
+                       e.created_at
                 FROM expenses e JOIN users u ON u.id=e.applicant_id
                 WHERE {scope} ORDER BY e.created_at,e.id LIMIT ?""",
             (*args, limit),
         ).fetchall()
-        headers = ["expense_id", "applicant", "category", "amount", "expense_date", "status", "created_at"]
+        headers = ["expense_id", "applicant_id", "store_id", "category", "description", "expense_date",
+                   "applied_at", "amount_including_tax", "consumption_tax_amount", "tax_category",
+                   "status", "reviewer_id", "reviewed_at", "rejection_reason", "receipt_attached",
+                   "accounting_integration_id", "recorded_reference", "recorded_confirmed_at",
+                   "created_at"]
         record_ids = [row["id"] for row in rows]
-        data = [[row["id"], row["applicant_name"] if include_personal_data else f"社員#{row['applicant_id']}",
-                 row["category"], row["amount"], row["expense_date"], row["status"],
-                 row["created_at"]] for row in rows]
+        data = [[row["id"], row["applicant_id"],
+                 row["store_id"], row["category"], row["description"], row["expense_date"],
+                 row["applied_at"], row["amount"], row["tax_amount"], row["tax_category"],
+                 row["status"], row["reviewed_by"], row["reviewed_at"], row["rejection_reason"],
+                 bool(row["receipt_filename"]), row["accounting_integration_id"],
+                 row["recorded_reference"], row["recorded_confirmed_at"], row["created_at"]]
+                for row in rows]
     elif resource in ("fee_entitlements", "invoice_data"):
         if account_role not in ("finance", "executive", "administrator", "hq_staff"):
             raise HTTPException(403, "報酬・請求データを出力する権限がありません")
@@ -3378,9 +4266,11 @@ def expense_list(actor: CurrentActor = Depends(require_actor)):
         approval_thresholds = config_value(db, "expense.approval_thresholds_yen")
         rows = db.execute(
             f"""SELECT e.id,e.applicant_id,u.display_name AS applicant_name,e.store_id,e.category,
-                       e.amount,e.description,e.expense_date,e.receipt_filename,e.receipt_size,
-                       e.status,e.rejection_reason,e.version,e.reviewed_by,e.reviewed_at,
-                       e.finance_recorded_by,e.finance_recorded_at,e.created_at,e.updated_at
+                       e.amount,e.tax_amount,e.tax_category,e.description,e.expense_date,e.applied_at,
+                       e.receipt_filename,e.receipt_size,e.status,e.rejection_reason,e.version,
+                       e.reviewed_by,e.reviewed_at,e.finance_recorded_by,e.finance_recorded_at,
+                       e.accounting_integration_id,e.recorded_reference,e.recorded_confirmed_at,
+                       e.created_at,e.updated_at
                 FROM expenses e JOIN users u ON u.id=e.applicant_id
                 WHERE {visibility} ORDER BY e.created_at DESC,e.id DESC""",
             args,
@@ -3648,9 +4538,25 @@ def create_export_job(payload: ExportJobInput, actor: CurrentActor = Depends(req
             (actor.user_id,),
         ).fetchone()
         template_version = PDF_TEMPLATE_VERSION if payload.format == "pdf" else "csv-v1"
-        content = (build_pdf(headers, rows, payload.resource, now.isoformat(timespec="seconds"),
-                              actor_row["display_name"] if actor_row else str(actor.user_id))
-                   if payload.format == "pdf" else build_csv(headers, rows))
+        if payload.format == "pdf":
+            try:
+                content = build_pdf_isolated(
+                    headers, rows, payload.resource, now.isoformat(timespec="seconds"),
+                    actor_row["display_name"] if actor_row else str(actor.user_id),
+                    config_value(db, "pdf.render_timeout_seconds"),
+                    config_value(db, "pdf.render_concurrency"),
+                    config_value(db, "pdf.render_max_pending"),
+                )
+            except RuntimeError as error:
+                LOGGER.warning("PDF export was rejected or failed: %s", error)
+                if str(error) == "PDF_RENDER_QUEUE_FULL":
+                    raise HTTPException(503, "PDF出力が混雑しています。時間をおいて再度お試しください") from error
+                raise HTTPException(500, "PDFの生成に失敗しました") from error
+            except TimeoutError as error:
+                LOGGER.warning("PDF export timed out.")
+                raise HTTPException(504, "PDFの生成がタイムアウトしました") from error
+        else:
+            content = build_csv(headers, rows)
         if len(content) > max_bytes:
             raise HTTPException(413, "出力ファイルが設定サイズ上限を超えています")
         filename = f"mallboard_{payload.resource}_{now:%Y%m%d%H%M%S}.{payload.format}"
@@ -3696,10 +4602,11 @@ def export_job_list(actor: CurrentActor = Depends(require_actor)):
 @app.get("/api/export-jobs/{job_id}/download")
 def download_export_job(job_id: str, actor: CurrentActor = Depends(require_actor)):
     expired = False
+    corrupt = False
     with connect() as db:
         row = db.execute(
             """SELECT resource,format,template_version,created_role,scope_store_id,
-                      include_personal_data,record_ids_json,filename,content,status,expires_at
+                      include_personal_data,record_ids_json,filename,content,content_sha256,status,expires_at
                FROM export_jobs WHERE id=? AND user_id=? FOR UPDATE""",
             (job_id, actor.user_id),
         ).fetchone()
@@ -3725,13 +4632,37 @@ def download_export_job(job_id: str, actor: CurrentActor = Depends(require_actor
             original_ids = {str(item) for item in json.loads(row["record_ids_json"] or "[]")}
             if not original_ids.issubset(current_ids):
                 raise HTTPException(403, "出力対象の閲覧権限が変更されたためダウンロードできません")
-            filename = row["filename"]
-            content = row["content"]
-            audit(db, actor.user_id, f"export.downloaded.{row['format']}",
-                  "export_job", job_id,
-                  f"resource={row['resource']}; template={row['template_version']}")
+            content = bytes(row["content"])
+            actual_hash = hashlib.sha256(content).hexdigest()
+            if not hmac.compare_digest(actual_hash, row["content_sha256"]):
+                db.execute("UPDATE export_jobs SET status='CORRUPT' WHERE id=?", (job_id,))
+                audit(db, actor.user_id, "export.integrity_failed", "export_job", job_id,
+                      f"resource={row['resource']}; expected_sha256={row['content_sha256']}; "
+                      f"actual_sha256={actual_hash}")
+                admins = db.execute(
+                    """SELECT id FROM users WHERE role IN ('administrator','executive')
+                       AND account_status='ACTIVE'"""
+                ).fetchall()
+                for admin in admins:
+                    create_notification(
+                        db, admin["id"], "SECURITY", "出力ファイルの整合性異常",
+                        f"出力ジョブ {job_id} のハッシュ検証に失敗しました。",
+                        "export_job", job_id, title_zh="导出文件完整性异常",
+                        message_zh=f"导出任务 {job_id} 的哈希校验失败。",
+                    )
+                corrupt = True
+            else:
+                filename = row["filename"]
+                db.execute("UPDATE export_jobs SET downloaded_at=? WHERE id=?",
+                           (now_jst(), job_id))
+                audit(db, actor.user_id, f"export.downloaded.{row['format']}",
+                      "export_job", job_id,
+                      f"resource={row['resource']}; template={row['template_version']}; "
+                      f"sha256={actual_hash}")
     if expired:
         raise HTTPException(410, "出力ファイルの有効期限が切れています")
+    if corrupt:
+        raise HTTPException(409, "出力ファイルの整合性を確認できないためダウンロードできません")
     return Response(
         content=content,
         media_type="application/pdf" if filename.endswith(".pdf") else "text/csv; charset=utf-8",

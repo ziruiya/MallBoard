@@ -1,6 +1,6 @@
 # MallBoard — Debian 12 + 宝塔部署手顺
 
-対象は Debian 12 の VPS と宝塔面板です。公開通信は宝塔の Nginx を通し、アプリは `127.0.0.1:8000` のみにバインドします。MySQL は Compose 内部ネットワークだけで使用し、データは named volume `mysql-data` に保存します。初回起動時にアプリがテーブル作成と架空のデモデータ投入を自動で行うため、手動の seed コマンドは不要です。
+対象は Debian 12 の VPS と宝塔面板です。公開通信は宝塔の Nginx を通し、アプリは `127.0.0.1:8000` のみにバインドします。MySQL は Compose 内部ネットワークだけで使用し、データは named volume `mysql-data` に保存します。紹介状PDFは公開されない専用 named volume `referral-documents` に保存します。初回起動時にアプリがテーブル作成と架空のデモデータ投入を自動で行うため、手動の seed コマンドは不要です。
 
 ## 0. 事前準備
 
@@ -113,15 +113,15 @@ sudo systemctl is-active docker
 cd /opt/mallboard
 sudo docker compose ps
 curl -fsS https://demo.example.com/api/health
-sudo docker volume ls | grep mysql-data
+sudo docker volume ls | grep -E 'mysql-data|referral-documents'
 ```
 
-**期待結果:** Docker が `active`、両コンテナが稼働中、HTTPS health API が `{"status":"ok"}` を返し、`mysql-data` volume が存在すること。ブラウザーでリロードして再起動前の操作データが残っていることを確認します。
+**期待結果:** Docker が `active`、両コンテナが稼働中、HTTPS health API が `{"status":"ok"}` を返し、`mysql-data` と `referral-documents` volume が存在すること。ブラウザーでリロードして再起動前の操作データが残っていることを確認します。
 
 ## 運用上の注意
 
 - アプリ・DB を停止する場合は `sudo docker compose down` を実行します。named volume は保持されます。
-- `sudo docker compose down -v` は MySQL volume と保存データを削除するため実行しないでください。
+- `sudo docker compose down -v` は MySQL と紹介状ファイルの volume および保存データを削除するため実行しないでください。
 - 更新版を配布した場合は、バックアップ後に `sudo docker compose up -d --build` で再ビルドします。
 - DB パスワードを変更する際は `.env` と MySQL 側のユーザー認証を同時に更新してください。MySQL 初期化時に作成したユーザーのパスワードは、`.env` だけ変更しても既存 volume 上では自動変更されません。
 - このプロトタイプは実顧客情報・本番業務データを扱う設計ではありません。外部公開前に OS、宝塔、Docker の更新と `.env`・DB バックアップを整備してください。
