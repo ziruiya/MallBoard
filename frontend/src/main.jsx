@@ -264,6 +264,7 @@ const CONFIG_LABELS = {
 
 const ROLE_LABEL = { ja: { advisor: "顧問", manager: "店長", hq_finance: "本社・経理", executive: "社長" },
   zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务", executive: "社长" } };
+const ROLE_FALLBACK = [{ id: "advisor" }, { id: "manager" }, { id: "hq_finance" }, { id: "executive" }];
 const NAV = [
   ["dashboard", LayoutDashboard, "today"], ["households", Users, "households"],
   ["introductions", ArrowDownRight, "introductions"], ["revenue", BadgeJapaneseYen, "revenue"],
@@ -409,7 +410,7 @@ function App() {
           <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>
           <button className="icon-btn" title={t("notificationPrefs")}><Bell size={18}/></button>
           <div className="select-wrap"><Users size={15}/><select aria-label={t("role")} value={role} onChange={(e) => setRole(e.target.value)}>
-            {data.roles.map((option) => <option value={option.id} key={option.id}>{ROLE_LABEL[locale][option.id]}</option>)}
+            {(data?.roles || ROLE_FALLBACK).map((option) => <option value={option.id} key={option.id}>{ROLE_LABEL[locale][option.id]}</option>)}
           </select><ChevronDown size={13}/></div>
           <button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "中文" : "日本語"}</button>
         </div>
