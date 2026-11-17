@@ -125,7 +125,12 @@ CREATE TABLE IF NOT EXISTS introductions (
 );
 CREATE TABLE IF NOT EXISTS negotiations (
   id INT AUTO_INCREMENT PRIMARY KEY, introduction_id INT NOT NULL, status VARCHAR(80) NOT NULL,
-  last_activity_at DATETIME NOT NULL, FOREIGN KEY (introduction_id) REFERENCES introductions(id)
+  last_activity_at DATETIME NOT NULL, next_action VARCHAR(255) NULL, next_action_due DATE NULL,
+  next_action_owner_id INT NULL, risk_level VARCHAR(20) NOT NULL DEFAULT 'none',
+  version INT NOT NULL DEFAULT 1,
+  FOREIGN KEY (introduction_id) REFERENCES introductions(id),
+  FOREIGN KEY (next_action_owner_id) REFERENCES users(id),
+  INDEX idx_negotiations_next_action(next_action_due,next_action_owner_id)
 );
 CREATE TABLE IF NOT EXISTS contracts (
   id INT AUTO_INCREMENT PRIMARY KEY, negotiation_id INT NOT NULL, contract_date DATE NOT NULL,
@@ -355,6 +360,32 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   user_id INT PRIMARY KEY, dashboard_widgets JSON NOT NULL, notification_preferences JSON NOT NULL,
   updated_at DATETIME NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id)
 );
+CREATE TABLE IF NOT EXISTS calendar_events (
+  id CHAR(36) PRIMARY KEY, owner_id INT NOT NULL, title VARCHAR(255) NOT NULL,
+  event_type VARCHAR(40) NOT NULL, starts_at DATETIME NOT NULL, ends_at DATETIME NULL,
+  all_day TINYINT NOT NULL DEFAULT 0, visibility VARCHAR(20) NOT NULL DEFAULT 'private',
+  store_id INT NULL, created_by INT NOT NULL, updated_by INT NOT NULL,
+  created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, version INT NOT NULL DEFAULT 1,
+  INDEX idx_calendar_events_range(starts_at,ends_at),
+  INDEX idx_calendar_events_owner(owner_id,starts_at),
+  FOREIGN KEY (owner_id) REFERENCES users(id), FOREIGN KEY (store_id) REFERENCES stores(id)
+);
+CREATE TABLE IF NOT EXISTS bulletin_posts (
+  id CHAR(36) PRIMARY KEY, post_type VARCHAR(40) NOT NULL, title VARCHAR(255) NOT NULL,
+  body TEXT NOT NULL, author_id INT NOT NULL, department VARCHAR(120) NULL, store_id INT NULL,
+  visibility VARCHAR(20) NOT NULL DEFAULT 'company', status VARCHAR(20) NOT NULL DEFAULT 'published',
+  pinned TINYINT NOT NULL DEFAULT 0, published_at DATETIME NULL, created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL, daily_report_user_id INT NULL, daily_report_date DATE NULL,
+  UNIQUE KEY uq_bulletin_daily_report(daily_report_user_id,daily_report_date),
+  INDEX idx_bulletin_scope(status,visibility,store_id,published_at),
+  FOREIGN KEY (author_id) REFERENCES users(id), FOREIGN KEY (store_id) REFERENCES stores(id)
+);
+CREATE TABLE IF NOT EXISTS bulletin_comments (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, post_id CHAR(36) NOT NULL, author_id INT NOT NULL,
+  body TEXT NOT NULL, created_at DATETIME NOT NULL,
+  INDEX idx_bulletin_comments_post(post_id,created_at),
+  FOREIGN KEY (post_id) REFERENCES bulletin_posts(id), FOREIGN KEY (author_id) REFERENCES users(id)
+);
 CREATE TABLE IF NOT EXISTS sla_settings (
   reminder_type VARCHAR(40) PRIMARY KEY, days_before INT NOT NULL, label_ja VARCHAR(120) NOT NULL,
   label_zh VARCHAR(120) NOT NULL
@@ -362,7 +393,8 @@ CREATE TABLE IF NOT EXISTS sla_settings (
 """
 
 TABLES = [
-    "user_preferences", "audit_logs", "daily_report_drafts", "export_jobs", "import_row_results",
+    "user_preferences", "bulletin_comments", "bulletin_posts", "calendar_events",
+    "audit_logs", "daily_report_drafts", "export_jobs", "import_row_results",
     "import_jobs", "external_record_mappings", "month_closes", "month_close_period_locks", "expenses",
     "referral_document_generations", "referral_documents", "referral_document_files",
     "data_correction_requests", "tasks", "data_disclosures", "consents", "referral_disputes",
@@ -1494,6 +1526,14 @@ def ensure_schema(db):
             "cancelled": "TINYINT NOT NULL DEFAULT 0",
             "status": "VARCHAR(20) NOT NULL DEFAULT 'open'",
         },
+        "negotiations": {
+            "next_action": "VARCHAR(255) NULL",
+            "next_action_due": "DATE NULL",
+            "next_action_owner_id": "INT NULL",
+            "risk_level": "VARCHAR(20) NOT NULL DEFAULT 'none'",
+            "version": "INT NOT NULL DEFAULT 1",
+        },
+        "calendar_events": {"version": "INT NOT NULL DEFAULT 1"},
         "user_preferences": {
             "dashboard_widgets": "JSON NULL",
             "notification_preferences": "JSON NULL",
@@ -1517,6 +1557,17 @@ def ensure_schema(db):
         ).fetchone()[0]
         if not exists:
             db.execute(f"CREATE UNIQUE INDEX `{index_name}` ON users(`{column_name}`)")
+    for table, index_name, columns in (
+        ("negotiations", "idx_negotiations_next_action", "next_action_due,next_action_owner_id"),
+        ("calendar_events", "idx_calendar_events_range", "starts_at,ends_at"),
+    ):
+        exists = db.execute(
+            """SELECT COUNT(*) FROM information_schema.statistics
+               WHERE table_schema=DATABASE() AND table_name=? AND index_name=?""",
+            (table, index_name),
+        ).fetchone()[0]
+        if not exists:
+            db.execute(f"CREATE INDEX `{index_name}` ON `{table}`({columns})")
     db.execute("UPDATE tasks SET status=IF(done=1,'done','open') WHERE status IS NULL")
 
 
@@ -1894,6 +1945,21 @@ def seed(db):
                 (intro_id, ("訪問予定", "商談中", "見積提示")[position % 3],
                  introduced_at + timedelta(days=position + 2)),
             ).lastrowid
+            if number in (52, 53, 54, 55) and position == 0:
+                action_owner = household["advisor_id"] or advisors[household["store_id"] - 1]
+                action_due = today + timedelta(days=number % 3 - 1)
+                action_text = "住宅会社へ次回相談の日程を確認"
+                db.execute(
+                    """UPDATE negotiations SET next_action=?,next_action_due=?,
+                       next_action_owner_id=?,risk_level='watch' WHERE id=?""",
+                    (action_text, action_due, action_owner, negotiation_id),
+                )
+                db.execute(
+                    """INSERT INTO tasks(assignee_id,title,due_at,source,related_household_id,
+                       task_type,priority,related_type,related_id,status)
+                       VALUES(?,?,?,'demo_seed',?,'negotiation_action','normal','negotiation',?,'open')""",
+                    (action_owner, action_text, action_due, household["id"], negotiation_id),
+                )
             rows.append((intro_id, negotiation_id, partner_id))
         introductions_by_household[number] = rows
 
@@ -2190,6 +2256,42 @@ def seed(db):
         db.execute(
             "INSERT INTO daily_report_drafts(user_id,report_date,auto_summary,manual_note) VALUES(?,?,?,?)",
             (user_id, today, f"本日の活動 {count} 件。デモデータを確認してください。", ""),
+        )
+    calendar_now = datetime.combine(today, datetime.min.time())
+    db.execute(
+        """INSERT INTO calendar_events(id,owner_id,title,event_type,starts_at,ends_at,all_day,
+           visibility,store_id,created_by,updated_by,created_at,updated_at)
+           VALUES(?,?,?,'meeting',?,?,0,'company',NULL,?,?,?,?)""",
+        (str(uuid.uuid4()), users["manager"], "店舗運営ミーティング",
+         calendar_now + timedelta(days=1, hours=10), calendar_now + timedelta(days=1, hours=11),
+         users["manager"], users["manager"], now, now),
+    )
+    db.execute(
+        """INSERT INTO bulletin_posts(id,post_type,title,body,author_id,visibility,status,pinned,
+           published_at,created_at,updated_at) VALUES(?,'notice',?,? ,?,'company','published',1,?,?,?)""",
+        (str(uuid.uuid4()), "デモ運用のお知らせ",
+         "この投稿は架空のデモデータです。顧客情報や本番情報は含まれていません。",
+         users["executive"], now, now, now),
+    )
+    db.execute(
+        """INSERT INTO bulletin_posts(id,post_type,title,body,author_id,visibility,status,pinned,
+           published_at,created_at,updated_at) VALUES(?,'meeting',?,? ,?,'company','published',0,?,?,?)""",
+        (str(uuid.uuid4()), "店舗運営ミーティング記録",
+         "期限が近い紹介対応と次回アクションの設定状況を確認しました。",
+         users["manager"], now, now, now),
+    )
+    advisor_report = db.execute(
+        "SELECT id,report_date,auto_summary,manual_note FROM daily_report_drafts WHERE user_id=? ORDER BY id LIMIT 1",
+        (users["advisor"],),
+    ).fetchone()
+    if advisor_report:
+        db.execute(
+            """INSERT INTO bulletin_posts(id,post_type,title,body,author_id,store_id,visibility,status,
+               published_at,created_at,updated_at,daily_report_user_id,daily_report_date)
+               VALUES(?,'daily_report',?,?,?,?,'store','published',?,?,?,?,?)""",
+            (str(uuid.uuid4()), f"{advisor_report['report_date']} 日報",
+             "\n\n".join(value for value in (advisor_report["auto_summary"], advisor_report["manual_note"]) if value),
+             users["advisor"], 1, now, now, now, users["advisor"], advisor_report["report_date"]),
         )
     db.execute(
         "INSERT INTO seed_metadata(id,batch_key,seeded_at) VALUES(1,?,?)",
@@ -2967,6 +3069,550 @@ def create_activity(payload: ActivityInput, x_demo_role: CurrentActor = Depends(
         audit(db, user["id"], "activity.created", "household", payload.household_id, payload.type)
         db.commit()
     return {"ok": True}
+
+
+def parse_local_datetime(value, field_name):
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise HTTPException(422, f"{field_name}の日時が正しくありません") from error
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(JST).replace(tzinfo=None)
+    return parsed
+
+
+class CalendarEventInput(BaseModel):
+    title: str
+    event_type: str
+    starts_at: str
+    ends_at: Optional[str] = None
+    all_day: bool = False
+    visibility: str = "private"
+    version: Optional[int] = None
+
+
+def validate_calendar_event(payload, actor, user):
+    title = payload.title.strip()
+    if not 1 <= len(title) <= 255:
+        raise HTTPException(422, "予定のタイトルは1〜255文字で入力してください")
+    if payload.event_type not in ("meeting", "business_trip", "personal"):
+        raise HTTPException(422, "予定の種類が正しくありません")
+    if payload.visibility not in ("private", "store", "company"):
+        raise HTTPException(422, "予定の公開範囲が正しくありません")
+    if payload.visibility == "store" and not user["store_id"]:
+        raise HTTPException(422, "所属店舗が必要です")
+    if payload.visibility == "company" and actor not in ("manager", "hq_finance", "executive"):
+        raise HTTPException(403, "全社公開の予定を作成する権限がありません")
+    starts_at = parse_local_datetime(payload.starts_at, "開始")
+    ends_at = parse_local_datetime(payload.ends_at, "終了") if payload.ends_at else None
+    if ends_at and ends_at <= starts_at:
+        raise HTTPException(422, "終了日時は開始日時より後にしてください")
+    if ends_at and ends_at - starts_at > timedelta(days=1):
+        raise HTTPException(422, "予定は24時間以内で登録してください")
+    return title, starts_at, ends_at
+
+
+@app.get("/api/calendar")
+def calendar_index(start: str, end: str, actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "人事アカウントから業務予定へアクセスできません")
+    try:
+        start_date, end_date = date.fromisoformat(start), date.fromisoformat(end)
+    except ValueError as error:
+        raise HTTPException(422, "表示期間を正しく指定してください") from error
+    if end_date <= start_date or (end_date - start_date).days > 31:
+        raise HTTPException(422, "表示期間は1〜31日で指定してください")
+    range_start = datetime.combine(start_date, datetime.min.time())
+    range_end = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+    with connect() as db:
+        user = request_user(db, actor)
+        if actor == "advisor":
+            visibility_sql = "(ce.owner_id=? OR ce.visibility='company' OR (ce.visibility='store' AND ce.store_id=?))"
+            visibility_args = (user["id"], user["store_id"])
+            user_sql, user_args = "u.id=?", (user["id"],)
+            task_sql, task_args = "t.assignee_id=?", (user["id"],)
+        elif actor == "manager":
+            visibility_sql = "(ce.owner_id=? OR ce.visibility='company' OR (ce.visibility='store' AND ce.store_id=?))"
+            visibility_args = (user["id"], user["store_id"])
+            user_sql, user_args = "u.store_id=?", (user["store_id"],)
+            task_sql, task_args = "(t.assignee_id=? OR h.store_id=?)", (user["id"], user["store_id"])
+        elif actor == "hq_finance" and getattr(actor, "account_role", "") == "finance":
+            visibility_sql = "(ce.owner_id=? OR ce.visibility='company')"
+            visibility_args = (user["id"],)
+            user_sql, user_args = "u.role IN ('finance','executive')", ()
+            task_sql = "(t.assignee_id=? OR t.task_type IN ('fee_approval','invoice_generation','invoice_unpaid'))"
+            task_args = (user["id"],)
+        else:
+            visibility_sql = "(ce.owner_id=? OR ce.visibility IN ('company','store'))"
+            visibility_args = (user["id"],)
+            user_sql, user_args = "u.role NOT IN ('hr')", ()
+            task_sql, task_args = "1=1", ()
+        events = [dict(row) for row in db.execute(
+            f"""SELECT ce.id,ce.owner_id,COALESCE(u.display_name,u.name) AS owner_name,
+                ce.title,ce.event_type,ce.starts_at,ce.ends_at,ce.all_day,ce.visibility,
+                ce.store_id,ce.version,'manual' AS source_type,NULL AS source_id
+                FROM calendar_events ce JOIN users u ON u.id=ce.owner_id
+                WHERE {visibility_sql} AND ce.starts_at<? AND COALESCE(ce.ends_at,ce.starts_at)>=?
+                ORDER BY ce.starts_at LIMIT 300""",
+            (*visibility_args, range_end, range_start),
+        )]
+        task_rows = db.execute(
+            f"""SELECT t.id,t.title,t.task_type,t.due_at,t.related_type,t.related_id,
+                t.related_household_id,h.store_id,t.assignee_id,
+                COALESCE(u.display_name,u.name) AS owner_name
+                FROM tasks t LEFT JOIN households h ON h.id=t.related_household_id
+                JOIN users u ON u.id=t.assignee_id
+                WHERE {task_sql} AND t.done=0 AND t.cancelled=0 AND t.due_at>=? AND t.due_at<?
+                ORDER BY t.due_at,t.id LIMIT 300""",
+            (*task_args, start_date, end_date + timedelta(days=1)),
+        ).fetchall()
+        for row in task_rows:
+            event_date = row["due_at"]
+            event_type = "appointment" if row["task_type"] == "appointment" else "task_deadline"
+            events.append({
+                "id": f"task-{row['id']}", "owner_id": row["assignee_id"],
+                "owner_name": row["owner_name"], "title": row["title"],
+                "event_type": event_type, "starts_at": datetime.combine(
+                    event_date, datetime.min.time()
+                ), "ends_at": None, "all_day": True, "visibility": "authorized",
+                "store_id": row["store_id"], "version": None, "source_type": row["related_type"],
+                "source_id": row["related_id"], "household_id": row["related_household_id"],
+                "task_id": row["id"],
+            })
+        employees = [dict(row) for row in db.execute(
+            f"""SELECT u.id,COALESCE(u.display_name,u.name) AS name,u.role,u.store_id,s.name AS store_name
+                FROM users u LEFT JOIN stores s ON s.id=u.store_id
+                WHERE {user_sql} AND u.account_status='ACTIVE' ORDER BY u.store_id,u.display_name,u.id""",
+            user_args,
+        )]
+        return {
+            "range_start": start_date.isoformat(), "range_end": end_date.isoformat(),
+            "timezone": "Asia/Tokyo", "events": events, "employees": employees,
+        }
+
+
+@app.post("/api/calendar")
+def create_calendar_event(payload: CalendarEventInput, actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "予定を作成する権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        title, starts_at, ends_at = validate_calendar_event(payload, actor, user)
+        event_id, now = str(uuid.uuid4()), now_jst()
+        store_id = user["store_id"] if payload.visibility == "store" else None
+        db.execute(
+            """INSERT INTO calendar_events(id,owner_id,title,event_type,starts_at,ends_at,all_day,
+               visibility,store_id,created_by,updated_by,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (event_id, user["id"], title, payload.event_type, starts_at, ends_at,
+             int(payload.all_day), payload.visibility, store_id, user["id"], user["id"], now, now),
+        )
+        audit(db, user["id"], "calendar_event.created", "calendar_event", event_id,
+              f"type={payload.event_type}; visibility={payload.visibility}")
+    return {"ok": True, "id": event_id}
+
+
+@app.put("/api/calendar/{event_id}")
+def update_calendar_event(event_id: str, payload: CalendarEventInput,
+                          actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "予定を変更する権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        current = db.execute(
+            "SELECT id,version FROM calendar_events WHERE id=? AND owner_id=? FOR UPDATE",
+            (event_id, user["id"]),
+        ).fetchone()
+        if not current:
+            raise HTTPException(404, "予定が見つかりません")
+        if payload.version is None or payload.version != current["version"]:
+            raise HTTPException(409, "予定が更新されています。再読み込みしてください")
+        title, starts_at, ends_at = validate_calendar_event(payload, actor, user)
+        now = now_jst()
+        store_id = user["store_id"] if payload.visibility == "store" else None
+        db.execute(
+            """UPDATE calendar_events SET title=?,event_type=?,starts_at=?,ends_at=?,all_day=?,
+               visibility=?,store_id=?,updated_by=?,updated_at=?,version=version+1
+               WHERE id=? AND version=?""",
+            (title, payload.event_type, starts_at, ends_at, int(payload.all_day), payload.visibility,
+             store_id, user["id"], now, event_id, payload.version),
+        )
+        audit(db, user["id"], "calendar_event.updated", "calendar_event", event_id,
+              f"version={payload.version + 1}")
+    return {"ok": True, "version": payload.version + 1}
+
+
+class NegotiationActionInput(BaseModel):
+    next_action: Optional[str] = None
+    next_action_due: Optional[str] = None
+    owner_id: Optional[int] = None
+    risk_level: str = "none"
+    version: int
+
+
+@app.get("/api/negotiation-queue")
+def negotiation_queue(actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "商談キューへアクセスする権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        scope, args = role_scope(actor, user)
+        rows = [dict(row) for row in db.execute(
+            f"""SELECT n.id AS negotiation_id,n.introduction_id,n.status AS stage,
+                n.next_action,n.next_action_due,n.risk_level,n.version,n.last_activity_at,
+                i.advisor_id,h.id AS household_id,h.household_code,h.representative_name,
+                h.store_id,s.name AS store_name,COALESCE(owner.display_name,owner.name) AS owner_name,
+                n.next_action_owner_id AS owner_id,p.name AS partner_name
+                FROM negotiations n JOIN introductions i ON i.id=n.introduction_id
+                JOIN households h ON h.id=i.household_id
+                LEFT JOIN stores s ON s.id=h.store_id
+                LEFT JOIN users owner ON owner.id=n.next_action_owner_id
+                JOIN partners p ON p.id=i.partner_id
+                WHERE {scope} AND n.status NOT IN ('契約','見送り')
+                ORDER BY CASE WHEN n.next_action_due<CURRENT_DATE THEN 0
+                              WHEN n.next_action_due=CURRENT_DATE THEN 1
+                              WHEN n.next_action_due IS NULL THEN 3 ELSE 2 END,
+                         n.next_action_due,h.id,n.id LIMIT 500""", args,
+        )]
+        today = date.today()
+        for row in rows:
+            due = row["next_action_due"]
+            row["risk_level"] = (
+                "high" if due and due < today else
+                "watch" if row["risk_level"] == "watch" or
+                (due and due <= today + timedelta(days=3)) else row["risk_level"]
+            )
+        return {"items": rows}
+
+
+@app.put("/api/negotiation-queue/{negotiation_id}")
+def update_negotiation_action(negotiation_id: int, payload: NegotiationActionInput,
+                              actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    action = payload.next_action.strip() if payload.next_action else ""
+    if len(action) > 255 or bool(action) != bool(payload.next_action_due):
+        raise HTTPException(422, "次の行動と期限を両方入力してください")
+    if payload.risk_level not in ("none", "watch", "high"):
+        raise HTTPException(422, "リスク区分が正しくありません")
+    try:
+        due_date = date.fromisoformat(payload.next_action_due) if payload.next_action_due else None
+    except ValueError as error:
+        raise HTTPException(422, "期限の日付が正しくありません") from error
+    with connect() as db:
+        user = request_user(db, actor)
+        row = db.execute(
+            """SELECT n.id,n.version,h.id AS household_id,h.store_id
+               FROM negotiations n JOIN introductions i ON i.id=n.introduction_id
+               JOIN households h ON h.id=i.household_id
+               WHERE n.id=? FOR UPDATE""", (negotiation_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "商談が見つかりません")
+        require_household_access(db, actor, user, row["household_id"])
+        if payload.version != row["version"]:
+            raise HTTPException(409, "商談が更新されています。再読み込みしてください")
+        owner_id = payload.owner_id or user["id"]
+        owner = db.execute(
+            "SELECT id FROM users WHERE id=? AND role='advisor' AND store_id=? AND account_status='ACTIVE'",
+            (owner_id, row["store_id"]),
+        ).fetchone()
+        if action and not owner:
+            raise HTTPException(422, "担当者は同じ店舗の有効な顧問から選択してください")
+        now = now_jst()
+        db.execute(
+            """UPDATE negotiations SET next_action=?,next_action_due=?,next_action_owner_id=?,
+               risk_level=?,last_activity_at=?,version=version+1 WHERE id=? AND version=?""",
+            (action or None, due_date, owner_id if action else None, payload.risk_level,
+             now, negotiation_id, payload.version),
+        )
+        linked_task = db.execute(
+            """SELECT id FROM tasks WHERE related_type='negotiation' AND related_id=?
+               AND done=0 AND cancelled=0 ORDER BY id LIMIT 1 FOR UPDATE""",
+            (negotiation_id,),
+        ).fetchone()
+        if action:
+            task_priority = "high" if payload.risk_level == "high" else "normal"
+            if linked_task:
+                db.execute(
+                    """UPDATE tasks SET assignee_id=?,title=?,due_at=?,related_household_id=?,
+                       priority=?,status='open',done=0 WHERE id=?""",
+                    (owner_id, action, due_date, row["household_id"], task_priority,
+                     linked_task["id"]),
+                )
+            else:
+                db.execute(
+                    """INSERT INTO tasks(assignee_id,title,due_at,source,related_household_id,
+                       task_type,priority,related_type,related_id,status)
+                       VALUES(?,?,?,'negotiation_queue',?,'negotiation_action',?,'negotiation',?,'open')""",
+                    (owner_id, action, due_date, row["household_id"], task_priority,
+                     negotiation_id),
+                )
+        elif linked_task:
+            db.execute("UPDATE tasks SET done=1,status='done' WHERE id=?", (linked_task["id"],))
+        audit(db, user["id"], "negotiation.next_action.updated", "negotiation", negotiation_id,
+              f"owner_id={owner_id if action else ''}; due={due_date or ''}; risk={payload.risk_level}")
+    return {"ok": True, "version": payload.version + 1}
+
+
+def bulletin_scope(actor, user, alias="p"):
+    if actor == "advisor":
+        return (
+            f"({alias}.author_id=? OR {alias}.visibility='company' OR "
+            f"({alias}.visibility='store' AND {alias}.store_id=?))",
+            (user["id"], user["store_id"]),
+        )
+    if actor == "manager":
+        return (
+            f"({alias}.author_id=? OR {alias}.visibility='company' OR "
+            f"({alias}.visibility='store' AND {alias}.store_id=?))",
+            (user["id"], user["store_id"]),
+        )
+    if actor == "hr":
+        return "1=0", ()
+    return (
+        f"({alias}.author_id=? OR {alias}.visibility IN ('company','store'))",
+        (user["id"],),
+    )
+
+
+def accessible_bulletin_post(db, actor, user, post_id):
+    scope, args = bulletin_scope(actor, user)
+    post = db.execute(
+        f"""SELECT p.*,COALESCE(u.display_name,u.name) AS author_name,s.name AS store_name
+            FROM bulletin_posts p JOIN users u ON u.id=p.author_id
+            LEFT JOIN stores s ON s.id=p.store_id
+            WHERE p.id=? AND {scope}""",
+        (post_id, *args),
+    ).fetchone()
+    if not post:
+        raise HTTPException(404, "掲示板の投稿が見つかりません")
+    return post
+
+
+@app.get("/api/bulletin")
+def bulletin_index(category: Optional[str] = None, q: Optional[str] = None,
+                  month: Optional[str] = None, actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "掲示板へアクセスする権限がありません")
+    if category and category not in ("daily_report", "meeting", "notice", "shared"):
+        raise HTTPException(422, "投稿分類が正しくありません")
+    search = (q or "").strip()
+    if len(search) > 100:
+        raise HTTPException(422, "検索語は100文字以内で入力してください")
+    month_start = month_end = None
+    if month:
+        try:
+            month_start = datetime.strptime(month, "%Y-%m").date().replace(day=1)
+            month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        except ValueError as error:
+            raise HTTPException(422, "年月を YYYY-MM 形式で指定してください") from error
+    with connect() as db:
+        user = request_user(db, actor)
+        scope, args = bulletin_scope(actor, user)
+        where = [scope, "(p.status='published' OR p.author_id=?)"]
+        params = [*args, user["id"]]
+        if category:
+            where.append("p.post_type=?")
+            params.append(category)
+        if search:
+            normalized = unicodedata.normalize("NFKC", search).casefold()
+            where.append("LOCATE(?,LOWER(CONCAT_WS(' ',p.title,p.body)))>0")
+            params.append(normalized)
+        if month_start:
+            where.append("p.published_at>=? AND p.published_at<?")
+            params.extend((month_start, month_end))
+        rows = [dict(row) for row in db.execute(
+            f"""SELECT p.id,p.post_type,p.title,p.body,p.author_id,
+                COALESCE(u.display_name,u.name) AS author_name,p.department,p.store_id,s.name AS store_name,
+                p.visibility,p.status,p.pinned,p.published_at,p.created_at,p.updated_at
+                FROM bulletin_posts p JOIN users u ON u.id=p.author_id
+                LEFT JOIN stores s ON s.id=p.store_id
+                WHERE {' AND '.join(where)} ORDER BY p.pinned DESC,p.published_at DESC,p.created_at DESC
+                LIMIT 100""", params,
+        )]
+        if rows:
+            ids = [row["id"] for row in rows]
+            placeholders = ",".join("?" for _ in ids)
+            comments = db.execute(
+                f"""SELECT c.id,c.post_id,c.author_id,COALESCE(u.display_name,u.name) AS author_name,
+                    c.body,c.created_at FROM bulletin_comments c JOIN users u ON u.id=c.author_id
+                    WHERE c.post_id IN ({placeholders}) ORDER BY c.created_at,c.id""", ids,
+            ).fetchall()
+            grouped = {}
+            for comment in comments:
+                grouped.setdefault(comment["post_id"], []).append(dict(comment))
+            for row in rows:
+                row["comments"] = grouped.get(row["id"], [])
+        return {"items": rows}
+
+
+class BulletinPostInput(BaseModel):
+    post_type: str
+    title: str = ""
+    body: str = ""
+    visibility: str = "private"
+    status: str = "published"
+    department: Optional[str] = None
+    pinned: bool = False
+    report_date: Optional[str] = None
+
+
+def validate_bulletin_access(actor, user, payload):
+    if payload.post_type not in ("daily_report", "meeting", "notice", "shared"):
+        raise HTTPException(422, "投稿分類が正しくありません")
+    if payload.visibility not in ("private", "store", "company"):
+        raise HTTPException(422, "公開範囲が正しくありません")
+    if payload.status not in ("draft", "published"):
+        raise HTTPException(422, "投稿状態が正しくありません")
+    if payload.visibility == "store" and not user["store_id"]:
+        raise HTTPException(422, "所属店舗が必要です")
+    if payload.visibility == "company" and actor not in ("manager", "hq_finance", "executive"):
+        raise HTTPException(403, "全社公開の投稿を作成する権限がありません")
+    if payload.pinned and actor not in ("manager", "hq_finance", "executive"):
+        raise HTTPException(403, "投稿を固定する権限がありません")
+    if payload.post_type in ("meeting", "notice") and actor not in (
+            "manager", "hq_finance", "executive"):
+        raise HTTPException(403, "この分類の投稿を作成する権限がありません")
+
+
+def daily_report_post_body(db, user_id, report_date):
+    report = db.execute(
+        """SELECT auto_summary,manual_note FROM daily_report_drafts
+           WHERE user_id=? AND report_date=? ORDER BY id DESC LIMIT 1""",
+        (user_id, report_date),
+    ).fetchone()
+    if not report:
+        raise HTTPException(404, "対象日の日報ドラフトが見つかりません")
+    return "\n\n".join(value for value in (report["auto_summary"], report["manual_note"]) if value).strip()
+
+
+@app.post("/api/bulletin")
+def create_bulletin_post(payload: BulletinPostInput, actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "投稿する権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        validate_bulletin_access(actor, user, payload)
+        if payload.post_type == "daily_report":
+            try:
+                report_date = date.fromisoformat(payload.report_date or date.today().isoformat())
+            except ValueError as error:
+                raise HTTPException(422, "日報の日付が正しくありません") from error
+            title = payload.title.strip() or f"{report_date.isoformat()} 日報"
+            body = daily_report_post_body(db, user["id"], report_date)
+            existing = db.execute(
+                "SELECT id FROM bulletin_posts WHERE daily_report_user_id=? AND daily_report_date=?",
+                (user["id"], report_date),
+            ).fetchone()
+            now = now_jst()
+            if existing:
+                db.execute(
+                    """UPDATE bulletin_posts SET title=?,body=?,visibility=?,store_id=?,status=?,
+                       published_at=?,updated_at=? WHERE id=?""",
+                    (title, body, payload.visibility,
+                     user["store_id"] if payload.visibility == "store" else None,
+                     payload.status, now if payload.status == "published" else None, now, existing["id"]),
+                )
+                post_id = existing["id"]
+                action = "bulletin.daily_report.updated"
+            else:
+                post_id = str(uuid.uuid4())
+                db.execute(
+                    """INSERT INTO bulletin_posts(id,post_type,title,body,author_id,department,store_id,
+                       visibility,status,pinned,published_at,created_at,updated_at,daily_report_user_id,
+                       daily_report_date) VALUES(?,'daily_report',?,?,?,NULL,?,?,?,0,?,?,?, ?,?)""",
+                    (post_id, title, body, user["id"],
+                     user["store_id"] if payload.visibility == "store" else None,
+                     payload.visibility, payload.status,
+                     now if payload.status == "published" else None, now, now, user["id"], report_date),
+                )
+                action = "bulletin.daily_report.published"
+        else:
+            title, body = payload.title.strip(), payload.body.strip()
+            if not title or len(title) > 255 or not body or len(body) > 20000:
+                raise HTTPException(422, "タイトルと本文を入力してください（本文は20,000文字以内）")
+            now, post_id = now_jst(), str(uuid.uuid4())
+            db.execute(
+                """INSERT INTO bulletin_posts(id,post_type,title,body,author_id,department,store_id,
+                   visibility,status,pinned,published_at,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (post_id, payload.post_type, title, body, user["id"],
+                 payload.department.strip()[:120] if payload.department else None,
+                 user["store_id"] if payload.visibility == "store" else None,
+                 payload.visibility, payload.status, int(payload.pinned),
+                 now if payload.status == "published" else None, now, now),
+            )
+            action = "bulletin.post.created"
+        audit(db, user["id"], action, "bulletin_post", post_id,
+              f"type={payload.post_type}; visibility={payload.visibility}; status={payload.status}")
+    return {"ok": True, "id": post_id}
+
+
+@app.put("/api/bulletin/{post_id}")
+def update_bulletin_post(post_id: str, payload: BulletinPostInput,
+                         actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "投稿を変更する権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        post = accessible_bulletin_post(db, actor, user, post_id)
+        if post["author_id"] != user["id"] or post["status"] == "archived":
+            raise HTTPException(403, "投稿を変更する権限がありません")
+        validate_bulletin_access(actor, user, payload)
+        title, body = payload.title.strip(), payload.body.strip()
+        if not title or len(title) > 255 or not body or len(body) > 20000:
+            raise HTTPException(422, "タイトルと本文を入力してください（本文は20,000文字以内）")
+        now = now_jst()
+        db.execute(
+            """UPDATE bulletin_posts SET title=?,body=?,department=?,visibility=?,store_id=?,
+               pinned=?,status=?,published_at=IF(?='published',COALESCE(published_at,?),NULL),
+               updated_at=? WHERE id=?""",
+            (title, body, payload.department.strip()[:120] if payload.department else None,
+             payload.visibility, user["store_id"] if payload.visibility == "store" else None,
+             int(payload.pinned), payload.status, payload.status, now, now, post_id),
+        )
+        audit(db, user["id"], "bulletin.post.updated", "bulletin_post", post_id, "post updated")
+    return {"ok": True}
+
+
+@app.post("/api/bulletin/{post_id}/archive")
+def archive_bulletin_post(post_id: str, actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "投稿をアーカイブする権限がありません")
+    with connect() as db:
+        user = request_user(db, actor)
+        post = accessible_bulletin_post(db, actor, user, post_id)
+        if post["author_id"] != user["id"] and actor not in (
+                "manager", "hq_finance", "executive"):
+            raise HTTPException(403, "投稿をアーカイブする権限がありません")
+        db.execute(
+            "UPDATE bulletin_posts SET status='archived',updated_at=? WHERE id=?",
+            (now_jst(), post_id),
+        )
+        audit(db, user["id"], "bulletin.post.archived", "bulletin_post", post_id, "post archived")
+    return {"ok": True}
+
+
+@app.post("/api/bulletin/{post_id}/comments")
+def create_bulletin_comment(post_id: str, payload: dict,
+                            actor: CurrentActor = Depends(require_actor)):
+    if actor == "hr":
+        raise HTTPException(403, "コメントする権限がありません")
+    body = payload.get("body")
+    if not isinstance(body, str) or not body.strip() or len(body.strip()) > 4000:
+        raise HTTPException(422, "コメントは1〜4,000文字で入力してください")
+    with connect() as db:
+        user = request_user(db, actor)
+        post = accessible_bulletin_post(db, actor, user, post_id)
+        if post["status"] != "published":
+            raise HTTPException(409, "公開中の投稿にのみコメントできます")
+        comment_id = db.execute(
+            "INSERT INTO bulletin_comments(post_id,author_id,body,created_at) VALUES(?,?,?,?)",
+            (post_id, user["id"], body.strip(), now_jst()),
+        ).lastrowid
+        audit(db, user["id"], "bulletin.comment.created", "bulletin_post", post_id,
+              f"comment_id={comment_id}")
+    return {"ok": True, "id": comment_id}
 
 
 class IntroductionInput(BaseModel):

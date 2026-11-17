@@ -7,6 +7,7 @@ import {
   Users, WalletCards, X,
 } from "lucide-react";
 import "./style.css";
+import CollaborationWorkspace from "./collaboration.jsx";
 
 const COPY = {
   ja: {
@@ -198,6 +199,28 @@ const COPY = {
     accountingNotDeveloped: "本機能は月次集計・ロック管理です。請求書発行や入金消込は行いません。",
     snapshotDetails: "集計スナップショット", closePrepared: "準備済み", closeClosed: "締め済み",
     reopenRequested: "再オープン承認待ち", reopened: "再オープン済み", locked: "ロック中", unlocked: "ロックなし",
+    workToday: "今日の仕事", deadlineReminder: "期限の確認", businessRegistration: "業務登録",
+    workHistory: "業務記録", todayWorkCount: "本日対応する業務", overdueCount: "期限超過",
+    openTodayWork: "今日の一覧を開く", openOverdue: "期限超過を確認", createActivity: "活動を記録",
+    createExpense: "経費を申請", openWorkHistory: "日報・記録を確認", collaboration: "チーム業務",
+    schedule: "全員の日程", bulletin: "掲示板", negotiationQueue: "商談キュー",
+    backToWorkspace: "今日の仕事へ戻る", previousWeek: "前週", nextWeek: "翌週",
+    calendarEmpty: "この期間に予定はありません。", newSchedule: "予定を登録",
+    eventTitle: "予定名", eventType: "予定の種類", eventStart: "開始日時", eventEnd: "終了日時",
+    eventVisibility: "公開範囲", privateEvent: "自分のみ", storeEvent: "店舗内", companyEvent: "全社",
+    eventMeeting: "会議", eventTrip: "出張", eventPersonal: "個人予定",
+    eventAppointment: "来店予約", eventTask: "タスク期限", saveSchedule: "予定を保存",
+    updateSchedule: "予定を更新", cancelEdit: "編集をやめる", allDay: "終日",
+    postTitle: "タイトル", postBody: "本文", postCategory: "分類", postVisibility: "公開範囲",
+    reportDate: "日報の日付", pinPost: "掲示板の上部に固定",
+    postDaily: "日報", postMeeting: "会議記録", postNotice: "お知らせ", postShared: "共有",
+    publishPost: "投稿する", editPost: "編集", archivePost: "アーカイブ", comment: "コメント",
+    addComment: "コメントを追加", noPosts: "投稿はありません。", searchPosts: "投稿を検索",
+    postMonth: "対象月", dailyReportPublish: "日報ドラフトを共有",
+    queueAction: "次の行動", queueOwner: "担当者", queueStage: "商談段階",
+    queueRisk: "リスク", riskNone: "通常", riskWatch: "要確認", riskHigh: "優先",
+    saveQueueAction: "行動を保存", noNegotiations: "対応対象の商談はありません。",
+    copyright: "Copyright SUZIRUI · V3.0.1",
   },
   zh: {
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
@@ -385,6 +408,28 @@ const COPY = {
     accountingNotDeveloped: "本功能仅做月度汇总和锁定管理，不开具发票或核销收款。",
     snapshotDetails: "汇总快照", closePrepared: "已准备", closeClosed: "已结账",
     reopenRequested: "等待重新开放审批", reopened: "已重新开放", locked: "已锁定", unlocked: "未锁定",
+    workToday: "今日工作", deadlineReminder: "查看期限", businessRegistration: "业务登记",
+    workHistory: "工作记录", todayWorkCount: "今日需处理", overdueCount: "已超期",
+    openTodayWork: "查看今日清单", openOverdue: "查看超期事项", createActivity: "记录活动",
+    createExpense: "申请费用", openWorkHistory: "查看日报与记录", collaboration: "团队协作",
+    schedule: "全员日程", bulletin: "公告板", negotiationQueue: "洽谈队列",
+    backToWorkspace: "返回今日工作", previousWeek: "上一周", nextWeek: "下一周",
+    calendarEmpty: "此期间没有日程。", newSchedule: "新建日程",
+    eventTitle: "日程名称", eventType: "日程类型", eventStart: "开始时间", eventEnd: "结束时间",
+    eventVisibility: "可见范围", privateEvent: "仅自己", storeEvent: "门店内", companyEvent: "全公司",
+    eventMeeting: "会议", eventTrip: "出差", eventPersonal: "个人安排",
+    eventAppointment: "到店预约", eventTask: "任务期限", saveSchedule: "保存日程",
+    updateSchedule: "更新日程", cancelEdit: "取消编辑", allDay: "全天",
+    postTitle: "标题", postBody: "正文", postCategory: "分类", postVisibility: "可见范围",
+    reportDate: "日报日期", pinPost: "置顶公告",
+    postDaily: "日报", postMeeting: "会议记录", postNotice: "通知", postShared: "共享",
+    publishPost: "发布", editPost: "编辑", archivePost: "归档", comment: "评论",
+    addComment: "添加评论", noPosts: "暂无帖子。", searchPosts: "搜索帖子",
+    postMonth: "月份", dailyReportPublish: "分享日报草稿",
+    queueAction: "下一步行动", queueOwner: "负责人", queueStage: "洽谈阶段",
+    queueRisk: "风险", riskNone: "正常", riskWatch: "需关注", riskHigh: "优先",
+    saveQueueAction: "保存行动", noNegotiations: "暂无待处理洽谈。",
+    copyright: "Copyright SUZIRUI · V3.0.1",
   },
 };
 
@@ -470,6 +515,7 @@ function App() {
   const [locale, setLocale] = useState(localStorage.getItem("mallboard-locale") || "ja");
   const [role, setRole] = useState("advisor");
   const [page, setPage] = useState("dashboard");
+  const [workspaceView, setWorkspaceView] = useState("home");
   const [data, setData] = useState(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [demoAccounts, setDemoAccounts] = useState([]);
@@ -735,7 +781,7 @@ function App() {
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Home size={21}/></div><div><b>MallBoard</b><span>{t("subtitle")}</span></div></div>
       <div className="workspace-label">{t("workspace")}</div>
-      <nav>{navItems.map(([id, Icon, key]) => <button key={id} onClick={() => setPage(id)}
+      <nav>{navItems.map(([id, Icon, key]) => <button key={id} onClick={() => { setWorkspaceView("home"); setPage(id); }}
         className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
         {id === "households" && summary?.counters.find((item) => item.key === "overdue")?.count > 0 &&
           <em>{summary.counters.find((item) => item.key === "overdue").count}</em>}
@@ -744,7 +790,7 @@ function App() {
       <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
         <div className="role-meta"><b>{data.user?.name || "—"}</b><span>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</span></div>
         <ChevronDown size={16} className="muted"/></div>
-      <div className="sidebar-foot">{t("demoEnvironment")} <span>●</span></div>
+      <div className="sidebar-foot">{t("copyright")}</div>
     </aside>
     <main className="main">
       <header className="topbar">
@@ -777,8 +823,9 @@ function App() {
             <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
           {page === "change-password" && <PasswordChangePage forced api={api} t={t}
             onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
-          {page === "dashboard" && <Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} onHousehold={openHousehold}
-            onActivity={() => setModal("activity")} onNavigate={setPage}
+          {page === "dashboard" && <Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale}
+            workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold}
+            onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }}
             onReport={(body) => api("/api/report", "PUT", { manual_note: body })}
             onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }}
             onTask={(task) => {
@@ -967,7 +1014,87 @@ function PasswordChangePage({ forced = false, api, t, onChanged }) {
   </section>;
 }
 
-function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHousehold, onActivity, onNavigate, onReport, onCounter, onTask }) {
+function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
+  const today = new Date().toLocaleDateString("sv-SE");
+  const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) === today).length;
+  const overdue = tasks.filter((task) => task.days_overdue > 0).length;
+  return <div className="employee-workstation">
+    <PageTitle title={<>{t("workToday")}<span>{data.user.name}さん</span></>}
+      sub={t("todaySub")} eyebrow={new Date().toLocaleDateString("ja-JP", {
+        year: "numeric", month: "long", day: "numeric", weekday: "long",
+      })}/>
+    <div className="employee-card-grid">
+      <button className="employee-action-card tone-blue" onClick={() => onOpenTasks("tasks:today_followups")}>
+        <span>{t("workToday")}</span><strong>{dueToday}</strong><small>{t("todayWorkCount")}</small>
+        <b>{t("openTodayWork")} <ChevronRight size={14}/></b>
+      </button>
+      <button className="employee-action-card tone-amber" onClick={() => onOpenTasks("tasks:overdue")}>
+        <span>{t("deadlineReminder")}</span><strong>{overdue}</strong><small>{t("overdueCount")}</small>
+        <b>{t("openOverdue")} <ChevronRight size={14}/></b>
+      </button>
+      <section className="employee-action-card tone-green">
+        <span>{t("businessRegistration")}</span><strong className="card-icon"><Plus size={22}/></strong>
+        <small>{t("createActivity")}</small>
+        <div className="employee-card-actions">
+          <button onClick={onActivity}>{t("createActivity")}</button>
+          <button onClick={() => onView("expenses")}>{t("createExpense")}</button>
+        </div>
+      </section>
+      <button className="employee-action-card tone-violet" onClick={() => onView("records")}>
+        <span>{t("workHistory")}</span><strong className="card-icon"><FileText size={22}/></strong>
+        <small>{t("dailyReport")}</small><b>{t("openWorkHistory")} <ChevronRight size={14}/></b>
+      </button>
+    </div>
+    <section className="panel employee-task-panel">
+      <div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div>
+        <span className="pill pill-blue">{tasks.length}</span></div>
+      {tasks.length ? tasks.slice(0, 8).map((task) => <button className="employee-task-row" key={task.task_id}
+        onClick={() => onTask(task)}>
+        <span className={`task-check ${task.days_overdue > 0 ? "text-danger" : ""}`}>
+          {task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</span>
+        <span className="employee-task-copy"><b>{task.title}</b><small>{task.due_at}
+          {task.days_overdue > 0 ? ` · ${task.days_overdue} ${t("daysOverdue")}` : ""}</small></span>
+        <span className={`pill ${task.days_overdue > 0 ? "pill-red" : "pill-blue"}`}>
+          {task.days_overdue > 0 ? t("overdueLabel") : t("status")}</span><ChevronRight size={15}/>
+      </button>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}
+    </section>
+    <section className="panel collaboration-shortcuts">
+      <div className="panel-head"><div><div className="eyebrow">{t("collaboration")}</div><h2>{t("collaboration")}</h2></div></div>
+      <div className="collaboration-shortcut-list">
+        <button onClick={() => onView("calendar")}><CalendarDays size={17}/>{t("schedule")}</button>
+        <button onClick={() => onView("bulletin")}><ClipboardList size={17}/>{t("bulletin")}</button>
+        <button onClick={() => onView("queue")}><ArrowDownRight size={17}/>{t("negotiationQueue")}</button>
+      </div>
+    </section>
+  </div>;
+}
+
+function EmployeeWorkHistory({ data, t, api }) {
+  const [note, setNote] = useState(data.daily_report?.manual_note || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function save(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try { await api("/api/report", "PUT", { manual_note: note }); }
+    catch (saveError) { setError(saveError.message || t("error")); }
+    finally { setSaving(false); }
+  }
+  return <section className="panel employee-records">
+    <div className="panel-head"><div><div className="eyebrow">{t("workHistory")}</div><h2>{t("dailyReport")}</h2></div></div>
+    <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div>
+      <div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div>
+    <form onSubmit={save}><label className="field-label">{t("note")}
+      <textarea value={note} onChange={(event) => setNote(event.target.value)} rows="5"/></label>
+      {error && <div className="config-error" role="alert">{error}</div>}
+      <button className="primary-btn" disabled={saving}>{saving ? "…" : t("save")}</button>
+    </form>
+  </section>;
+}
+
+function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, workspaceView,
+  onWorkspaceView, api, onHousehold, onActivity, onNavigate, onReport, onCounter, onTask }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
   const [period, setPeriod] = useState("7d");
   const [metric, setMetric] = useState("introductions");
@@ -979,6 +1106,26 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
     fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
       .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
   }, [metric, period, role, showManagement]);
+  if (workspaceView !== "home") {
+    if (workspaceView === "expenses") {
+      return <><PageTitle eyebrow={t("businessRegistration")} title={t("expenses")}
+        actions={<button className="secondary-btn" onClick={() => onWorkspaceView("home")}>{t("backToWorkspace")}</button>}/>
+        <ExpensePanel data={data} t={t} role={role} accountRole={data.account_role} locale={locale}/>
+      </>;
+    }
+    if (workspaceView === "records") {
+      return <><PageTitle eyebrow={t("workHistory")} title={t("dailyReport")}
+        actions={<button className="secondary-btn" onClick={() => onWorkspaceView("home")}>{t("backToWorkspace")}</button>}/>
+        <EmployeeWorkHistory data={data} t={t} api={api}/></>;
+    }
+    return <CollaborationWorkspace view={workspaceView} data={data} locale={locale} role={role} t={t}
+      api={api} onBack={() => onWorkspaceView("home")} onTask={onTask} onHousehold={onHousehold}/>;
+  }
+  if (role === "advisor") {
+    return <EmployeeWorkstation data={data} tasks={tasks} t={t} onActivity={onActivity}
+      onView={(view) => onWorkspaceView(view)} onTask={onTask}
+      onOpenTasks={(filter) => { onCounter({ filter, target_page: "households" }); }}/>;
+  }
   const visibleTasks = tasks.slice(0, 5);
   return <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
     title={<>{t("todayTitle")}<span>{data.user.name}さん</span></>} sub={t("todaySub")}
