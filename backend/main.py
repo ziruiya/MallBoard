@@ -2765,7 +2765,7 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                {store_clause} GROUP BY s.id ORDER BY s.id""", store_clause_args,
         ).fetchall()
         funnel_stages = [
-               "反響", "初回相談済", "FP診断済", "紹介済",
+               "反響", "新規予約", "初回相談済", "FP診断済", "紹介済",
                "訪問・商談中", "契約", "着工",
         ]
         funnel_start = now_jst().date() - timedelta(days=89)
@@ -2793,16 +2793,10 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                 WHERE cp.confirmed_start_date>=? AND cp.confirmed_start_date<=? AND cp.confirmed_start_date>=DATE(h.created_at){store_filter}""",
             (funnel_start, funnel_end, *store_args),
         ).fetchone()["count"])
-        funnel = []
-        prior_count = None
-        for stage_name in funnel_stages:
-               count = funnel_counts.get(stage_name, 0)
-               funnel.append({
-                   "stage": stage_name, "count": count,
-                   "conversion_rate": round(min(count, prior_count) / prior_count, 4) if prior_count else None,
-                   "reference_value": True,
-               })
-               prior_count = count
+        funnel = [
+            {"stage": stage_name, "count": funnel_counts.get(stage_name, 0), "reference_value": True}
+            for stage_name in funnel_stages
+        ]
         dimensions = []
         if x_demo_role in ("hq_finance", "executive"):
             for row in db.execute(
@@ -2883,14 +2877,51 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                LEFT JOIN contracts c ON c.negotiation_id=n.id WHERE 1=1{store_filter}
                GROUP BY t.channel ORDER BY touches DESC""", store_args,
         )]
-        cohorts = [dict(row) for row in db.execute(
-            f"""SELECT DATE_FORMAT(h.created_at,'%%Y-%%m') AS cohort,COUNT(DISTINCT h.id) AS inquiries,
-               COUNT(DISTINCT i.id) AS introductions,COUNT(DISTINCT c.id) AS contracts
-               FROM households h LEFT JOIN introductions i ON i.household_id=h.id
-               LEFT JOIN negotiations n ON n.introduction_id=i.id
-               LEFT JOIN contracts c ON c.negotiation_id=n.id WHERE 1=1{store_filter}
-               GROUP BY cohort ORDER BY cohort""", store_args,
-        )]
+        cohort_rows = db.execute(
+            f"""SELECT DATE_FORMAT(h.created_at,'%%Y-%%m') AS cohort,
+               COUNT(DISTINCT h.id) AS households,
+               COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
+                 AND e.to_stage='新規予約' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
+                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS reservation_households,
+               COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
+                 AND e.to_stage='紹介済' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
+                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS introduction_households,
+               COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
+                 AND e.to_stage='契約' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
+                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS contract_households,
+               COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events a JOIN stage_events b ON b.household_id=a.household_id
+                 WHERE a.household_id=h.id AND a.to_stage='新規予約' AND b.to_stage='紹介済'
+                 AND a.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND a.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)
+                 AND b.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND b.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS reservation_introduction_households,
+               COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events a JOIN stage_events b ON b.household_id=a.household_id
+                 WHERE a.household_id=h.id AND a.to_stage='紹介済' AND b.to_stage='契約'
+                 AND a.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND a.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)
+                 AND b.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND b.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS introduction_contract_households
+               FROM households h WHERE 1=1{store_filter}
+               GROUP BY cohort ORDER BY cohort""", (now_jst(),) * 7 + store_args,
+        ).fetchall()
+        cohorts = []
+        for row in cohort_rows:
+            cohort = dict(row)
+            cohort["inquiries"] = cohort["households"]
+            cohort["introductions"] = cohort["introduction_households"]
+            cohort["contracts"] = cohort["contract_households"]
+            reservation = cohort["reservation_households"]
+            introductions_count = cohort["introduction_households"]
+            cohort["inquiry_to_reservation"] = {
+                "numerator": reservation, "denominator": cohort["households"],
+                "rate": reservation / cohort["households"] if cohort["households"] else None,
+            }
+            cohort["reservation_to_introduction"] = {
+                "numerator": cohort["reservation_introduction_households"],
+                "denominator": reservation,
+                "rate": cohort["reservation_introduction_households"] / reservation if reservation else None,
+            }
+            cohort["introduction_to_contract"] = {
+                "numerator": cohort["introduction_contract_households"], "denominator": introductions_count,
+                "rate": cohort["introduction_contract_households"] / introductions_count if introductions_count else None,
+            }
+            cohorts.append(cohort)
         partner_quality = [dict(row) for row in db.execute(
             f"""SELECT p.id,p.name,COUNT(DISTINCT i.id) AS introductions,
                COUNT(DISTINCT CASE WHEN fe.state='Disputed' THEN fe.id END) AS disputes,
@@ -2996,8 +3027,8 @@ def create_management_report(payload: ManagementReportInput,
                 for item in overview["operations_dimensions"]]
         title = "店舗運営状況 / 门店运营情况"
     elif report_type == "funnel":
-        headers = ["ステージ / 阶段", "世帯数 / 家庭数", "前段階からの転換率 / 相较上一阶段转化率"]
-        rows = [[item["stage"], item["count"], item["conversion_rate"]]
+        headers = ["ステージ / 阶段", "世帯数 / 家庭数"]
+        rows = [[item["stage"], item["count"]]
                 for item in overview["funnel"]]
         title = "相談から着工確認までのファネル / 从咨询到开工确认的漏斗"
     elif report_type == "attribution":
@@ -4198,10 +4229,12 @@ def confirm_construction(project_id: int, payload: ConfirmInput,
                FROM construction_projects cp JOIN contracts c ON c.id=cp.contract_id
                JOIN negotiations n ON n.id=c.negotiation_id
                JOIN introductions i ON i.id=n.introduction_id
-               JOIN households h ON h.id=i.household_id WHERE cp.id=?""", (project_id,)
+               JOIN households h ON h.id=i.household_id WHERE cp.id=? FOR UPDATE""", (project_id,)
         ).fetchone()
         if not project:
             raise HTTPException(404, "着工プロジェクトが見つかりません")
+        if project["confirmed_start_date"]:
+            raise HTTPException(409, "この着工はすでに確認済みです")
         if x_demo_role == "manager":
             manager = request_user(db, x_demo_role)
             if project["store_id"] != manager["store_id"]:
@@ -4231,17 +4264,22 @@ def confirm_construction(project_id: int, payload: ConfirmInput,
             tiers = params["tiers"]
             amount = next((int(t["amount"]) for t in tiers if project["contract_amount"] <= t["up_to"]), int(tiers[-1]["amount"]))
         user_id = request_user(db, x_demo_role)["id"]
-        db.execute("UPDATE construction_projects SET confirmed_start_date=?,confirmation_evidence=? WHERE id=?",
-                   (payload.confirmed_start_date, payload.evidence.strip(), project_id))
-        previous_stage = db.execute(
-            "SELECT to_stage FROM stage_events WHERE household_id=? ORDER BY changed_at DESC,id DESC LIMIT 1",
+        existing_start_event = db.execute(
+            "SELECT id FROM stage_events WHERE household_id=? AND to_stage='着工' LIMIT 1",
             (project["household_id"],),
         ).fetchone()
-        db.execute(
-            "INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at) VALUES(?,?,?,?,?)",
-            (project["household_id"], previous_stage["to_stage"] if previous_stage else None,
-             "着工", request_user(db, x_demo_role)["id"], now_jst()),
-        )
+        db.execute("UPDATE construction_projects SET confirmed_start_date=?,confirmation_evidence=? WHERE id=?",
+                   (payload.confirmed_start_date, payload.evidence.strip(), project_id))
+        if not existing_start_event:
+            previous_stage = db.execute(
+                "SELECT to_stage FROM stage_events WHERE household_id=? ORDER BY changed_at DESC,id DESC LIMIT 1",
+                (project["household_id"],),
+            ).fetchone()
+            db.execute(
+                "INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at) VALUES(?,?,?,?,?)",
+                (project["household_id"], previous_stage["to_stage"] if previous_stage else None,
+                 "着工", user_id, now_jst()),
+            )
         db.execute(
             """UPDATE tasks SET done=1,status='done' WHERE related_type='construction_project'
                AND related_id=? AND task_type='construction_queue'""", (project_id,)

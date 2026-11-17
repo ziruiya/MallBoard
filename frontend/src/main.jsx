@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import CollaborationWorkspace from "./collaboration.jsx";
+import { todayJst } from "./jst-date.js";
 
 const COPY = {
   ja: {
@@ -775,11 +776,11 @@ function App() {
       const relevantIds = new Set(tasks.filter((task) => {
         if (taskFilter === "overdue") return task.days_overdue > 0;
         if (taskFilter === "today_followups") return task.task_type === "followup"
-          && task.due_at.toString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+          && task.due_at.toString().slice(0, 10) === todayJst();
         if (taskFilter === "critical") return task.priority === "high" && task.days_overdue > 0;
         if (taskFilter === "partner_feedback") return task.task_type === "partner_feedback" && task.days_overdue > 0;
         return task.task_type === "appointment"
-          && task.due_at.toString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+          && task.due_at.toString().slice(0, 10) === todayJst();
       }).map((task) => task.household_id).filter(Boolean));
       rows = rows.filter((h) => relevantIds.has(h.id));
     }
@@ -1033,7 +1034,7 @@ function PasswordChangePage({ forced = false, api, t, onChanged }) {
 }
 
 function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
-  const today = new Date().toLocaleDateString("sv-SE");
+  const today = todayJst();
   const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) <= today).length;
   const overdue = tasks.filter((task) => task.days_overdue > 0).length;
   const dueSoon = tasks.filter((task) => {
@@ -1044,7 +1045,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
   return <div className="employee-workstation">
     <PageTitle title={<>{t("workToday")}<span>{data.user.name}さん</span></>}
       sub={t("todaySub")} eyebrow={new Date().toLocaleDateString("ja-JP", {
-        year: "numeric", month: "long", day: "numeric", weekday: "long",
+        timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long",
       })}/>
     <div className="employee-card-grid">
       <button className="employee-action-card tone-blue" onClick={() => onOpenTasks("tasks:today_followups")}>
@@ -1224,14 +1225,14 @@ function StageFunnel({ items, t }) {
   return <div className="funnel-list">{order.slice(0, 6).map((stage, i) => {
     const count = items.filter((h) => h.stage_events.at(-1)?.to_stage === stage).length;
     return <div className="funnel-row" key={stage}><span className="funnel-index">{String(i + 1).padStart(2, "0")}</span><span className="funnel-name">{stage}</span>
-      <div className="funnel-track"><i style={{ width: `${items.length ? Math.max(4, count / items.length * 100) : 0}%` }}/></div><b>{count}</b><small>{items.length ? `${Math.round(count / items.length * 100)}%` : "0%"}</small></div>;
+      <div className="funnel-track"><i style={{ width: `${items.length ? Math.max(4, count / items.length * 100) : 0}%` }}/></div><b>{count}</b></div>;
   })}</div>;
 }
 function HouseholdTable({ items, t, onOpen }) {
   return <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("stage")}</th><th>{t("nextAction")}</th><th>{t("due")}</th><th/></tr></thead>
     <tbody>{items.map((h) => { const task = h.activities.find((a) => a.next_action); return <tr key={h.id} onClick={() => onOpen(h)} className="click-row">
       <td><div className="customer-cell"><div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div></div></td>
-      <td><span className="stage-tag">{h.stage_events.at(-1)?.to_stage}</span></td><td>{task?.next_action || "—"}</td><td className={task?.next_action_due < new Date().toISOString().slice(0, 10) ? "text-danger" : ""}>{task?.next_action_due || "—"}</td>
+        <td><span className="stage-tag">{h.stage_events.at(-1)?.to_stage}</span></td><td>{task?.next_action || "—"}</td><td className={task?.next_action_due < todayJst() ? "text-danger" : ""}>{task?.next_action_due || "—"}</td>
       <td><ChevronRight size={15} className="muted"/></td></tr>;})}</tbody></table>
     {!items.length && <div className="empty-state">{t("noRows")}</div>}</div>;
 }
@@ -1330,7 +1331,7 @@ function ConstructionCard({ household, project, data, t, role, api }) {
     <div className="milestone-line"><div className="milestone done"><div><Check size={15}/></div><span>{t("contract")}</span><b>{project.contract_date}</b></div><div className="milestone done"><div><Check size={15}/></div><span>{t("startPlanned")}</span><b>{project.planned_start_date}</b></div>
       <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{project.actual_start_date || "—"}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{project.confirmed_start_date || "未確認"}</b></div></div>
     {!project.confirmed_start_date && canConfirm ? <div className="confirm-row"><label className="field-label">{t("confirmationEvidence")}<input value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="現場写真・担当者確認など"/></label>
-      <button className="primary-btn" disabled={!evidence.trim() || !project.actual_start_date} onClick={() => api(`/api/construction/${project.project_id}/confirm`, "POST", { confirmed_start_date: new Date().toISOString().slice(0, 10), evidence })}><Check size={15}/>{t("confirm")}</button></div>
+      <button className="primary-btn" disabled={!evidence.trim() || !project.actual_start_date} onClick={() => api(`/api/construction/${project.project_id}/confirm`, "POST", { confirmed_start_date: todayJst(), evidence })}><Check size={15}/>{t("confirm")}</button></div>
       : !project.confirmed_start_date ? <div className="inline-notice"><ShieldCheck size={16}/>{t("roleFinance")} または {t("roleManager")} ロールで着工確認ができます。</div>
       : <div className="success-notice"><Check size={16}/>{t("confirmed")} · {project.confirmation_evidence}</div>}
     {project.entitlement_id && <div className="generated-fee"><div className="metric-icon green"><BadgeJapaneseYen size={18}/></div><div><span>{t("entitlement")} · {t("basis")}</span><b>¥{Number(project.contract_amount).toLocaleString()} × {feeRate(project.rule_params)} = ¥{Number(project.calculated_amount).toLocaleString()}</b></div><span className="rule-chip">FeeRule v{project.rule_version}</span></div>}
@@ -1430,11 +1431,11 @@ function Management({ data, management, t, role, onReminder, onException }) {
       </section></div>
     {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
       <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
-      <span className="muted">参考値 · {t("conversionRate")}</span></div>
+      <span className="muted">{document.documentElement.lang === "zh" ? "参考值・世带数" : "参考値・世帯数"}</span></div>
       <div className="management-funnel-list">{funnel.map((item, index) => <div className="management-funnel-row" key={item.stage}>
         <span>{String(index + 1).padStart(2, "0")} · {localeLabel(document.documentElement.lang, item.stage)}</span>
         <div className="funnel-track"><i style={{ width: `${Math.min(100, item.count / Math.max(...funnel.map((entry) => entry.count), 1) * 100)}%` }}/></div>
-        <b>{item.count}</b><small>{item.conversion_rate == null ? "—" : `${(item.conversion_rate * 100).toFixed(1)}%`}</small>
+        <b>{item.count}</b>
       </div>)}</div>
     </section>}
     {management?.exception_cards?.length > 0 && <section className="panel exception-panel">
@@ -1484,10 +1485,14 @@ function Management({ data, management, t, role, onReminder, onException }) {
     <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("marketingAttribution")}</div><h2>{t("attribution")}</h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>{t("firstTouch")}</th><th>{t("touch")}</th><th>{t("households")}</th><th>{t("contract")}</th></tr></thead>
         <tbody>{management.attribution.map((row) => <tr key={row.channel}><td>{row.channel}</td><td>{row.touches}</td><td>{row.households}</td><td>{row.contracts}</td></tr>)}</tbody></table></div>
-    </section><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("cohortConversion")}</div><h2>{t("cohort")}</h2></div></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("cohort")}</th><th>{t("appointments")}</th><th>{t("introductions")}</th><th>{t("contract")}</th></tr></thead>
-        <tbody>{management.cohorts.map((row) => <tr key={row.cohort}><td>{row.cohort}</td><td>{row.inquiries}</td><td>{row.introductions} ({row.inquiries ? Math.round(row.introductions / row.inquiries * 100) : 0}%)</td>
-          <td>{row.contracts} ({row.inquiries ? Math.round(row.contracts / row.inquiries * 100) : 0}%)</td></tr>)}</tbody></table></div>
+    </section><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("cohortConversion")}</div><h2>{t("cohort")}</h2></div>
+      <span className="muted">{document.documentElement.lang === "zh" ? "正式 Cohort 转化率・同一世带追踪" : "正式 Cohort 転換率・同一世帯追跡"}</span></div>
+      <div className="table-scroll"><table><thead><tr><th>{t("cohort")}</th><th>{document.documentElement.lang === "zh" ? "反响→预约" : "反響→予約"}</th><th>{document.documentElement.lang === "zh" ? "预约→介绍" : "予約→紹介"}</th><th>{document.documentElement.lang === "zh" ? "介绍→签约" : "紹介→契約"}</th></tr></thead>
+        <tbody>{management.cohorts.map((row) => {
+          const rateLabel = (value) => value?.rate == null ? "—" : `${(value.rate * 100).toFixed(1)}% (${value.numerator}/${value.denominator})`;
+          return <tr key={row.cohort}><td>{row.cohort}</td><td>{rateLabel(row.inquiry_to_reservation)}</td>
+            <td>{rateLabel(row.reservation_to_introduction)}</td><td>{rateLabel(row.introduction_to_contract)}</td></tr>;
+        })}</tbody></table></div>
     </section></div>
     <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("partnerSettlementQuality")}</div><h2>{t("partnerQuality")}</h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>{t("partner")}</th><th>{t("introductions")}</th><th>{t("disputed")}</th><th>{t("paid")}</th><th>{t("amount")}</th></tr></thead>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { todayJst } from "./jst-date.js";
 import {
   ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, MessageSquare, Plus, Search,
 } from "lucide-react";
@@ -236,7 +237,7 @@ function BulletinView({ data, role, t, locale, api }) {
     setEditing(null);
     setForm({
       post_type: postType, title: "", body: "", visibility: "private", status: "published",
-      report_date: new Date().toLocaleDateString("sv-SE"),
+      report_date: todayJst(),
     });
     setComposer(true);
   }
