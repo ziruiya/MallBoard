@@ -184,10 +184,16 @@ const COPY = {
     dataExchange: "CSV / PDF 入出力", exportResource: "出力データ", exportFile: "ファイルを作成",
     exportFormat: "出力形式", formatCsv: "CSV", formatPdf: "PDFレポート",
     importKintone: "kintone CSVを取り込む", includePersonalData: "個人情報を含める（管理者のみ）",
+    importFieldMapping: "CSV項目マッピング", importExternalId: "外部ID", importRepresentative: "代表者名",
+    importStore: "店舗ID", importAdvisorCode: "担当顧問の社員番号", importBudget: "予算帯",
+    importArea: "希望エリア", importUnmapped: "割り当てなし", runDryRun: "ドライラン",
+    confirmImport: "確認して取り込む", previewReady: "取込可能", previewExpiry: "このプレビューは1時間有効です。",
+    previewStale: "マッピングが変更されています。再度ドライランを実行してください。",
+    previewRequired: "取り込み前にドライランを実行してください。",
     exportHouseholds: "顧客一覧", exportIntroductions: "紹介一覧", exportExpenses: "経費一覧",
     exportFees: "報酬一覧", exportInvoices: "会計連携データ一覧", importResults: "取り込み結果",
     importedRows: "取り込み済み", skippedRows: "スキップ", errorRows: "エラー",
-    downloadCsv: "ダウンロード", kintoneCsv: "kintone CSVファイル",
+    downloadCsv: "ダウンロード", kintoneCsv: "kintone CSVファイル", truncated: "先頭200行を表示しています。",
     importStatusIMPORTED: "取り込み済み", importStatusSKIPPED: "スキップ", importStatusERROR: "エラー",
     invoiceCsvNote: "CSV / PDF は会計連携データの一覧です。請求書の発行や入金消込は行いません。",
     monthClose: "月次締め", monthCloseDescription: "月次スナップショットはバージョン管理され、締め後の対象レコードはロックされます。",
@@ -393,10 +399,16 @@ const COPY = {
     dataExchange: "CSV / PDF 导入导出", exportResource: "导出数据", exportFile: "生成文件",
     exportFormat: "导出格式", formatCsv: "CSV", formatPdf: "PDF 报表",
     importKintone: "导入 kintone CSV", includePersonalData: "包含个人信息（仅管理员）",
+    importFieldMapping: "CSV 字段映射", importExternalId: "外部 ID", importRepresentative: "代表者姓名",
+    importStore: "门店 ID", importAdvisorCode: "负责顾问员工编号", importBudget: "预算范围",
+    importArea: "意向区域", importUnmapped: "不映射", runDryRun: "运行预检",
+    confirmImport: "确认并导入", previewReady: "可导入", previewExpiry: "此预检结果有效期为 1 小时。",
+    previewStale: "字段映射已更改，请重新运行预检。",
+    previewRequired: "导入前请先运行预检。",
     exportHouseholds: "客户列表", exportIntroductions: "介绍列表", exportExpenses: "费用列表",
     exportFees: "报酬列表", exportInvoices: "会计对接数据列表", importResults: "导入结果",
     importedRows: "已导入", skippedRows: "跳过", errorRows: "错误",
-    downloadCsv: "下载", kintoneCsv: "kintone CSV 文件",
+    downloadCsv: "下载", kintoneCsv: "kintone CSV 文件", truncated: "仅显示前 200 行。",
     importStatusIMPORTED: "已导入", importStatusSKIPPED: "跳过", importStatusERROR: "错误",
     invoiceCsvNote: "CSV / PDF 仅为会计对接数据列表，不会开具发票或进行收款核销。",
     monthClose: "月度结账", monthCloseDescription: "月度快照按版本保存，结账后锁定指定业务记录。",
@@ -783,8 +795,6 @@ function App() {
       <div className="workspace-label">{t("workspace")}</div>
       <nav>{navItems.map(([id, Icon, key]) => <button key={id} onClick={() => { setWorkspaceView("home"); setPage(id); }}
         className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
-        {id === "households" && summary?.counters.find((item) => item.key === "overdue")?.count > 0 &&
-          <em>{summary.counters.find((item) => item.key === "overdue").count}</em>}
       </button>)}</nav>
       <div className="sidebar-spacer"/>
       <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
@@ -800,7 +810,7 @@ function App() {
           <div className="notification-anchor">
             <button className="icon-btn" title={t("notifications")} aria-label={t("notifications")}
               onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}>
-              <Bell size={18}/>{notificationUnreadCount > 0 && <em>{notificationUnreadCount}</em>}
+              <Bell size={18}/>
             </button>
             {notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount}
               locale={locale} t={t} onOpen={openNotification}
@@ -1654,11 +1664,14 @@ function ExpensePanel({ data, t, role, accountRole, locale }) {
   </section>;
 }
 function DataExchangePanel({ data, t, locale }) {
+  const importFileInput = useRef(null);
   const [jobs, setJobs] = useState([]);
   const [resource, setResource] = useState("households");
   const [format, setFormat] = useState("csv");
   const [includePersonalData, setIncludePersonalData] = useState(false);
   const [importFile, setImportFile] = useState(null);
+  const [importMapping, setImportMapping] = useState({});
+  const [previewResult, setPreviewResult] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1704,14 +1717,41 @@ function DataExchangePanel({ data, t, locale }) {
     } catch (requestError) { setError(requestError.message || t("error")); }
     finally { setBusy(false); }
   }
-  async function importCsv(event) {
-    event.preventDefault();
+  const importFields = [
+    ["external_id", "importExternalId"], ["representative_name", "importRepresentative"],
+    ["store_id", "importStore"], ["advisor_employee_code", "importAdvisorCode"],
+    ["budget_band", "importBudget"], ["area_pref", "importArea"],
+  ];
+  const previewMatchesMapping = previewResult && importFields.every(([key]) =>
+    (previewResult.mapping?.[key] || "") === (importMapping[key] || ""));
+  async function previewCsv() {
     if (!importFile) return;
-    const form = event.currentTarget;
     setBusy(true); setError(""); setImportResult(null);
     try {
       const body = new FormData();
       body.append("file", importFile);
+      body.append("mapping_json", JSON.stringify(importMapping));
+      const response = await fetch(`${API_BASE}/api/imports/kintone/preview`, {
+        method: "POST", credentials: "include", body,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || t("error"));
+      setPreviewResult(result);
+      setImportMapping(result.mapping || {});
+    } catch (requestError) { setError(requestError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  async function importCsv() {
+    if (!importFile || !previewResult || !previewMatchesMapping) {
+      setError(t("previewRequired"));
+      return;
+    }
+    setBusy(true); setError("");
+    try {
+      const body = new FormData();
+      body.append("file", importFile);
+      body.append("preview_job_id", previewResult.id);
+      body.append("mapping_json", JSON.stringify(importMapping));
       const response = await fetch(`${API_BASE}/api/imports/kintone`, {
         method: "POST", credentials: "include", body,
       });
@@ -1721,7 +1761,9 @@ function DataExchangePanel({ data, t, locale }) {
       if (!detailResponse.ok) throw new Error(t("configLoadError"));
       setImportResult(await detailResponse.json());
       setImportFile(null);
-      form.reset();
+      if (importFileInput.current) importFileInput.current.value = "";
+      setPreviewResult(null);
+      setImportMapping({});
     } catch (requestError) { setError(requestError.message || t("error")); }
     finally { setBusy(false); }
   }
@@ -1731,7 +1773,12 @@ function DataExchangePanel({ data, t, locale }) {
     "store_id は数値で指定してください": "store_id 必须为数字。",
     "external_id は1〜160文字で指定してください": "external_id 长度须为 1–160 个字符。",
     "代表者名は1〜120文字で指定してください": "代表者姓名长度须为 1–120 个字符。",
+    "必須項目 external_id、representative_name、store_id をCSV列へ割り当ててください": "请将必填字段 external_id、representative_name、store_id 映射到 CSV 列。",
+    "担当顧問が店舗と一致しないか、有効なアカウントではありません": "负责顾问与门店不匹配或账号无效。",
+    "同じCSV内に同一external_idがあります": "CSV 内存在重复的 external_id。",
+    "予算帯または希望エリアが文字数上限を超えています": "预算范围或意向区域超出字符数限制。",
   };
+  const importReason = (reason) => locale === "zh" ? reasonZh[reason] || reason : reason;
   return <section className="panel data-exchange-panel"><div className="panel-head"><div>
     <div className="eyebrow">{t("settings")}</div><h2>{t("dataExchange")}</h2></div></div>
     {error && <p className="config-error" role="alert">{error}</p>}
@@ -1748,20 +1795,51 @@ function DataExchangePanel({ data, t, locale }) {
       <span>{resourceLabels[job.resource] || job.resource} · {String(job.format || "csv").toUpperCase()} · {job.row_count} · {job.status}</span>
       {job.status === "READY" && <a href={`${API_BASE}/api/export-jobs/${job.id}/download`}>{t("downloadCsv")}</a>}
     </div>)}</div>
-    {canImport && <form className="import-form" onSubmit={importCsv}>
-      <label>{t("kintoneCsv")}<input type="file" accept=".csv,text/csv" required
-        onChange={(event) => setImportFile(event.target.files?.[0] || null)}/></label>
-      <button className="secondary-btn" disabled={busy || !importFile}>{t("importKintone")}</button>
-    </form>}
+    {canImport && <div className="import-form">
+      <label>{t("kintoneCsv")}<input ref={importFileInput} type="file" accept=".csv,text/csv" required
+        onChange={(event) => {
+          setImportFile(event.target.files?.[0] || null);
+          setPreviewResult(null); setImportMapping({}); setImportResult(null);
+        }}/></label>
+      {previewResult && <div className="import-mapping"><h3>{t("importFieldMapping")}</h3>
+        <div className="import-mapping-grid">{importFields.map(([key, label]) => <label key={key}>{t(label)}
+          <select value={importMapping[key] || ""} onChange={(event) => {
+            setImportMapping((current) => ({ ...current, [key]: event.target.value }));
+          }}>
+            <option value="">{t("importUnmapped")}</option>
+            {previewResult.headers.filter((header) => !importFields.some(([otherKey]) =>
+              otherKey !== key && importMapping[otherKey] === header))
+              .map((header) => <option value={header} key={`${key}-${header}`}>{header}</option>)}
+          </select></label>)}</div>
+        <p className="config-note">{previewMatchesMapping ? t("previewExpiry") : t("previewStale")}</p>
+        <div className="import-preview-counts">
+          <span>{t("previewReady")}: {previewResult.ready_rows}</span>
+          <span>{t("skippedRows")}: {previewResult.skipped_rows}</span>
+          <span>{t("errorRows")}: {previewResult.error_rows}</span>
+          {previewResult.truncated && <span>{t("truncated")}</span>}
+        </div>
+        <div className="import-preview-actions">
+          <button type="button" className="secondary-btn" disabled={busy || !importFile} onClick={previewCsv}>{t("runDryRun")}</button>
+          <button type="button" className="primary-btn" disabled={busy || !previewMatchesMapping || !previewResult.ready_rows}
+            onClick={importCsv}>{t("confirmImport")}</button>
+        </div>
+        <ImportResultTable rows={previewResult.rows} t={t} locale={locale} importReason={importReason}/>
+      </div>}
+      {!previewResult && <button type="button" className="secondary-btn" disabled={busy || !importFile} onClick={previewCsv}>{t("runDryRun")}</button>}
+    </div>}
     {resource === "invoice_data" && <p className="config-note">{t("invoiceCsvNote")}</p>}
     {importResult && <div className="import-result"><h3>{t("importResults")} · {importResult.status}</h3>
       <p>{t("importedRows")}: {importResult.success_rows} · {t("skippedRows")}: {importResult.skipped_rows} · {t("errorRows")}: {importResult.error_rows}</p>
-      <div className="table-scroll"><table><thead><tr><th>#</th><th>external_id</th><th>{t("status")}</th><th>{t("detailLabel")}</th></tr></thead>
-        <tbody>{importResult.rows.map((row) => <tr key={row.source_row_number}>
-          <td>{row.source_row_number}</td><td>{row.external_id}</td>
-          <td>{t(`importStatus${row.status}`)}</td><td>{locale === "zh" ? reasonZh[row.reason] || row.reason : row.reason}</td>
-        </tr>)}</tbody></table></div></div>}
+      <ImportResultTable rows={importResult.rows} t={t} locale={locale} importReason={importReason}/>
+    </div>}
   </section>;
+}
+function ImportResultTable({ rows, t, importReason }) {
+  return <div className="table-scroll"><table><thead><tr><th>#</th><th>external_id</th><th>{t("status")}</th><th>{t("detailLabel")}</th></tr></thead>
+    <tbody>{(rows || []).map((row) => <tr key={row.source_row_number}>
+      <td>{row.source_row_number}</td><td>{row.external_id}</td>
+      <td>{t(row.status === "READY" ? "previewReady" : `importStatus${row.status}`)}</td><td>{importReason(row.reason)}</td>
+    </tr>)}</tbody></table></div>;
 }
 function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferences, onSavePreferences }) {
   return <><PageTitle eyebrow={t("systemPreferences")} title={t("settings")} sub={t("settingsSub")}/>

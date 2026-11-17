@@ -245,6 +245,7 @@ CREATE TABLE IF NOT EXISTS import_jobs (
   success_rows INT NOT NULL DEFAULT 0, skipped_rows INT NOT NULL DEFAULT 0,
   error_rows INT NOT NULL DEFAULT 0, status VARCHAR(24) NOT NULL,
   created_at DATETIME NOT NULL, finished_at DATETIME NULL,
+  content_sha256 CHAR(64) NULL, mapping_json JSON NULL, preview_expires_at DATETIME NULL,
   INDEX idx_import_jobs_requester(requested_by,created_at)
 );
 CREATE TABLE IF NOT EXISTS import_row_results (
@@ -1509,6 +1510,11 @@ def ensure_schema(db):
             "include_personal_data": "TINYINT NOT NULL DEFAULT 0",
             "record_ids_json": "LONGTEXT NULL",
             "downloaded_at": "DATETIME NULL",
+        },
+        "import_jobs": {
+            "content_sha256": "CHAR(64) NULL",
+            "mapping_json": "JSON NULL",
+            "preview_expires_at": "DATETIME NULL",
         },
         "expenses": {
             "applied_at": "DATETIME NULL",
@@ -5541,104 +5547,284 @@ def approve_month_reopen(close_id: str, payload: MonthCloseVersionInput,
     return {"ok": True, "status": "REOPENED", "version": payload.version + 1}
 
 
-@app.post("/api/imports/kintone")
-async def import_kintone_csv(file: UploadFile = File(...),
-                             actor: CurrentActor = Depends(require_actor)):
-    if getattr(actor, "account_role", "") not in ("administrator", "hq_staff"):
-        raise HTTPException(403, "kintoneデータを取り込む権限がありません")
-    filename = Path(file.filename or "").name
-    if not filename.lower().endswith(".csv"):
-        raise HTTPException(422, "CSVファイルを指定してください")
-    with connect() as db:
-        max_bytes = config_value(db, "import.max_csv_mb") * 1024 * 1024
-        max_rows = config_value(db, "import.max_csv_rows")
-        if "csv" not in set(config_value(db, "attachment.allowed_extensions")):
-            raise HTTPException(403, "CSV取り込みは設定で無効になっています")
-    content = await file.read(max_bytes + 1)
-    if len(content) > max_bytes:
-        raise HTTPException(413, "CSVファイルが設定サイズ上限を超えています")
+KINTONE_IMPORT_FIELDS = (
+    "external_id", "representative_name", "store_id",
+    "advisor_employee_code", "budget_band", "area_pref",
+)
+KINTONE_IMPORT_REQUIRED = ("external_id", "representative_name", "store_id")
+KINTONE_IMPORT_ALIASES = {
+    "external_id": ("external_id", "record_id", "レコード番号", "顧客番号"),
+    "representative_name": ("representative_name", "代表者名", "顧客名", "氏名"),
+    "store_id": ("store_id", "店舗ID", "store"),
+    "advisor_employee_code": ("advisor_employee_code", "担当者社員番号", "顧問社員番号"),
+    "budget_band": ("budget_band", "予算帯", "予算"),
+    "area_pref": ("area_pref", "希望エリア", "希望地域"),
+}
+
+
+def parse_kintone_csv(content, max_rows):
     try:
         text = content.decode("utf-8-sig")
-        reader = csv.DictReader(io.StringIO(text, newline=""))
-        required = {"external_id", "representative_name", "store_id"}
-        if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
-            raise HTTPException(422, "CSVには external_id、representative_name、store_id 列が必要です")
-        rows = list(reader)
+        records = list(csv.reader(io.StringIO(text, newline=""), strict=True))
     except UnicodeDecodeError as error:
         raise HTTPException(422, "CSVはUTF-8形式で保存してください") from error
     except csv.Error as error:
         raise HTTPException(422, "CSV形式を確認してください") from error
+    if not records:
+        raise HTTPException(422, "CSVにヘッダー行がありません")
+    headers = [header.strip() for header in records[0]]
+    if not headers or any(not header for header in headers) or len(headers) != len(set(headers)):
+        raise HTTPException(422, "CSVのヘッダーが空欄または重複しています")
+    rows = []
+    for row_number, values in enumerate(records[1:], start=2):
+        if not any(value.strip() for value in values):
+            continue
+        if len(values) != len(headers):
+            raise HTTPException(422, f"{row_number} 行目の列数がヘッダーと一致しません")
+        rows.append({"source_row_number": row_number, "values": dict(zip(headers, values))})
     if len(rows) > max_rows:
         raise HTTPException(413, "CSV行数が設定上限を超えています")
+    return headers, rows
 
-    now = now_jst()
-    job_id = str(uuid.uuid4())
-    imported = skipped = errors = 0
-    with connect() as db:
-        db.execute(
-            """INSERT INTO import_jobs(id,source_system,requested_by,filename,total_rows,
-               success_rows,skipped_rows,error_rows,status,created_at)
-               VALUES(?,'kintone',?,?,?,0,0,0,'PROCESSING',?)""",
-            (job_id, actor.user_id, filename[:255], len(rows), now),
-        )
-        for row_number, row in enumerate(rows, start=2):
-            external_id = (row.get("external_id") or "").strip()
-            name = (row.get("representative_name") or "").strip()
-            reason = None
-            store_id = None
-            advisor_id = None
+
+def resolve_kintone_mapping(headers, mapping_json):
+    try:
+        supplied = json.loads(mapping_json or "{}")
+    except (TypeError, ValueError) as error:
+        raise HTTPException(422, "フィールドマッピングのJSON形式が正しくありません") from error
+    if not isinstance(supplied, dict) or set(supplied) - set(KINTONE_IMPORT_FIELDS):
+        raise HTTPException(422, "未対応のフィールドがマッピングされています")
+    mapping = {}
+    if supplied:
+        for field, column in supplied.items():
+            if column in (None, ""):
+                continue
+            if not isinstance(column, str) or column not in headers:
+                raise HTTPException(422, f"{field} のCSV列が見つかりません")
+            mapping[field] = column
+    else:
+        normalized = {header.casefold(): header for header in headers}
+        for field, aliases in KINTONE_IMPORT_ALIASES.items():
+            column = next((normalized[item.casefold()] for item in aliases
+                           if item.casefold() in normalized), None)
+            if column:
+                mapping[field] = column
+    if len(set(mapping.values())) != len(mapping):
+        raise HTTPException(422, "同じCSV列を複数の項目に割り当てることはできません")
+    return mapping
+
+
+def mapped_value(row, mapping, field):
+    column = mapping.get(field)
+    return (row.get(column) or "").strip() if column else ""
+
+
+def analyze_kintone_rows(db, rows, mapping):
+    store_ids = {row["id"] for row in db.execute("SELECT id FROM stores").fetchall()}
+    advisors = {
+        (row["employee_code"], row["store_id"]): row["id"]
+        for row in db.execute(
+            """SELECT id,employee_code,store_id FROM users WHERE role='advisor'
+               AND account_status='ACTIVE' AND employee_code IS NOT NULL"""
+        ).fetchall()
+    }
+    external_ids = list(dict.fromkeys(
+        mapped_value(item["values"], mapping, "external_id")
+        for item in rows if mapped_value(item["values"], mapping, "external_id")
+    ))
+    existing = {}
+    for start in range(0, len(external_ids), 500):
+        batch = external_ids[start:start + 500]
+        placeholders = ",".join("?" for _ in batch)
+        existing.update({
+            row["external_id"]: row["local_id"]
+            for row in db.execute(
+                f"""SELECT external_id,local_id FROM external_record_mappings
+                    WHERE source_system='kintone' AND external_id IN ({placeholders})""",
+                batch,
+            ).fetchall()
+        })
+    seen = set()
+    result = []
+    for item in rows:
+        row, row_number = item["values"], item["source_row_number"]
+        external_id = mapped_value(row, mapping, "external_id")
+        name = mapped_value(row, mapping, "representative_name")
+        reason = None
+        store_id = None
+        advisor_id = None
+        if any(field not in mapping for field in KINTONE_IMPORT_REQUIRED):
+            reason = "必須項目 external_id、representative_name、store_id をCSV列へ割り当ててください"
+        elif not external_id or len(external_id) > 160:
+            reason = "external_id は1〜160文字で指定してください"
+        elif not name or len(name) > 120:
+            reason = "代表者名は1〜120文字で指定してください"
+        else:
             try:
-                if not external_id or len(external_id) > 160:
-                    reason = "external_id は1〜160文字で指定してください"
-                elif not name or len(name) > 120:
-                    reason = "代表者名は1〜120文字で指定してください"
-                else:
-                    store_id = int((row.get("store_id") or "").strip())
-                    if not db.execute("SELECT id FROM stores WHERE id=?", (store_id,)).fetchone():
-                        reason = "店舗が見つかりません"
-                    advisor_code = (row.get("advisor_employee_code") or "").strip()
-                    if not reason and advisor_code:
-                        advisor = db.execute(
-                            """SELECT id FROM users WHERE employee_code=? AND role='advisor'
-                               AND store_id=? AND account_status='ACTIVE'""",
-                            (advisor_code, store_id),
-                        ).fetchone()
-                        if not advisor:
-                            reason = "担当顧問が店舗と一致しないか、有効なアカウントではありません"
-                        else:
-                            advisor_id = advisor["id"]
+                store_id = int(mapped_value(row, mapping, "store_id"))
+                if store_id not in store_ids:
+                    reason = "店舗が見つかりません"
             except (TypeError, ValueError):
                 reason = "store_id は数値で指定してください"
-            mapped = db.execute(
-                "SELECT local_id FROM external_record_mappings WHERE source_system='kintone' AND external_id=?",
-                (external_id,),
-            ).fetchone() if external_id else None
-            if not reason and mapped:
+        advisor_code = mapped_value(row, mapping, "advisor_employee_code")
+        if not reason and advisor_code:
+            advisor_id = advisors.get((advisor_code, store_id))
+            if not advisor_id:
+                reason = "担当顧問が店舗と一致しないか、有効なアカウントではありません"
+        budget = mapped_value(row, mapping, "budget_band")
+        area = mapped_value(row, mapping, "area_pref")
+        if not reason and (len(budget) > 120 or len(area) > 255):
+            reason = "予算帯または希望エリアが文字数上限を超えています"
+        local_id = existing.get(external_id)
+        status = "READY"
+        if not reason and (local_id or external_id in seen):
+            status, reason = "SKIPPED", (
+                "同じCSV内に同一external_idがあります" if external_id in seen
+                else "既に取り込み済みです"
+            )
+        elif reason:
+            status = "ERROR"
+        if external_id:
+            seen.add(external_id)
+        result.append({
+            "source_row_number": row_number, "external_id": external_id or None,
+            "status": status, "reason": reason, "local_id": local_id,
+            "representative_name": name[:120], "store_id": store_id,
+            "advisor_id": advisor_id, "budget_band": budget or None, "area_pref": area or None,
+        })
+    return result
+
+
+def import_upload_limits(db):
+    if "csv" not in set(config_value(db, "attachment.allowed_extensions")):
+        raise HTTPException(403, "CSV取り込みは設定で無効になっています")
+    return config_value(db, "import.max_csv_mb") * 1024 * 1024, config_value(db, "import.max_csv_rows")
+
+
+async def read_kintone_upload(file, max_bytes):
+    filename = Path(file.filename or "").name
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(422, "CSVファイルを指定してください")
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(413, "CSVファイルが設定サイズ上限を超えています")
+    return filename, content
+
+
+@app.post("/api/imports/kintone/preview")
+async def preview_kintone_csv(file: UploadFile = File(...),
+                              mapping_json: str = Form("{}"),
+                              actor: CurrentActor = Depends(require_actor)):
+    if getattr(actor, "account_role", "") not in ("administrator", "hq_staff"):
+        raise HTTPException(403, "kintoneデータを取り込む権限がありません")
+    with connect() as db:
+        max_bytes, max_rows = import_upload_limits(db)
+    filename, content = await read_kintone_upload(file, max_bytes)
+    headers, rows = parse_kintone_csv(content, max_rows)
+    mapping = resolve_kintone_mapping(headers, mapping_json)
+    now = now_jst()
+    job_id = str(uuid.uuid4())
+    with connect() as db:
+        analyzed = analyze_kintone_rows(db, rows, mapping)
+        ready = sum(item["status"] == "READY" for item in analyzed)
+        skipped = sum(item["status"] == "SKIPPED" for item in analyzed)
+        errors = sum(item["status"] == "ERROR" for item in analyzed)
+        db.execute(
+            """INSERT INTO import_jobs(id,source_system,requested_by,filename,total_rows,
+               success_rows,skipped_rows,error_rows,status,created_at,finished_at,content_sha256,
+               mapping_json,preview_expires_at)
+               VALUES(?,'kintone',?,?,?,?,?,?, 'DRY_RUN',?,?,?,?,?)""",
+            (job_id, actor.user_id, filename[:255], len(rows), ready, skipped, errors, now, now,
+             hashlib.sha256(content).hexdigest(),
+             json.dumps(mapping, ensure_ascii=False, sort_keys=True),
+             now + timedelta(hours=1)),
+        )
+        for item in analyzed:
+            db.execute(
+                """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,
+                   reason,local_id,created_at) VALUES(?,?,?,?,?,?,?)""",
+                (job_id, item["source_row_number"], item["external_id"], item["status"],
+                 item["reason"], item["local_id"], now),
+            )
+        audit(db, actor.user_id, "kintone.import_previewed", "import_job", job_id,
+              f"ready={ready}; skipped={skipped}; errors={errors}; sha256={hashlib.sha256(content).hexdigest()}")
+    return {
+        "id": job_id, "status": "DRY_RUN", "filename": filename, "headers": headers,
+        "mapping": mapping, "total_rows": len(rows), "ready_rows": ready,
+        "skipped_rows": skipped, "error_rows": errors,
+        "preview_expires_at": (now + timedelta(hours=1)).isoformat(timespec="seconds"),
+        "rows": analyzed[:200], "truncated": len(analyzed) > 200,
+    }
+
+
+@app.post("/api/imports/kintone")
+async def import_kintone_csv(file: UploadFile = File(...),
+                             preview_job_id: str = Form(...),
+                             mapping_json: str = Form("{}"),
+                             actor: CurrentActor = Depends(require_actor)):
+    if getattr(actor, "account_role", "") not in ("administrator", "hq_staff"):
+        raise HTTPException(403, "kintoneデータを取り込む権限がありません")
+    with connect() as db:
+        max_bytes, max_rows = import_upload_limits(db)
+    filename, content = await read_kintone_upload(file, max_bytes)
+    headers, rows = parse_kintone_csv(content, max_rows)
+    requested_mapping = resolve_kintone_mapping(headers, mapping_json)
+    content_hash = hashlib.sha256(content).hexdigest()
+    now = now_jst()
+    with connect() as db:
+        preview = db.execute(
+            """SELECT * FROM import_jobs WHERE id=? AND requested_by=?
+               AND source_system='kintone' FOR UPDATE""",
+            (preview_job_id, actor.user_id),
+        ).fetchone()
+        if not preview or preview["status"] != "DRY_RUN":
+            raise HTTPException(409, "有効なドライラン結果がありません。再度プレビューしてください")
+        if not preview["preview_expires_at"] or preview["preview_expires_at"] <= now:
+            raise HTTPException(410, "ドライラン結果の有効期限が切れています。再度プレビューしてください")
+        saved_mapping = preview["mapping_json"]
+        if isinstance(saved_mapping, str):
+            saved_mapping = json.loads(saved_mapping)
+        if (preview["content_sha256"] != content_hash or
+                preview["filename"] != filename or saved_mapping != requested_mapping):
+            raise HTTPException(409, "プレビュー後にファイルまたはマッピングが変更されています")
+        if not db.execute(
+                "UPDATE import_jobs SET status='PROCESSING' WHERE id=? AND status='DRY_RUN'",
+                (preview_job_id,)).rowcount:
+            raise HTTPException(409, "ドライラン結果は既に使用されています")
+        db.execute("DELETE FROM import_row_results WHERE job_id=?", (preview_job_id,))
+        analyzed = analyze_kintone_rows(db, rows, requested_mapping)
+        imported = skipped = errors = 0
+        for item in analyzed:
+            external_id = item["external_id"]
+            if item["status"] == "SKIPPED":
                 db.execute(
-                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,local_id,created_at)
-                       VALUES(?,?,?,'SKIPPED','既に取り込み済みです',?,?)""",
-                    (job_id, row_number, external_id, mapped["local_id"], now),
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,
+                       reason,local_id,created_at) VALUES(?,?,?,'SKIPPED',?,?,?)""",
+                    (preview_job_id, item["source_row_number"], external_id, item["reason"],
+                     item["local_id"], now),
                 )
                 skipped += 1
                 continue
-            if reason:
+            if item["status"] == "ERROR":
                 db.execute(
-                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,created_at)
-                       VALUES(?,?,?,'ERROR',?,?)""",
-                    (job_id, row_number, external_id or None, reason, now),
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,
+                       reason,created_at) VALUES(?,?,?,'ERROR',?,?)""",
+                    (preview_job_id, item["source_row_number"], external_id,
+                     item["reason"], now),
                 )
                 errors += 1
                 continue
-
             db.execute("SAVEPOINT kintone_import_row")
             try:
-                household_code = "HH-KT-" + hashlib.sha256(external_id.encode("utf-8")).hexdigest()[:12].upper()
+                household_code = "HH-KT-" + hashlib.sha256(
+                    external_id.encode("utf-8")
+                ).hexdigest()[:12].upper()
                 household_id = db.execute(
                     """INSERT INTO households(representative_name,store_id,advisor_id,budget_band,
                        area_pref,land_status,status,created_at,household_code)
                        VALUES(?,?,?,?,?,'検討中','active',?,?)""",
-                    (name, store_id, advisor_id, (row.get("budget_band") or "").strip() or None,
-                     (row.get("area_pref") or "").strip() or None, now, household_code),
+                    (item["representative_name"], item["store_id"], item["advisor_id"],
+                     item["budget_band"], item["area_pref"], now, household_code),
                 ).lastrowid
                 db.execute(
                     """INSERT INTO external_record_mappings(source_system,external_id,object_type,
@@ -5652,35 +5838,37 @@ async def import_kintone_csv(file: UploadFile = File(...),
                 )
                 db.execute("RELEASE SAVEPOINT kintone_import_row")
                 db.execute(
-                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,local_id,created_at)
-                       VALUES(?,?,?,'IMPORTED',?,?)""",
-                    (job_id, row_number, external_id, str(household_id), now),
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,
+                       local_id,created_at) VALUES(?,?,?,'IMPORTED',?,?)""",
+                    (preview_job_id, item["source_row_number"], external_id,
+                     str(household_id), now),
                 )
                 imported += 1
             except pymysql.MySQLError as error:
                 db.execute("ROLLBACK TO SAVEPOINT kintone_import_row")
                 db.execute("RELEASE SAVEPOINT kintone_import_row")
                 db.execute(
-                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,created_at)
-                       VALUES(?,?,?,'ERROR',?,?)""",
-                    (job_id, row_number, external_id or None, f"データベース登録エラー: {error.args[0]}", now),
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,
+                       reason,created_at) VALUES(?,?,?,'ERROR',?,?)""",
+                    (preview_job_id, item["source_row_number"], external_id,
+                     f"データベース登録エラー: {error.args[0]}", now),
                 )
                 errors += 1
         status = "COMPLETED" if not errors else "COMPLETED_WITH_ERRORS"
         db.execute(
             """UPDATE import_jobs SET success_rows=?,skipped_rows=?,error_rows=?,status=?,finished_at=?
                WHERE id=?""",
-            (imported, skipped, errors, status, now_jst(), job_id),
+            (imported, skipped, errors, status, now_jst(), preview_job_id),
         )
-        audit(db, actor.user_id, "kintone.import_completed", "import_job", job_id,
-              f"imported={imported}; skipped={skipped}; errors={errors}")
+        audit(db, actor.user_id, "kintone.import_completed", "import_job", preview_job_id,
+              f"imported={imported}; skipped={skipped}; errors={errors}; sha256={content_hash}")
         create_notification(
             db, actor.user_id, "IMPORT", "kintone CSV取込が完了しました",
             f"{filename}: 取込 {imported} 件、スキップ {skipped} 件、エラー {errors} 件。",
-            "import_job", job_id, title_zh="kintone CSV 导入完成",
+            "import_job", preview_job_id, title_zh="kintone CSV 导入完成",
             message_zh=f"{filename}：导入 {imported} 条，跳过 {skipped} 条，错误 {errors} 条。",
         )
-    return {"id": job_id, "status": status, "total_rows": len(rows),
+    return {"id": preview_job_id, "status": status, "total_rows": len(rows),
             "success_rows": imported, "skipped_rows": skipped, "error_rows": errors}
 
 
