@@ -7,7 +7,6 @@ import {
   Users, WalletCards, X,
 } from "lucide-react";
 import "./style.css";
-import "./workbench.css";
 
 const COPY = {
   ja: {
@@ -48,83 +47,6 @@ const COPY = {
     startPlanned: "着工予定", confirmed: "着工確認済", evidence: "証跡",
     review: "詳細を確認", days: "日", noEntitlement: "着工確認後に報酬権利が生成されます。",
     amountRule: "請負金額 × 料率", currentRole: "表示ロール", loggingOut: "ログアウト",
-    executive: "社長", notificationPreferences: "通知設定", todoBar: "対応が必要な業務",
-    focusTasks: "今日の重点タスク", businessOverview: "経営概況", viewTrend: "業務トレンドを見る",
-    openTasks: "未処理", dueOver: "期限超過", noTasks: "対応待ちの業務はありません。",
-    dueToday: "本日期限", overdueDays: "超過日数", filterApplied: "適用中フィルター",
-    clearFilter: "解除", taskList: "対応が必要な業務", jumpTo: "処理する",
-    taskFollowup: "顧客フォロー", taskPartnerFeedback: "住宅会社の回答確認",
-    taskConstruction: "着工確認", taskAppointment: "来店予約", taskUnassigned: "担当者未割当",
-    taskFeeApproval: "報酬承認", taskInvoiceGeneration: "請求データ生成待ち",
-    taskInvoiceUnpaid: "入金確認", taskDispute: "紹介帰属争議",
-    constructionQueue: "着工確認キュー", pendingTotal: "確認待ち", overdueOnly: "期限超過",
-    plannedOverdue: "予定日到来・未確認", evidenceMissing: "証拠未提出",
-    actualUnderReview: "実着工・確認待ち", delayed: "延期",
-    plannedFee: "着工予定報酬", approvalPendingAmount: "報酬条件確認中",
-    approvedAmount: "報酬承認済額", invoicedAmount: "請求額", paidAmount: "入金額",
-    confirmedSales: "確定売上", disputeCases: "争議件数", disputeReference: "争議中参考金額",
-    frozenAmount: "凍結金額", noInvoiceGeneration: "MallBoard は請求書を発行しません。請求データ準備の状態のみ管理します。",
-    accountingSync: "本番の請求・入金状況は会計システムから連携します。",
-    managementSub: "店舗運営、期限リスク、流入、業務トレンドを確認",
-    operations: "店舗運営状況", noOverallScore: "指標は個別表示です。総合点・順位付けは行いません。",
-    sampleSize: "サンプル数", numerator: "実績", denominator: "対象",
-    followupExecution: "フォロー実行率", dataCompleteness: "データ完全性",
-    nextActionRate: "次回アクション設定率", reportSubmission: "日報提出率",
-    responseQuality: "顧客対応品質サンプル",
-    deadlineReminders: "期限リマインダー", dueDate: "期限", expiresIn: "期限まで",
-    reminder_introduction_validity: "紹介有効期間", reminder_construction_evidence: "着工証拠提出期限",
-    reminder_dispute_resolution: "争議処理期限", reminder_agreement_renewal: "提携契約更新期限",
-    reminder_fee_rule_validity: "FeeRule 適用期限",
-    storeComparison: "同条件の店舗比較", openMonths: "開設月数", caseVolume: "案件数",
-    marketingAttribution: "集客チャネル分析", firstTouchCount: "初回流入",
-    latestTouchCount: "最新流入", introducedHomes: "紹介済世帯",
-    partnerQuality: "住宅会社別・報酬処理品質", conversionCohort: "コホート転換",
-    trend: "業務トレンド", period7: "7日", period30: "30日", period90: "90日",
-    period180: "180日", period365: "365日", previousPeriod: "前期間", currentPeriod: "直近期間",
-    inquiriesMetric: "問い合わせ数", consultationsMetric: "来店相談数",
-    introductionsMetric: "紹介数", contractsMetric: "契約数", constructionMetric: "着工数",
-    cohortMonth: "相談月", inquiryHomes: "相談世帯", introRate: "紹介率", contractRate: "契約率",
-    partnerIntros: "紹介件数", partnerContracts: "契約件数", partnerPaid: "入金済",
-    partnerDisputes: "争議中", preferences: "表示設定", homeWidgets: "ホーム表示項目",
-    notificationSettings: "通知設定", demoDataMarker: "デモデータ（仮データ）",
-    hideOverdue: "超過タスク", showOverview: "経営概況", showDailyReport: "日報ドラフト",
-    showFocusTasks: "重点タスク",
-    slaSettings: "期限日数の設定", saveSla: "日数を保存", slaPermission: "期限設定は本社・経理または社長ロールで変更できます。",
-    customerList: "世帯一覧", introPipeline: "紹介パイプライン", selectedHousehold: "選択中の世帯",
-    approve: "承認",
-    unassignedLabel: "担当未割当", advisorSelect: "担当顧問", assign: "担当を割り当てる",
-    constructionPermission: "着工確認は店長または本社・経理ロールで実行できます。",
-    unconfirmed: "未確認", revenueSub: "着工予定・実際・確認を分け、報酬の根拠と処理状況を追跡します。",
-    householdsSub: "顧客情報・接点・商談状況を一元管理します。",
-    introductionsSub: "一つの家庭に対する複数住宅会社との並行商談を追跡します。",
-    construction: "着工確認", fees: "報酬台帳", disputes: "争議処理",
-    trendDelta: "前期間比", enableNotifications: "未処理業務の通知を表示",
-    badgeRule: "既読では消えず、業務オブジェクトが処理された時のみ解消します。",
-    productionNotes: "運用上の前提", productionRoleNotice: "本番ではデモロールを認証済みユーザーに置き換えます。",
-    evidencePlaceholder: "現場写真・担当者確認など", feeGenerated: "計算根拠を台帳に記録",
-    remindersNotice: "期限の日数は設定値です。具体的な SLA は会社確認後に確定します。",
-    filter_today_followup: "今日のフォロー", filter_overdue_followup: "期限超過",
-    filter_appointments_today: "本日来店", filter_store_overdue: "店内期限超過",
-    filter_unassigned: "担当未割当", filter_partner_feedback: "住宅会社フィードバック待ち",
-    filter_fee_approval: "報酬承認待ち", filter_invoice_generation: "請求データ生成待ち",
-    filter_invoice_unpaid: "請求済・未入金", filter_critical_overdue: "重大業務リスク",
-    filter_disputed_introductions: "紹介帰属争議", filter_construction_queue: "着工確認滞留",
-    metric_units: "件", auditDescription: "監査記録",
-    touchHistory: "接点履歴", existingCustomerDispute: "既存顧客・争議", disputeReason: "争議理由",
-    disputePlaceholder: "住宅会社から既存顧客の申立て", evidenceLevel: "証拠レベル",
-    evidenceA: "契約 + 原始紹介記録", evidenceB: "住宅会社 CRM",
-    evidenceC: "予約・来電記録", evidenceD: "口頭",
-    consented: "同意", revoked: "取消", shared: "共有",
-    privacyNotice: "L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。",
-    activitySummaryTemplate: "本日の活動 {count} 件。面談・紹介状況を確認してください。",
-    activitySummaryEmpty: "本日の活動状況を確認してください。",
-    channel: "チャネル", attributionNote: "First / Latest Touch は Touch 履歴から算出",
-    timestamp: "日時", userLabel: "ユーザー", actionLabel: "操作", targetLabel: "対象", detailLabel: "詳細",
-    settingsSub: "デモ環境の表示とデータを管理",
-    languageNotice: "日本語を標準表示とし、中文へ切り替えられます。",
-    privacySettingsNotice: "L1 原始診断データは初期状態で非表示です。共有履歴は対象世帯の詳細画面で確認できます。",
-    resetNotice: "世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。",
-    resetPermission: "本社・経理ロールで実行できます。",
   },
   zh: {
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
@@ -161,180 +83,36 @@ const COPY = {
     startPlanned: "计划开工", confirmed: "已确认开工", evidence: "凭据",
     review: "查看详情", days: "天", noEntitlement: "确认开工后将生成报酬权利。",
     amountRule: "合同金额 × 费率", currentRole: "当前角色", loggingOut: "退出登录",
-    executive: "社长", notificationPreferences: "通知设置", todoBar: "待处理业务",
-    focusTasks: "今日重点任务", businessOverview: "经营概览", viewTrend: "查看业务趋势",
-    openTasks: "待处理", dueOver: "已超期", noTasks: "当前没有待处理事项。",
-    dueToday: "今日到期", overdueDays: "超期天数", filterApplied: "当前筛选",
-    clearFilter: "清除", taskList: "待处理事项", jumpTo: "立即处理",
-    taskFollowup: "客户跟进", taskPartnerFeedback: "住宅公司回复确认",
-    taskConstruction: "开工确认", taskAppointment: "来店预约", taskUnassigned: "负责人未分配",
-    taskFeeApproval: "报酬审批", taskInvoiceGeneration: "请款数据待生成",
-    taskInvoiceUnpaid: "确认入金", taskDispute: "介绍归属争议",
-    constructionQueue: "开工确认队列", pendingTotal: "待确认", overdueOnly: "已超期",
-    plannedOverdue: "计划日到期·待确认", evidenceMissing: "未提交证据",
-    actualUnderReview: "已实际开工·待审核", delayed: "延期",
-    plannedFee: "计划开工报酬", approvalPendingAmount: "报酬条件确认中",
-    approvedAmount: "已审批报酬", invoicedAmount: "已请款金额", paidAmount: "已入金金额",
-    confirmedSales: "确定收入", disputeCases: "争议数量", disputeReference: "争议参考金额",
-    frozenAmount: "冻结金额", noInvoiceGeneration: "MallBoard 不开发票；这里只跟踪请款数据准备状态。",
-    accountingSync: "生产环境的请款与入金状态由会计系统回传。",
-    managementSub: "查看门店运营、期限风险、来源与业务趋势",
-    operations: "门店运营状况", noOverallScore: "指标分别展示，不计算总分或排名。",
-    sampleSize: "样本量", numerator: "已完成", denominator: "目标",
-    followupExecution: "跟进执行率", dataCompleteness: "数据完整度",
-    nextActionRate: "下次行动设置率", reportSubmission: "日报提交率",
-    responseQuality: "客户响应质量样本",
-    deadlineReminders: "期限提醒", dueDate: "截止日期", expiresIn: "距截止",
-    reminder_introduction_validity: "介绍有效期", reminder_construction_evidence: "开工证据提交期限",
-    reminder_dispute_resolution: "争议处理期限", reminder_agreement_renewal: "合作协议续约期限",
-    reminder_fee_rule_validity: "FeeRule 适用期限",
-    storeComparison: "同条件门店对比", openMonths: "开店月数", caseVolume: "案件量",
-    marketingAttribution: "获客渠道分析", firstTouchCount: "首次来源",
-    latestTouchCount: "最近来源", introducedHomes: "已介绍家庭",
-    partnerQuality: "住宅公司报酬处理质量", conversionCohort: "转化队列",
-    trend: "业务趋势", period7: "7天", period30: "30天", period90: "90天",
-    period180: "180天", period365: "365天", previousPeriod: "上一周期", currentPeriod: "最近周期",
-    inquiriesMetric: "咨询数", consultationsMetric: "来店咨询数",
-    introductionsMetric: "介绍数", contractsMetric: "签约数", constructionMetric: "开工数",
-    cohortMonth: "咨询月份", inquiryHomes: "咨询家庭", introRate: "介绍率", contractRate: "签约率",
-    partnerIntros: "介绍数", partnerContracts: "签约数", partnerPaid: "已入金",
-    partnerDisputes: "争议中", preferences: "显示偏好", homeWidgets: "首页显示项",
-    notificationSettings: "通知设置", demoDataMarker: "演示数据（虚构）",
-    hideOverdue: "超期任务", showOverview: "经营概览", showDailyReport: "日报草稿",
-    showFocusTasks: "重点任务",
-    slaSettings: "期限天数设置", saveSla: "保存天数", slaPermission: "期限设置仅限总部财务或社长角色修改。",
-    customerList: "家庭列表", introPipeline: "介绍管道", selectedHousehold: "当前家庭",
-    approve: "审批",
-    unassignedLabel: "负责人未分配", advisorSelect: "选择顾问", assign: "分配负责人",
-    constructionPermission: "开工确认需由店长或总部财务角色执行。",
-    unconfirmed: "未确认", revenueSub: "分别记录计划、实际与确认开工时间，并追踪报酬依据和状态。",
-    householdsSub: "统一管理客户信息、接触记录与洽谈状态。",
-    introductionsSub: "追踪同一家庭与多家住宅公司的并行洽谈。",
-    construction: "开工确认", fees: "报酬台账", disputes: "争议处理",
-    trendDelta: "较上一周期", enableNotifications: "显示未处理业务提醒",
-    badgeRule: "打开页面不会消除提醒；只有业务对象处理完成后才会消除。",
-    productionNotes: "生产环境说明", productionRoleNotice: "生产环境将以已认证用户身份替代演示角色切换。",
-    evidencePlaceholder: "现场照片、负责人确认等", feeGenerated: "计算依据已记入台账",
-    remindersNotice: "期限天数为配置值；具体 SLA 待公司确认后确定。",
-    filter_today_followup: "今日待跟进", filter_overdue_followup: "已超期",
-    filter_appointments_today: "今日来店", filter_store_overdue: "门店超期任务",
-    filter_unassigned: "负责人未分配", filter_partner_feedback: "待住宅公司反馈",
-    filter_fee_approval: "待审批报酬", filter_invoice_generation: "待生成请款数据",
-    filter_invoice_unpaid: "已请款未入金", filter_critical_overdue: "重大业务风险",
-    filter_disputed_introductions: "介绍归属争议", filter_construction_queue: "待确认开工",
-    metric_units: "项", auditDescription: "审计记录",
-    touchHistory: "接触记录", existingCustomerDispute: "既有客户／争议", disputeReason: "争议原因",
-    disputePlaceholder: "住宅公司提出其为既有客户", evidenceLevel: "证据等级",
-    evidenceA: "合同 + 原始介绍记录", evidenceB: "住宅公司 CRM",
-    evidenceC: "预约／来电记录", evidenceD: "口头",
-    consented: "授权", revoked: "撤销", shared: "共享",
-    privacyNotice: "L1 原始诊断数据不可见 · 查看操作会记录在审计日志中。",
-    activitySummaryTemplate: "今日活动 {count} 项。请查看面谈与介绍进展。",
-    activitySummaryEmpty: "请查看今日活动情况。",
-    channel: "渠道", attributionNote: "First / Latest Touch 根据接触记录计算",
-    timestamp: "时间", userLabel: "用户", actionLabel: "操作", targetLabel: "对象", detailLabel: "详情",
-    settingsSub: "管理演示环境的显示方式和数据",
-    languageNotice: "默认显示日语，并可切换为中文。",
-    privacySettingsNotice: "L1 原始诊断数据默认不可见。共享记录可在对应家庭的详情页查看。",
-    resetNotice: "将家庭、介绍、开工与报酬等演示数据恢复到初始状态。",
-    resetPermission: "仅限总部财务角色执行。",
   },
 };
-
-const ENUM_LABELS = {
-  ja: {
-    "新規予約": "新規予約", "初回相談済": "初回相談済", "FP診断済": "FP診断済", "紹介済": "紹介済",
-    "訪問・商談中": "訪問・商談中", "契約": "契約", "着工": "着工", "完了・見送り": "完了・見送り",
-    "訪問予定": "訪問予定", "訪問済": "訪問済", "見積提示": "見積提示", "商談中": "商談中",
-    "受付確認済": "受付確認済", "商談へ移行": "商談へ移行", "見送り": "見送り", "帰属争議中": "帰属争議中",
-    "有": "有", "無": "無", "検討中": "検討中", "本人": "本人", "配偶者": "配偶者",
-    "Confirmed": "着工確認済", "Invoiced": "請求済", "Paid": "入金済", "Disputed": "争議中",
-    "Pending": "承認待ち", "PendingConfirmation": "確認待ち", "Estimated": "見積", "Potential": "見込",
-    "WrittenOff": "償却", "面談": "面談", "電話": "電話", "LINE": "LINE", "訪問同行": "訪問同行", "メモ": "メモ",
-    "L1": "L1 原始診断", "L2": "L2 診断結果", "L3": "L3 共有用条件",
-    "住宅会社への希望条件共有": "住宅会社への希望条件共有",
-    "Web広告": "Web広告", "ポスティング": "ポスティング", "紹介": "紹介",
-    "自然検索": "自然検索", "直接来店": "直接来店", "TVCM": "TVCM", "UTM": "UTM",
-    "QR": "QR", "予約連携": "予約連携", "手入力": "手入力",
-    "東京エリア": "東京エリア", "神奈川エリア": "神奈川エリア", "埼玉エリア": "埼玉エリア",
-    "千葉エリア": "千葉エリア", "愛知エリア": "愛知エリア", "大阪エリア": "大阪エリア",
-    "兵庫エリア": "兵庫エリア", "福岡エリア": "福岡エリア",
-  },
-  zh: {
-    "新規予約": "新预约", "初回相談済": "已完成首次咨询", "FP診断済": "已完成财务诊断", "紹介済": "已介绍",
-    "訪問・商談中": "访问／洽谈中", "契約": "已签约", "着工": "已开工", "完了・見送り": "已完成／未继续",
-    "訪問予定": "计划访问", "訪問済": "已访问", "見積提示": "已报价", "商談中": "洽谈中",
-    "受付確認済": "已确认受理", "商談へ移行": "已转为洽谈", "見送り": "未继续", "帰属争議中": "归属争议中",
-    "有": "有", "無": "无", "検討中": "考虑中", "本人": "本人", "配偶者": "配偶",
-    "Confirmed": "已确认开工", "Invoiced": "已请款", "Paid": "已入金", "Disputed": "争议中",
-    "Pending": "待审批", "PendingConfirmation": "待确认", "Estimated": "预估", "Potential": "潜在",
-    "WrittenOff": "已核销", "面談": "面谈", "電話": "电话", "LINE": "LINE", "訪問同行": "陪同访问", "メモ": "备注",
-    "L1": "L1 原始诊断", "L2": "L2 诊断结果", "L3": "L3 共享条件",
-    "住宅会社への希望条件共有": "向住宅公司共享意向条件",
-    "Web広告": "网络广告", "ポスティング": "传单投递", "紹介": "转介绍",
-    "自然検索": "自然搜索", "直接来店": "直接到店", "TVCM": "电视广告", "UTM": "UTM",
-    "QR": "二维码", "予約連携": "预约联动", "手入力": "手动录入",
-    "東京エリア": "东京地区", "神奈川エリア": "神奈川地区", "埼玉エリア": "埼玉地区",
-    "千葉エリア": "千叶地区", "愛知エリア": "爱知地区", "大阪エリア": "大阪地区",
-    "兵庫エリア": "兵库地区", "福岡エリア": "福冈地区",
-  },
-};
-function displayEnum(value) {
-  const locale = document.documentElement.lang === "zh" ? "zh" : "ja";
-  return ENUM_LABELS[locale][value] || value || "—";
-}
 
 const ROLE_LABEL = { ja: { advisor: "顧問", manager: "店長", hq_finance: "本社・経理" },
-  zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务", executive: "社长" } };
-ROLE_LABEL.ja.executive = "社長";
+  zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务" } };
 const NAV = [
   ["dashboard", LayoutDashboard, "today"], ["households", Users, "households"],
   ["introductions", ArrowDownRight, "introductions"], ["revenue", BadgeJapaneseYen, "revenue"],
   ["management", Building2, "management"], ["settings", Settings, "settings"],
 ];
 const API_BASE = import.meta.env.VITE_API_BASE || "";
-const DEFAULT_PREFERENCES = { focusTasks: true, overview: true, dailyReport: true, notifications: true };
-function readPreferences() {
-  try { return { ...DEFAULT_PREFERENCES, ...JSON.parse(localStorage.getItem("mallboard-preferences") || "{}") }; }
-  catch { return DEFAULT_PREFERENCES; }
-}
-function savePreferences(value) { localStorage.setItem("mallboard-preferences", JSON.stringify(value)); }
 
 function App() {
   const [locale, setLocale] = useState(localStorage.getItem("mallboard-locale") || "ja");
   const [role, setRole] = useState(localStorage.getItem("mallboard-role") || "advisor");
   const [page, setPage] = useState("dashboard");
   const [data, setData] = useState(null);
-  const [bootstrap, setBootstrap] = useState(null);
-  const [summary, setSummary] = useState(null);
-  const [taskData, setTaskData] = useState({ tasks: [] });
-  const [revenueData, setRevenueData] = useState(null);
-  const [managementData, setManagementData] = useState(null);
-  const [taskFilter, setTaskFilter] = useState("");
-  const [preferences, setPreferences] = useState(readPreferences);
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState("");
-  const [activityHouseholdId, setActivityHouseholdId] = useState(null);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const t = (key) => COPY[locale][key] || key;
 
-  async function load(filter = taskFilter) {
-    const headers = { "X-Demo-Role": role, "X-Demo-Locale": locale };
-    const taskPath = `/api/dashboard/my-tasks${filter ? `?filter=${encodeURIComponent(filter)}` : ""}`;
-    const paths = ["/api/bootstrap", "/api/households", "/api/dashboard/summary", taskPath, "/api/revenue", "/api/management"];
-    const responses = await Promise.all(paths.map((path) => fetch(`${API_BASE}${path}`, { headers })));
-    if (responses.some((response) => !response.ok)) throw new Error("API の読み込みに失敗しました。");
-    const [identity, workspace, summaryResult, tasksResult, revenueResult, managementResult] =
-      await Promise.all(responses.map((response) => response.json()));
-    setBootstrap(identity);
-    setData(workspace);
-    setSummary(summaryResult);
-    setTaskData(tasksResult);
-    setRevenueData(revenueResult);
-    setManagementData(managementResult);
-    if (selected) setSelected(workspace.households.find((h) => h.id === selected.id) || null);
+  async function load() {
+    const response = await fetch(`${API_BASE}/api/bootstrap`, { headers: { "X-Demo-Role": role } });
+    if (!response.ok) throw new Error("load failed");
+    const result = await response.json();
+    setData(result);
+    if (selected) setSelected(result.households.find((h) => h.id === selected.id) || null);
   }
   useEffect(() => {
     localStorage.setItem("mallboard-locale", locale);
@@ -343,7 +121,7 @@ function App() {
   useEffect(() => {
     localStorage.setItem("mallboard-role", role);
     load().catch(() => setToast("API connection failed"));
-  }, [role, locale, taskFilter]);
+  }, [role]);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(""), 3000);
@@ -372,42 +150,16 @@ function App() {
 
   const filtered = useMemo(() => (data?.households || []).filter((h) =>
     `${h.representative_name} ${h.area_pref}`.toLowerCase().includes(query.toLowerCase())), [data, query]);
-  const roleOptions = bootstrap?.roles || [{ id: "advisor" }, { id: "manager" }, { id: "hq_finance" }, { id: "executive" }];
+  const roleOptions = data?.roles || [{ id: "advisor" }, { id: "manager" }, { id: "hq_finance" }];
   const openHousehold = (household) => { setSelected(household); setModal("household"); };
-  const openCounter = (counter) => {
-    setTaskFilter(counter.filter);
-    setPage(counter.target_page);
-  };
-  const openTask = (task) => {
-    if (!task) return;
-    if (task.task_type === "construction_queue") {
-      setTaskFilter("construction_queue"); setPage("revenue"); return;
-    }
-    if (["fee_approval", "invoice_generation", "invoice_unpaid"].includes(task.task_type)) {
-      setTaskFilter(task.task_type); setPage("revenue"); return;
-    }
-    if (task.task_type === "dispute") {
-      setTaskFilter("disputed_introductions"); setPage("introductions"); return;
-    }
-    if (task.task_type === "partner_feedback") {
-      setTaskFilter("partner_feedback"); setPage("introductions");
-      if (task.household_id) setSelected(data.households.find((h) => h.id === task.household_id) || null);
-      return;
-    }
-    if (task.task_type === "unassigned") {
-      setTaskFilter("unassigned"); setPage("introductions"); return;
-    }
-    if (!task.household_id) return;
-    setSelected(data.households.find((h) => h.id === task.household_id) || null);
-    setModal("household");
-  };
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Home size={21}/></div><div><b>MallBoard</b><span>{t("subtitle")}</span></div></div>
       <div className="workspace-label">WORKSPACE</div>
-      <nav>{NAV.map(([id, Icon, key]) => <button key={id} onClick={() => { setTaskFilter(""); setPage(id); }}
+      <nav>{NAV.map(([id, Icon, key]) => <button key={id} onClick={() => setPage(id)}
         className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
+        {id === "revenue" && data?.pending_confirmation_count > 0 && <em>{data.pending_confirmation_count}</em>}
       </button>)}</nav>
       <div className="sidebar-spacer"/>
       <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
@@ -420,7 +172,7 @@ function App() {
         <div className="breadcrumb"><span>{t("product")}</span><ChevronRight size={14}/><b>{t(NAV.find(([id]) => id === page)?.[2] || page)}</b></div>
         <div className="top-actions">
           <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>
-          <button className="icon-btn" title={t("notificationPreferences")} onClick={() => setPage("settings")}><Bell size={18}/></button>
+          <button className="icon-btn" title="Notifications"><Bell size={18}/><i/></button>
           <div className="select-wrap"><Users size={15}/><select aria-label={t("role")} value={role} onChange={(e) => setRole(e.target.value)}>
             {roleOptions.map((option) => <option value={option.id} key={option.id}>{ROLE_LABEL[locale][option.id]}</option>)}
           </select><ChevronDown size={13}/></div>
@@ -429,30 +181,24 @@ function App() {
       </header>
       <div className="page-content">
         {!data ? <div className="loading"><div className="spinner"/>Loading MallBoard…</div> : <>
-          {page === "dashboard" && <Dashboard data={data} summary={summary} tasks={taskData.tasks} t={t} locale={locale}
-            role={role} preferences={preferences} onHousehold={openHousehold} onTask={openTask} onCounter={openCounter}
-            onActivity={() => setModal("activity")} onNavigate={(target) => { setTaskFilter(""); setPage(target); }}
+          {page === "dashboard" && <Dashboard data={data} t={t} role={role} onHousehold={openHousehold}
+            onActivity={() => setModal("activity")} onNavigate={setPage}
             onReport={(body) => api("/api/report", "PUT", { manual_note: body })}/>}
-          {page === "households" && <Households items={filtered} tasks={taskData.tasks} taskFilter={taskFilter}
-            t={t} onClearFilter={() => setTaskFilter("")} onOpen={openHousehold}/>}
-          {page === "introductions" && <Introductions items={filtered} tasks={taskData.tasks} taskFilter={taskFilter}
-            advisors={data.advisors} role={role} api={api} t={t} onClearFilter={() => setTaskFilter("")} onOpen={openHousehold}
+          {page === "households" && <Households items={filtered} t={t} onOpen={openHousehold}/>}
+          {page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold}
             onAdd={(household) => { setSelected(household); setModal("introduction"); }}/>}
-          {page === "revenue" && <Revenue data={data} revenue={revenueData} tasks={taskData.tasks}
-            taskFilter={taskFilter} t={t} role={role} api={api} onClearFilter={() => setTaskFilter("")} onOpen={openHousehold}/>}
-          {page === "management" && <Management data={data} reports={managementData} t={t} locale={locale} role={role}
-            onNavigate={(target) => { setTaskFilter(""); setPage(target); }}/>}
-          {page === "settings" && <SettingsPage data={data} roles={bootstrap?.roles || []} slaRules={managementData?.sla_rules || {}} t={t} role={role} locale={locale} api={api}
-            preferences={preferences} onPreferences={(next) => { setPreferences(next); savePreferences(next); }} onReset={async () => {
+          {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold}/>}
+          {page === "management" && <Management data={data} t={t}/>}
+          {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async () => {
             if (window.confirm(t("resetConfirm"))) { await api("/api/reset"); setToast(t("resetDone")); }
           }}/>}
         </>}
       </div>
-      <footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} · {t("demoDataMarker")} · {t("demoWarning")}<span>© MallBoard Demo</span></footer>
+      <footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} · {t("demoWarning")}<span>© MallBoard Demo</span></footer>
     </main>
     {modal === "household" && selected && <HouseholdModal household={selected} t={t} role={role}
-      onClose={() => setModal("")} onActivity={() => { setActivityHouseholdId(selected.id); setModal("activity"); }} api={api}/>}
-    {modal === "activity" && <ActivityModal households={data?.households || []} initialHouseholdId={activityHouseholdId} t={t} onClose={() => setModal("")}
+      onClose={() => setModal("")} onActivity={() => setModal("activity")} api={api}/>}
+    {modal === "activity" && <ActivityModal households={data?.households || []} t={t} onClose={() => setModal("")}
       onSubmit={(body) => api("/api/activities", "POST", body)}/>}
     {modal === "introduction" && selected && <IntroductionModal household={selected} data={data} t={t}
       onClose={() => setModal("")} onSubmit={(body) => api("/api/introductions", "POST", body)}/>}
@@ -469,60 +215,49 @@ function Metric({ label, value, delta, icon: Icon, tone = "blue", small }) {
     <div className="metric-info"><span>{label}</span><strong>{value}</strong>{delta && <small>{delta}</small>}</div>
     {delta && <div className="metric-spark"><ArrowUpRight size={16}/></div>}</div>;
 }
-function Dashboard({ data, summary, tasks, t, locale, role, preferences, onHousehold, onTask, onCounter, onActivity, onNavigate, onReport }) {
+function Dashboard({ data, t, role, onHousehold, onActivity, onNavigate, onReport }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
-  const reportCount = data.daily_report?.auto_summary?.match(/本日の活動\s+(\d+)\s+件/)?.[1];
-  const reportSummary = reportCount !== undefined
-    ? t("activitySummaryTemplate").replace("{count}", reportCount)
-    : data.daily_report?.auto_summary || t("activitySummaryEmpty");
-  return <><PageTitle eyebrow={new Date().toLocaleDateString(locale === "ja" ? "ja-JP" : "zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
-    title={<>{t("todayTitle")}<span>{data.user.name}{locale === "ja" ? "さん" : "，您好"}</span></>} sub={t("todaySub")}
+  const appointments = data.households.filter((h) => h.status === "active").length;
+  const followups = data.households.reduce((n, h) => n + h.activities.filter((a) => a.next_action_due && a.next_action_due <= new Date().toISOString().slice(0, 10)).length, 0);
+  const recent = data.households.slice(0, 4);
+  const introCount = data.households.reduce((n, h) => n + h.introductions.length, 0);
+  return <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
+    title={<>{t("todayTitle")}<span>{data.user.name}さん</span></>} sub={t("todaySub")}
     actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
-    <SectionTabs items={[["todoBar","dashboard-todo"],["focusTasks","dashboard-focus"],["businessOverview","dashboard-overview"],
-      ...(preferences.dailyReport ? [["dailyReport","dashboard-report"]] : [])]} t={t}/>
-    <section className="panel todo-bar" id="dashboard-todo"><div className="panel-head"><div><div className="eyebrow">ACTION QUEUE</div><h2>{t("todoBar")}</h2></div><span className="demo-batch">{t("demoDataMarker")}</span></div>
-      <div className="counter-grid">{(summary?.counters || []).slice(0, 3).map((counter, index) =>
-        <button key={counter.key} className={`counter-card counter-${index}`} onClick={() => onCounter(counter)}>
-          <span>{counter.label}</span><b>{counter.count}<small>{t("metric_units")}</small></b>
-          <span className="counter-link">{t("jumpTo")} <ChevronRight size={13}/></span>
-        </button>)}</div>
-    </section>
-    <section className="panel focus-panel" id="dashboard-focus"><div className="panel-head"><div><div className="eyebrow">NEXT BEST ACTION</div><h2>{t("focusTasks")}</h2></div>
+    <div className="metrics-grid">
+      <Metric label={t("appointments")} value={String(appointments).padStart(2, "0")} delta="+2.4%" icon={CalendarDays}/>
+      <Metric label={t("followups")} value={String(followups).padStart(2, "0")} delta={t("today")} icon={Activity} tone="violet"/>
+      <Metric label={t("overdue")} value={String(data.overdue_tasks.length).padStart(2, "0")} delta={role === "hq_finance" ? t("disputed") : "要対応"} icon={Clock3} tone="orange"/>
+      <Metric label={t("activities")} value={String(data.activity_count_today).padStart(2, "0")} delta="活動ログ" icon={ClipboardList} tone="green"/>
+    </div>
+    <div className="dashboard-grid">
+      <section className="panel pipeline-panel"><div className="panel-head"><div><div className="eyebrow">OVERVIEW</div><h2>{t("pipeline")}</h2></div>
+        <button className="text-button" onClick={() => onNavigate("introductions")}>{t("viewAll")} <ChevronRight size={15}/></button>
       </div>
-      {preferences.focusTasks && <TaskList tasks={tasks.slice(0, 6)} t={t} onTask={onTask}/>}
-    </section>
-    {preferences.overview && <section className="panel overview-panel" id="dashboard-overview">
-      <div className="panel-head"><div><div className="eyebrow">BUSINESS CONTEXT</div><h2>{t("businessOverview")}</h2></div>
-        <button className="text-button" onClick={() => onNavigate("management")}>{t("viewTrend")} <ChevronRight size={15}/></button></div>
-      <div className="overview-links"><button onClick={() => onNavigate("households")}><Users size={17}/><span>{t("recentHouseholds")}</span><ChevronRight size={15}/></button>
-        <button onClick={() => onNavigate("introductions")}><Building2 size={17}/><span>{t("pipeline")}</span><ChevronRight size={15}/></button>
-        <button onClick={() => onNavigate("revenue")}><BadgeJapaneseYen size={17}/><span>{t("revenue")}</span><ChevronRight size={15}/></button></div>
-    </section>}
-    {preferences.dailyReport && <section className="panel report-panel" id="dashboard-report"><div className="panel-head"><div><div className="eyebrow">DAILY SUMMARY</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
-        <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{reportSummary}</p></div></div>
+        <div className="pipeline-summary"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div><div className="pipeline-divider"/>
+          <div><strong>{introCount}</strong><span>{t("introductions")}</span></div><div className="pipeline-divider"/>
+          <div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div>
+        <StageFunnel items={data.households} t={t}/>
+      </section>
+      <section className="panel tasks-panel"><div className="panel-head"><div><div className="eyebrow">ACTION REQUIRED</div><h2>{t("overdue")}</h2></div><span className="pill pill-red">{data.overdue_tasks.length} overdue</span></div>
+        {data.overdue_tasks.length ? data.overdue_tasks.map((task) => <div className="task-row" key={task.id}>
+          <div className="task-check"><CircleAlert size={16}/></div><div className="task-copy"><b>{task.title}</b><span>{task.representative_name} · {task.due_at}</span></div>
+          <button className="icon-btn compact" onClick={() => onHousehold(data.households.find((h) => h.id === task.related_household_id))}><ChevronRight size={16}/></button>
+        </div>) : <div className="empty-mini"><Check size={17}/>{t("noRows")}</div>}
+        <div className="task-bottom"><span><Clock3 size={14}/>{t("today")} 09:00 — 18:00</span><button className="text-button">{t("review")} <ChevronRight size={14}/></button></div>
+      </section>
+    </div>
+    <div className="lower-grid">
+      <section className="panel household-panel"><div className="panel-head"><div><div className="eyebrow">CUSTOMER SUCCESS</div><h2>{t("recentHouseholds")}</h2></div>
+        <button className="text-button" onClick={() => onNavigate("households")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
+        <HouseholdTable items={recent} t={t} onOpen={onHousehold}/></section>
+      <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">DAILY SUMMARY</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
+        <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || `本日の活動 ${data.activity_count_today} 件。`}</p></div></div>
         <label className="field-label">{t("note")}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows="3"/></label>
         <button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button>
-      </section>}
+      </section>
+    </div>
   </>;
-}
-function SectionTabs({ items, t, active, onSelect }) {
-  return <div className="section-tabs">{items.map(([key, target]) => <button key={target} onClick={() =>
-    onSelect ? onSelect(key) : document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-    className={active === key ? "selected" : ""}>{t(key)}</button>)}</div>;
-}
-const TASK_TYPE_KEYS = {
-  followup: "taskFollowup", partner_feedback: "taskPartnerFeedback", construction_queue: "taskConstruction",
-  appointment: "taskAppointment", unassigned: "taskUnassigned", fee_approval: "taskFeeApproval",
-  invoice_generation: "taskInvoiceGeneration", invoice_unpaid: "taskInvoiceUnpaid", dispute: "taskDispute",
-};
-function TaskList({ tasks, t, onTask }) {
-  if (!tasks?.length) return <div className="empty-mini"><Check size={17}/>{t("noTasks")}</div>;
-  return <div className="task-list">{tasks.map((task) => <button className="task-list-row" key={task.task_id} onClick={() => onTask(task)}>
-    <span className={`task-type-icon ${task.days_overdue > 0 ? "late" : ""}`}>{task.days_overdue > 0 ? <CircleAlert size={16}/> : <ClipboardList size={16}/>}</span>
-    <span className="task-list-main"><b>{task.title}</b><small>{task.representative_name || task.household_code || t(TASK_TYPE_KEYS[task.task_type] || "taskList")} · {task.due_at}</small></span>
-    {task.days_overdue > 0 ? <span className="overdue-tag">{task.days_overdue}{t("days")}</span> : <span className="task-state">{t("dueToday")}</span>}
-    <ChevronRight size={16} className="muted"/>
-  </button>)}</div>;
 }
 function StageFunnel({ items, t }) {
   const order = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"];
@@ -535,294 +270,155 @@ function StageFunnel({ items, t }) {
 function HouseholdTable({ items, t, onOpen }) {
   return <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("stage")}</th><th>{t("nextAction")}</th><th>{t("due")}</th><th/></tr></thead>
     <tbody>{items.map((h) => { const task = h.activities.find((a) => a.next_action); return <tr key={h.id} onClick={() => onOpen(h)} className="click-row">
-      <td><div className="customer-cell"><div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{displayEnum(h.area_pref)}</span></div></div></td>
-      <td><span className="stage-tag">{displayEnum(h.stage_events.at(-1)?.to_stage)}</span></td><td>{task?.next_action || "—"}</td><td className={task?.next_action_due < new Date().toISOString().slice(0, 10) ? "text-danger" : ""}>{task?.next_action_due || "—"}</td>
+      <td><div className="customer-cell"><div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div></div></td>
+      <td><span className="stage-tag">{h.stage_events.at(-1)?.to_stage}</span></td><td>{task?.next_action || "—"}</td><td className={task?.next_action_due < new Date().toISOString().slice(0, 10) ? "text-danger" : ""}>{task?.next_action_due || "—"}</td>
       <td><ChevronRight size={15} className="muted"/></td></tr>;})}</tbody></table>
     {!items.length && <div className="empty-state">{t("noRows")}</div>}</div>;
 }
-function Households({ items, tasks, taskFilter, t, onClearFilter, onOpen }) {
-  const taskHouseholdIds = new Set((tasks || []).map((task) => task.household_id).filter(Boolean));
-  const shown = taskFilter ? items.filter((household) => taskHouseholdIds.has(household.id)) : items;
-  return <><PageTitle eyebrow="CUSTOMER RELATIONSHIP" title={t("households")} sub={t("householdsSub")}/>
-    {taskFilter && <div className="active-filter"><span>{t("filterApplied")}：{t(`filter_${taskFilter}`) || taskFilter}</span><button className="text-button" onClick={onClearFilter}>{t("clearFilter")}</button></div>}
-    <SectionTabs items={[["customerList","household-list"],["taskList","household-tasks"]]} t={t}/>
-    <section className="panel table-panel" id="household-list"><div className="panel-head"><div><h2>{t("households")} <span className="count-badge">{shown.length}</span></h2></div>
+function Households({ items, t, onOpen }) {
+  return <><PageTitle eyebrow="CUSTOMER RELATIONSHIP" title={t("households")} sub="顧客情報・接点・商談状況を一元管理"/>
+    <section className="panel table-panel"><div className="panel-head"><div><h2>{t("households")} <span className="count-badge">{items.length}</span></h2></div>
       <div className="table-tools"><button className="filter-btn"><Filter size={15}/>{t("all")}<ChevronDown size={13}/></button></div></div>
-      <HouseholdTable items={shown} t={t} onOpen={onOpen}/></section>
-    <section className="panel task-section" id="household-tasks"><div className="panel-head"><h2>{t("taskList")}</h2></div>
-      <TaskList tasks={tasks} t={t} onTask={(task) => onOpen(items.find((household) => household.id === task.household_id))}/></section></>;
+      <HouseholdTable items={items} t={t} onOpen={onOpen}/></section></>;
 }
-function Introductions({ items, tasks, taskFilter, advisors, role, api, t, onClearFilter, onOpen, onAdd }) {
-  const taskHouseholdIds = new Set((tasks || []).map((task) => task.household_id).filter(Boolean));
-  const shown = taskFilter ? items.filter((household) => taskHouseholdIds.has(household.id)) : items;
+function Introductions({ items, t, onOpen, onAdd }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
-  useEffect(() => { if (!shown.some((h) => h.id === activeHousehold)) setActiveHousehold(shown[0]?.id || null); }, [shown, activeHousehold]);
-  const household = shown.find((h) => h.id === activeHousehold);
-  return <><PageTitle eyebrow="PARTNER JOURNEY" title={t("introductions")} sub={t("introductionsSub")}/>
-    {taskFilter && <div className="active-filter"><span>{t("filterApplied")}：{t(`filter_${taskFilter}`) || taskFilter}</span><button className="text-button" onClick={onClearFilter}>{t("clearFilter")}</button></div>}
-    <SectionTabs items={[["introPipeline","intro-pipeline"],["selectedHousehold","intro-selected"]]} t={t}/>
-    <div className="intro-layout" id="intro-pipeline"><section className="panel intro-list"><div className="panel-head"><h2>{t("households")}</h2><span className="count-badge">{shown.length}</span></div>
-      {shown.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
-        <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{displayEnum(h.area_pref)}</span></div><span className="intro-count">{h.introductions.length}</span>
+  useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
+  const household = items.find((h) => h.id === activeHousehold);
+  return <><PageTitle eyebrow="PARTNER JOURNEY" title={t("introductions")} sub="一つの家庭に対する複数住宅会社との並行商談を追跡"/>
+    <div className="intro-layout"><section className="panel intro-list"><div className="panel-head"><h2>{t("households")}</h2><span className="count-badge">{items.length}</span></div>
+      {items.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
+        <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div><span className="intro-count">{h.introductions.length}</span>
       </button>)}</section>
-      {household ? <section className="intro-detail" id="intro-selected"><div className="panel intro-context"><div><div className="eyebrow">{household.store_name} · {household.advisor_name || t("unassignedLabel")}</div><h2>{household.representative_name}</h2><span>{household.budget_band} · {displayEnum(household.area_pref)}</span></div>
-        {role === "manager" || role === "executive" ? <AssignAdvisorControl object={household} type="household" advisors={advisors} role={role} api={api} t={t}/> : null}
+      {household ? <section className="intro-detail"><div className="panel intro-context"><div><div className="eyebrow">{household.store_name} · {household.advisor_name}</div><h2>{household.representative_name}</h2><span>{household.budget_band} · {household.area_pref}</span></div>
         <button className="secondary-btn" onClick={() => onAdd(household)}><Plus size={15}/>{t("partnerCreate")}</button></div>
-        <div className="partner-grid">{household.introductions.map((intro) => <PartnerCard key={intro.id} intro={intro} storeId={household.store_id} t={t} role={role} advisors={advisors} api={api} onOpen={() => onOpen(household)}/>)}
+        <div className="partner-grid">{household.introductions.map((intro) => <PartnerCard key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
           {!household.introductions.length && <button className="add-partner-card" onClick={() => onAdd(household)}><Plus size={20}/>{t("partnerCreate")}</button>}</div>
       </section> : <section className="panel empty-state">{t("noRows")}</section>}
     </div></>;
 }
-function AssignAdvisorControl({ object, storeId, type, advisors, role, api, t }) {
-  const choices = (advisors || []).filter((advisor) => advisor.store_id === (object.store_id || storeId));
-  const [advisorId, setAdvisorId] = useState(String(choices[0]?.id || ""));
-  useEffect(() => { setAdvisorId(String(choices[0]?.id || "")); }, [object.id, advisors]);
-  if (!choices.length) return null;
-  return <div className="assign-control"><select aria-label={t("advisorSelect")} value={advisorId} onChange={(e) => setAdvisorId(e.target.value)}>
-    {choices.map((advisor) => <option value={advisor.id} key={advisor.id}>{advisor.name}</option>)}</select>
-    <button className="mini-action" disabled={!advisorId} onClick={() => api(`/api/${type === "household" ? "households" : "introductions"}/${object.id}/assign`, "POST", { advisor_id: Number(advisorId) })}>{t("assign")}</button>
-  </div>;
-}
-function PartnerCard({ intro, storeId, t, role, advisors, api, onOpen }) {
+function PartnerCard({ intro, t, onOpen }) {
   const elapsed = Math.max(0, Math.floor((Date.now() - new Date(intro.introduced_at).getTime()) / 86400000));
   const state = intro.entitlement_state;
   return <article className={`partner-card ${state === "Disputed" ? "disputed-card" : ""}`}>
     <div className="partner-card-head"><div className="partner-icon"><Building2 size={18}/></div><div><b>{intro.partner_name}</b><span>{intro.staff_name || "—"} · {intro.introduced_at}</span></div>
       {intro.existing_customer_flag ? <span className="pill pill-red">{t("disputed")}</span> : <span className="pill pill-blue">{t(intro.status === "受付確認済" ? "received" : "introduced")}</span>}</div>
-    <div className="negotiation-status"><div><small>{t("status")}</small><b>{displayEnum(intro.negotiation_status || "紹介済")}</b></div><div><small>{t("elapsed")}</small><b>{elapsed} {t("days")}</b></div><div><small>{t("last")}</small><b>{intro.last_activity_at || "—"}</b></div></div>
-    {!intro.advisor_id && (role === "manager" || role === "executive") && <AssignAdvisorControl object={intro} storeId={storeId} type="introduction" advisors={advisors} role={role} api={api} t={t}/>}
+    <div className="negotiation-status"><div><small>{t("status")}</small><b>{intro.negotiation_status || "紹介済"}</b></div><div><small>{t("elapsed")}</small><b>{elapsed} {t("days")}</b></div><div><small>{t("last")}</small><b>{intro.last_activity_at || "—"}</b></div></div>
     {intro.contract_id && <div className="contract-highlight"><div className="contract-icon"><Check size={15}/></div><div><b>{t("contract")} · ¥{Number(intro.contract_amount).toLocaleString()}</b><span>{intro.contract_date}</span></div></div>}
     {state === "Disputed" && <div className="frozen-banner"><CircleAlert size={15}/>{t("frozen")}</div>}
     <button className="card-link" onClick={onOpen}>{t("review")} <ChevronRight size={14}/></button>
   </article>;
 }
-function Revenue({ data, revenue, tasks, taskFilter, t, role, api, onClearFilter, onOpen }) {
-  const [activeSection, setActiveSection] = useState("construction");
-  const projects = revenue?.projects || [];
-  const queue = projects.filter((project) => !project.confirmed_start_date);
-  const entitlements = revenue?.entitlements || [];
-  const disputes = revenue?.disputes || [];
-  const financial = revenue?.financial || {};
-  const queueCounts = revenue?.queue_counts || {};
+function Revenue({ data, t, role, api, onOpen }) {
+  const household = data.households.find((h) => h.introductions.some((i) => i.project_id || i.contract_id));
+  const project = household?.introductions.find((i) => i.project_id);
   const feeRuleParams = (value) => typeof value === "string" ? JSON.parse(value) : value;
-  const sectionLabels = [["constructionQueue", "construction"], ["entitlement", "fees"], ["disputed", "disputes"]];
-  const visibleEntitlements = taskFilter === "fee_approval" ? entitlements.filter((fee) => fee.state === "Pending")
-    : taskFilter === "invoice_generation" ? entitlements.filter((fee) => fee.state === "Confirmed")
-    : taskFilter === "invoice_unpaid" ? entitlements.filter((fee) => fee.state === "Invoiced") : entitlements;
-  return <><PageTitle eyebrow="CONSTRUCTION & REVENUE" title={t("revenue")} sub={t("revenueSub")}/>
-    {taskFilter && <div className="active-filter"><span>{t("filterApplied")}：{t(`filter_${taskFilter}`) || taskFilter}</span><button className="text-button" onClick={onClearFilter}>{t("clearFilter")}</button></div>}
-    <div className="financial-state-grid">{[
-      [t("plannedFee"), financial.planned_construction_fee, "planned"], [t("approvalPendingAmount"), financial.pending_approval, "pending"],
-      [t("approvedAmount"), financial.approved, "approved"], [t("invoicedAmount"), financial.invoiced, "invoiced"],
-      [t("paidAmount"), financial.paid, "paid"], [t("confirmedSales"), financial.confirmed_sales, "sales"],
-      [t("disputeCases"), financial.dispute_count, "disputes"], [t("frozenAmount"), financial.frozen_amount, "frozen"],
-    ].map(([label, amount, kind]) => <div className={`financial-state ${kind}`} key={kind}><span>{label}</span>
-      <b>{kind === "disputes" ? amount || 0 : `¥${Number(amount || 0).toLocaleString()}`}</b></div>)}</div>
-    <SectionTabs items={sectionLabels} t={t} active={activeSection} onSelect={setActiveSection}/>
-    {activeSection === "construction" && <section className="panel queue-panel" id="construction">
-      <div className="panel-head"><div><div className="eyebrow">CONSTRUCTION REVIEW</div><h2>{t("constructionQueue")} · {queue.length}</h2></div>
-        <span className="pill pill-orange">{t("overdueOnly")} · {queueCounts.overdue || 0}</span></div>
-      <div className="queue-state-grid">{[
-        ["planned_due_overdue", t("plannedOverdue")], ["planned_due_today", t("dueToday")],
-        ["evidence_missing", t("evidenceMissing")], ["pending_review", t("actualUnderReview")], ["delayed", t("delayed")],
-      ].map(([key, label]) => <div className="queue-state" key={key}><span>{label}</span><b>{queueCounts[key] || 0}</b></div>)}</div>
-      <div className="construction-list">{queue.map((project) => <ConstructionCard key={project.id} project={project} t={t} role={role} api={api}/>)}
-        {!queue.length && <div className="empty-state">{t("noRows")}</div>}</div>
-    </section>}
-    {activeSection === "fees" && <section className="panel entitlement-panel" id="fees"><div className="panel-head"><div><div className="eyebrow">REVENUE LEDGER</div><h2>{t("entitlement")}</h2></div>
+  return <><PageTitle eyebrow="CONSTRUCTION & REVENUE" title={t("revenue")} sub="予定・実際・確認を分けて記録し、報酬の根拠と状態を追跡"/>
+    <div className="revenue-metrics"><Metric small label={t("entitlement")} value={String(data.entitlements.length).padStart(2, "0")} icon={WalletCards}/>
+      <Metric small label={t("pending_confirmation_count") in data ? "確認待ち・処理待ち" : t("confirmStart")} value={String(data.pending_confirmation_count).padStart(2, "0")} icon={Clock3} tone="orange"/>
+      <Metric small label={t("disputed")} value={String(data.disputed_count).padStart(2, "0")} icon={CircleAlert} tone="red"/>
+      <Metric small label={t("amount")} value={`¥${data.entitlements.reduce((n, e) => n + e.calculated_amount, 0).toLocaleString()}`} icon={BadgeJapaneseYen} tone="green"/></div>
+    {project ? <ConstructionCard household={household} project={project} data={data} t={t} role={role} api={api}/> :
+      <div className="panel empty-state">{t("noEntitlement")}</div>}
+    <section className="panel entitlement-panel"><div className="panel-head"><div><div className="eyebrow">REVENUE LEDGER</div><h2>{t("entitlement")}</h2></div>
       <span className="pill pill-green">APPEND-ONLY AUDIT</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("partner")}</th><th>{t("basis")}</th><th>{t("rule")}</th><th>{t("amount")}</th><th>{t("status")}</th><th/></tr></thead><tbody>
-      {visibleEntitlements.map((e) => <tr key={e.id}><td><b>{e.representative_name}</b></td><td>{e.partner_name}</td>
+      {data.entitlements.map((e) => <tr key={e.id}><td><b>{e.representative_name}</b></td><td>{e.partner_name}</td>
         <td>¥{Number(e.base_amount).toLocaleString()} × {feeRuleParams(e.params).rate ? `${feeRuleParams(e.params).rate * 100}%` : "—"}</td>
         <td><span className="rule-chip">v{e.rule_version}</span> {e.base}</td><td className="amount-cell">¥{Number(e.calculated_amount).toLocaleString()}</td>
         <td><StateBadge state={e.state}/></td><td><EntitlementActions entitlement={e} t={t} role={role} api={api}/></td></tr>)}</tbody></table>
-        {!visibleEntitlements.length && <div className="empty-state">{t("noEntitlement")}</div>}</div></section>}
-    {activeSection === "disputes" && <section className="panel entitlement-panel" id="disputes"><div className="panel-head"><div><div className="eyebrow">FROZEN ENTITLEMENTS</div><h2>{t("disputed")} · {disputes.length}</h2></div>
-      <span className="pill pill-red">¥{Number(financial.frozen_amount || 0).toLocaleString()} {t("frozenAmount")}</span></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("partner")}</th><th>{t("status")}</th><th>{t("amount")}</th><th>{t("basis")}</th><th/></tr></thead>
-      <tbody>{disputes.map((dispute) => <tr key={dispute.id}><td><b>{dispute.representative_name}</b></td><td>{dispute.partner_name}</td>
-        <td>{dispute.reason}</td><td className="amount-cell">¥{Number(dispute.calculated_amount).toLocaleString()}</td><td>{dispute.evidence_level}</td>
-        <td><button className="mini-action" onClick={() => onOpen(data.households.find((h) => h.id === dispute.household_id))}>{t("review")} <ChevronRight size={13}/></button></td></tr>)}</tbody></table>
-      {!disputes.length && <div className="empty-state">{t("noRows")}</div>}</div>
-      <div className="dispute-note"><CircleAlert size={18}/><div><b>{t("frozen")}</b><span>{t("noInvoiceGeneration")}</span></div></div>
-    </section>}
-    <div className="accounting-note"><ShieldCheck size={15}/><span>{t("noInvoiceGeneration")} {t("accountingSync")}</span></div>
+        {!data.entitlements.length && <div className="empty-state">{t("noEntitlement")}</div>}</div></section>
+    {data.disputed_count > 0 && <div className="dispute-note"><CircleAlert size={18}/><div><b>{t("frozen")}</b><span>異議申立てがある報酬は解決まで請求対象から除外されます。</span></div></div>}
+    {household && <button className="text-button revenue-detail" onClick={() => onOpen(household)}>{t("show")} · {household.representative_name}<ChevronRight size={14}/></button>}
   </>;
 }
-function ConstructionCard({ project, t, role, api }) {
+function ConstructionCard({ household, project, data, t, role, api }) {
   const [evidence, setEvidence] = useState(project.confirmation_evidence || "");
   const canConfirm = role === "manager" || role === "hq_finance";
-  return <article className={`panel construction-panel ${project.days_overdue > 0 ? "construction-overdue" : ""}`}><div className="panel-head"><div><div className="eyebrow">PROJECT MILESTONE</div><h2>{project.representative_name} · {project.partner_name}</h2></div>
-    <div className="construction-status"><StateBadge state={project.confirmed_start_date ? "Confirmed" : "PendingConfirmation"}/>{project.days_overdue > 0 && <span className="overdue-tag">{project.days_overdue}{t("days")}</span>}</div></div>
+  return <section className="panel construction-panel"><div className="panel-head"><div><div className="eyebrow">PROJECT MILESTONE</div><h2>{household.representative_name} · {project.partner_name}</h2></div><StateBadge state={project.confirmed_start_date ? "Confirmed" : "PendingConfirmation"}/></div>
     <div className="milestone-line"><div className="milestone done"><div><Check size={15}/></div><span>{t("contract")}</span><b>{project.contract_date}</b></div><div className="milestone done"><div><Check size={15}/></div><span>{t("startPlanned")}</span><b>{project.planned_start_date}</b></div>
-    <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{project.actual_start_date || "—"}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{project.confirmed_start_date || t("unconfirmed")}</b></div></div>
-    {!project.confirmed_start_date && canConfirm ? <div className="confirm-row"><label className="field-label">{t("confirmationEvidence")}<input value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder={t("evidencePlaceholder")}/></label>
-      <button className="primary-btn" disabled={!evidence.trim()} onClick={() => api(`/api/construction/${project.id}/confirm`, "POST", { confirmed_start_date: new Date().toISOString().slice(0, 10), evidence })}><Check size={15}/>{t("confirm")}</button></div>
-      : !project.confirmed_start_date ? <div className="inline-notice"><ShieldCheck size={16}/>{t("constructionPermission")}</div>
+      <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{project.actual_start_date || "—"}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{project.confirmed_start_date || "未確認"}</b></div></div>
+    {!project.confirmed_start_date && canConfirm ? <div className="confirm-row"><label className="field-label">{t("confirmationEvidence")}<input value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="現場写真・担当者確認など"/></label>
+      <button className="primary-btn" disabled={!evidence.trim()} onClick={() => api(`/api/construction/${project.project_id}/confirm`, "POST", { confirmed_start_date: new Date().toISOString().slice(0, 10), evidence })}><Check size={15}/>{t("confirm")}</button></div>
+      : !project.confirmed_start_date ? <div className="inline-notice"><ShieldCheck size={16}/>{t("roleFinance")} または {t("roleManager")} ロールで着工確認ができます。</div>
       : <div className="success-notice"><Check size={16}/>{t("confirmed")} · {project.confirmation_evidence}</div>}
-    {project.entitlement_id && <div className="generated-fee"><div className="metric-icon green"><BadgeJapaneseYen size={18}/></div><div><span>{t("entitlement")} · {t("basis")}</span><b>¥{Number(project.contract_amount).toLocaleString()} × {t("rule")} = ¥{Number(project.calculated_amount).toLocaleString()}</b></div><span className="rule-chip">{t("feeGenerated")}</span></div>}
-  </article>;
+    {project.entitlement_id && <div className="generated-fee"><div className="metric-icon green"><BadgeJapaneseYen size={18}/></div><div><span>{t("entitlement")} · {t("basis")}</span><b>¥{Number(project.contract_amount).toLocaleString()} × 2% = ¥{Number(project.calculated_amount).toLocaleString()}</b></div><span className="rule-chip">FeeRule v2026.1</span></div>}
+  </section>;
 }
 function StateBadge({ state }) {
-  return <span className={`state-badge state-${state?.toLowerCase()}`}>{state === "Disputed" && <CircleAlert size={13}/>} {displayEnum(state)}</span>;
+  const labels = { Confirmed: "確認済", Invoiced: "請求済", Paid: "入金済", Disputed: "争議中",
+    PendingConfirmation: "確認待ち", Estimated: "見積", Potential: "見込", WrittenOff: "償却" };
+  return <span className={`state-badge state-${state?.toLowerCase()}`}>{state === "Disputed" && <CircleAlert size={13}/>} {labels[state] || state}</span>;
 }
 function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Disputed") return <span className="frozen-label"><CircleAlert size={13}/>{t("frozen")}</span>;
   if (role !== "hq_finance") return <span className="muted">—</span>;
-  if (entitlement.state === "Pending") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "approve" })}>{t("approve")} <ChevronRight size={13}/></button>;
   if (entitlement.state === "Confirmed") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "invoice" })}>{t("invoice")} <ChevronRight size={13}/></button>;
   if (entitlement.state === "Invoiced") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "paid" })}>{t("paid")} <ChevronRight size={13}/></button>;
   return <span className="muted">—</span>;
 }
-function Management({ data, reports, t, locale, role, onNavigate }) {
-  const [metric, setMetric] = useState("inquiries");
-  const [period, setPeriod] = useState("90d");
-  const [trend, setTrend] = useState(null);
-  const [cohort, setCohort] = useState(null);
-  const metricLabels = { inquiries: t("inquiriesMetric"), consultations: t("consultationsMetric"),
-    introductions: t("introductionsMetric"), contracts: t("contractsMetric"), construction: t("constructionMetric") };
-  useEffect(() => {
-    let active = true;
-    const headers = { "X-Demo-Role": role };
-    Promise.all([
-      fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { headers }),
-      fetch(`${API_BASE}/api/dashboard/trends?metric=cohort&period=365d`, { headers }),
-    ]).then(async ([trendResponse, cohortResponse]) => {
-      if (!trendResponse.ok || !cohortResponse.ok) throw new Error(t("error"));
-      const [trendResult, cohortResult] = await Promise.all([trendResponse.json(), cohortResponse.json()]);
-      if (active) { setTrend(trendResult); setCohort(cohortResult); }
-    }).catch(() => { if (active) { setTrend(null); setCohort(null); } });
-    return () => { active = false; };
-  }, [metric, period, role]);
-  const reminderTarget = (item) => onNavigate(
-    item.related_type === "construction_project" ? "revenue" :
-      item.related_type === "introduction" || item.related_type === "dispute" ? "introductions" : "settings",
-  );
-  const operationRows = [
-    ["followupExecution", reports?.operations?.followup_execution],
-    ["dataCompleteness", reports?.operations?.data_completeness],
-    ["nextActionRate", reports?.operations?.next_action_setting],
-    ["reportSubmission", reports?.operations?.daily_report_submission],
-    ["responseQuality", reports?.operations?.customer_response_sample],
-  ];
-  return <><PageTitle eyebrow="BUSINESS INTELLIGENCE" title={t("management")} sub={t("managementSub")}/>
-    <SectionTabs items={[["operations","management-operations"],["deadlineReminders","management-reminders"],["storeComparison","management-stores"],
-      ["marketingAttribution","management-marketing"],["conversionCohort","management-cohort"],["partnerQuality","management-partners"],["trend","management-trend"]]} t={t}/>
-    <section className="panel operations-panel" id="management-operations"><div className="panel-head"><div><div className="eyebrow">STORE OPERATIONS</div><h2>{t("operations")}</h2></div>
-      <span className="panel-caption">{t("noOverallScore")}</span></div>
-      <div className="operations-grid">{operationRows.map(([label, row]) => <div className="operation-card" key={label}>
-        <span>{t(label)}</span><b>{row?.numerator || 0}<small> / {row?.denominator || 0} {t("sampleSize")}</small></b>
-        <div className="operation-track"><i style={{ width: `${row?.denominator ? Math.min(100, row.numerator / row.denominator * 100) : 0}%` }}/></div>
-      </div>)}</div></section>
-    <section className="panel reminder-panel" id="management-reminders"><div className="panel-head"><div><div className="eyebrow">DEADLINE CONTROL</div><h2>{t("deadlineReminders")}</h2></div><span className="panel-caption">{t("remindersNotice")}</span></div>
-      <div className="reminder-grid">{(reports?.reminders || []).map((item, index) => <button className={`reminder-card ${item.status === "overdue" ? "reminder-late" : ""}`} key={`${item.key}-${item.related_id}-${index}`} onClick={() => reminderTarget(item)}>
-        <span className="reminder-kind">{t(`reminder_${item.key}`) || item.key}</span><b>{item.household_code || item.partner_name || `#${item.related_id}`}</b>
-        <small>{t("dueDate")} · {item.due_at} · {item.status === "overdue" ? `${Math.abs(item.days_until_due)}${t("days")} ${t("dueOver")}` : `${item.days_until_due}${t("days")} ${t("expiresIn")}`}</small>
-        <span className="reminder-action">{t("review")} <ChevronRight size={13}/></span>
-      </button>)}</div>
-    </section>
-    <section className="panel store-comparison-panel" id="management-stores"><div className="panel-head"><div><div className="eyebrow">COMPARABLE STORE CONTEXT</div><h2>{t("storeComparison")}</h2></div>
-      <span className="panel-caption">{locale === "ja" ? "開設月数と案件数を併記し、順位付けはしません。" : "同时显示开店时长和案件量，不进行排名。"}</span></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("stores")}</th><th>{t("openMonths")}</th><th>{t("caseVolume")}</th><th>{t("contractsMetric")}</th><th>{t("contractRate")}</th></tr></thead><tbody>
-      {(reports?.stores || []).map((store) => <tr key={store.id}><td><b>{store.name}</b></td><td>{store.opened_months}</td><td>{store.household_count}</td><td>{store.contract_count}</td>
-        <td>{store.household_count ? `${(store.contract_household_count / store.household_count * 100).toFixed(1)}%` : "—"}</td></tr>)}</tbody></table></div>
-    </section>
-    <div className="management-grid">
-      <section className="panel analytics-panel" id="management-marketing"><div className="panel-head"><div><div className="eyebrow">ATTRIBUTION</div><h2>{t("marketingAttribution")}</h2></div><ArrowUpRight size={17} className="green-text"/></div>
-        <div className="table-scroll"><table><thead><tr><th>{t("channel")}</th><th>{t("firstTouchCount")}</th><th>{t("latestTouchCount")}</th><th>{t("introducedHomes")}</th></tr></thead><tbody>
-          {(reports?.marketing || []).map((row) => <tr key={row.channel}><td>{displayEnum(row.channel)}</td><td>{row.first_touch}</td><td>{row.latest_touch}</td><td>{row.introduced_households}</td></tr>)}</tbody></table></div>
-        <div className="chart-footnote">{t("attributionNote")}</div></section>
-      <section className="panel analytics-panel" id="management-partners"><div className="panel-head"><div><div className="eyebrow">PARTNER FEE OPERATIONS</div><h2>{t("partnerQuality")}</h2></div></div>
-        <div className="table-scroll"><table><thead><tr><th>{t("partner")}</th><th>{t("partnerIntros")}</th><th>{t("partnerContracts")}</th><th>{t("partnerPaid")}</th><th>{t("partnerDisputes")}</th></tr></thead><tbody>
-          {(reports?.partner_quality || []).map((row) => <tr key={row.id}><td>{row.name}</td><td>{row.introductions}</td><td>{row.contracts}</td><td>{row.paid}</td><td>{row.disputed}</td></tr>)}</tbody></table></div></section>
-    </div>
-    <section className="panel cohort-panel" id="management-cohort"><div className="panel-head"><div><div className="eyebrow">COHORT CONVERSION</div><h2>{t("conversionCohort")}</h2></div><span className="panel-caption">{t("period365")}</span></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("cohortMonth")}</th><th>{t("inquiryHomes")}</th><th>{t("introductionsMetric")}</th><th>{t("introRate")}</th><th>{t("contractsMetric")}</th><th>{t("contractRate")}</th></tr></thead><tbody>
-        {(cohort?.cohorts || reports?.cohorts || []).map((row) => <tr key={row.cohort}><td>{row.cohort}</td><td>{row.households}</td><td>{row.introductions}</td><td>{row.introduction_rate}%</td><td>{row.contracts}</td><td>{row.contract_rate}%</td></tr>)}</tbody></table>
-        {!(cohort?.cohorts || reports?.cohorts || []).length && <div className="empty-state">{t("noRows")}</div>}</div></section>
-    <section className="panel trend-panel" id="management-trend"><div className="panel-head"><div><div className="eyebrow">BUSINESS TREND</div><h2>{t("trend")}</h2></div>
-      <div className="trend-controls"><select aria-label={t("trend")} value={metric} onChange={(e) => setMetric(e.target.value)}>
-        {Object.entries(metricLabels).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select>
-        <select aria-label={t("period90")} value={period} onChange={(e) => setPeriod(e.target.value)}>
-          {[["7d","period7"],["30d","period30"],["90d","period90"],["180d","period180"],["365d","period365"]].map(([value,label]) => <option value={value} key={value}>{t(label)}</option>)}</select></div></div>
-      <div className="trend-summary"><span>{t("currentPeriod")} <b>{trend?.current_count ?? "—"}</b></span><span>{t("previousPeriod")} <b>{trend?.previous_count ?? "—"}</b></span>
-        <span>{t("trendDelta")} <b>{trend?.change > 0 ? "+" : ""}{trend?.change ?? "—"}</b></span></div>
-      <div className="trend-chart">{(trend?.points || []).map((point, index) => {
-        const maximum = Math.max(1, ...(trend?.points || []).map((p) => p.count));
-        return <div className={`trend-point ${point.series}`} key={`${point.series}-${point.label}-${index}`} title={`${point.label}: ${point.count}`}>
-          <div className="trend-bar-wrap"><i style={{ height: `${Math.max(3, point.count / maximum * 100)}%` }}/></div><small>{point.label}</small></div>;
-      })}</div>
-    </section>
-    <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">GOVERNANCE</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>{t("auditDescription")}</span></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("timestamp")}</th><th>{t("userLabel")}</th><th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead><tbody>
+function Management({ data, t }) {
+  const max = Math.max(...data.stores.slice(0, 7).map((s) => data.households.filter((h) => h.store_id === s.id).length), 1);
+  return <><PageTitle eyebrow="BUSINESS INTELLIGENCE" title={t("management")} sub="店舗・流入・着工・報酬を同じ事実データから可視化"/>
+    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">STORE PERFORMANCE</div><h2>{t("funnel")}</h2></div><span className="filter-btn"><CalendarDays size={15}/>今月<ChevronDown size={13}/></span></div>
+      <div className="store-bars">{data.stores.slice(0, 8).map((store) => { const count = data.households.filter((h) => h.store_id === store.id).length;
+        return <div className="store-bar-row" key={store.id}><span>{store.name}</span><div className="bar-track"><i style={{ width: `${count / max * 100}%` }}/></div><b>{count}</b></div>;})}</div>
+      <div className="chart-footnote">Source: append-only StageEvent · {t("demoWarning")}</div></section>
+      <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">ATTRIBUTION</div><h2>{t("roi")}</h2></div><ArrowUpRight size={17} className="green-text"/></div>
+        <div className="channel-list">{["Web広告", "直接来店", "紹介", "自然検索", "TVCM"].map((channel, i) => <div className="channel-row" key={channel}><div className={`channel-dot dot-${i}`}/><span>{channel}</span><b>{data.households.reduce((n, h) => n + h.touches.filter((touch) => touch.channel === channel).length, 0)}</b><small>{i === 0 ? "First touch" : i === 1 ? "Latest touch" : "Touch"}</small></div>)}</div>
+        <div className="chart-footnote">First / Latest Touch は Touch 履歴から算出</div></section></div>
+    <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">GOVERNANCE</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>監査対応</span></div>
+      <div className="table-scroll"><table><thead><tr><th>日時</th><th>ユーザー</th><th>操作</th><th>対象</th><th>詳細</th></tr></thead><tbody>
         {data.audit_logs.map((row) => <tr key={row.id}><td>{row.at}</td><td>{row.user_name || "—"}</td><td><span className="audit-action">{row.action}</span></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
       </tbody></table>{!data.audit_logs.length && <div className="empty-state">{t("noRows")}</div>}</div></section>
   </>;
 }
-function SettingsPage({ data, roles, slaRules, t, role, locale, preferences, onPreferences, api, onReset }) {
-  const updatePreference = (key, value) => onPreferences({ ...preferences, [key]: value });
-  return <><PageTitle eyebrow="SYSTEM PREFERENCES" title={t("settings")} sub={t("settingsSub")}/>
-    <SectionTabs items={[["preferences","settings-preferences"],["notificationSettings","settings-notifications"],["slaSettings","settings-sla"],["reset","settings-reset"]]} t={t}/>
+function SettingsPage({ data, t, role, locale, onReset }) {
+  return <><PageTitle eyebrow="SYSTEM PREFERENCES" title={t("settings")} sub="デモ環境の表示とデータを管理"/>
     <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{ROLE_LABEL[locale][role]}。{locale === "ja" ? "役割ごとに表示と操作権限が異なります。" : "不同角色拥有不同的数据视图和操作权限。"}</p>
-      <div className="setting-roles">{roles.map((r) => <span className={`role-chip ${r.id === role ? "current" : ""}`} key={r.id}>{ROLE_LABEL[locale][r.id]} {r.id === role && <Check size={13}/>}</span>)}</div></div></section>
-      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>{t("languageNotice")}</p><span className="locale-pill">日本語 · 中文</span></div></section>
-      <section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("consent")}</h2><p>{t("privacySettingsNotice")}</p><span className="pill pill-green">L1 PROTECTED</span></div></section>
-      <section className="panel setting-card preference-card" id="settings-preferences"><div className="setting-icon"><LayoutDashboard size={19}/></div><div><h2>{t("homeWidgets")}</h2>
-        {[["focusTasks","showFocusTasks"],["overview","showOverview"],["dailyReport","showDailyReport"]].map(([key,label]) => <label className="preference-toggle" key={key}><input type="checkbox" checked={Boolean(preferences[key])} onChange={(e) => updatePreference(key,e.target.checked)}/>{t(label)}</label>)}</div></section>
-      <section className="panel setting-card preference-card" id="settings-notifications"><div className="setting-icon"><Bell size={19}/></div><div><h2>{t("notificationSettings")}</h2>
-        <label className="preference-toggle"><input type="checkbox" checked={Boolean(preferences.notifications)} onChange={(e) => updatePreference("notifications",e.target.checked)}/>{t("enableNotifications")}</label>
-        <p>{t("badgeRule")}</p></div></section>
-      <section className="panel setting-card production-note"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("productionNotes")}</h2><p>{t("noInvoiceGeneration")} {t("accountingSync")}</p><p>{t("productionRoleNotice")}</p></div></section>
-      <section className="panel setting-card sla-setting-card" id="settings-sla"><div className="setting-icon"><Clock3 size={19}/></div><div><h2>{t("slaSettings")}</h2>
-        <p>{t("remindersNotice")}</p><div className="sla-controls">{Object.entries(slaRules).map(([key, days]) => <SLASetting key={key} settingKey={key} days={days} t={t} role={role} api={api}/>)}</div>
-        {role !== "hq_finance" && role !== "executive" && <small>{t("slaPermission")}</small>}</div></section>
-      <section className="panel setting-card danger-setting" id="settings-reset"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>{t("resetNotice")}</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>{t("resetPermission")}</small>}</div></section>
+      <div className="setting-roles">{data.roles.map((r) => <span className={`role-chip ${r.id === role ? "current" : ""}`} key={r.id}>{ROLE_LABEL[locale][r.id]} {r.id === role && <Check size={13}/>}</span>)}</div></div></section>
+      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>日本語を標準表示とし、中文へ切り替えられます。</p><span className="locale-pill">日本語 · 中文</span></div></section>
+      <section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("consent")}</h2><p>L1 原始診断データは初期状態で非表示です。共有履歴は対象世帯の詳細画面で確認できます。</p><span className="pill pill-green">L1 PROTECTED</span></div></section>
+      <section className="panel setting-card danger-setting"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>本社・経理ロールで実行できます。</small>}</div></section>
     </div></>;
-}
-function SLASetting({ settingKey, days, t, role, api }) {
-  const [value, setValue] = useState(days);
-  useEffect(() => setValue(days), [days]);
-  return <div className="sla-setting-row"><label>{t(`reminder_${settingKey}`) || settingKey}<input type="number" min="0" max="365" value={value}
-    disabled={role !== "hq_finance" && role !== "executive"} onChange={(e) => setValue(Number(e.target.value))}/></label>
-    <button className="mini-action" disabled={role !== "hq_finance" && role !== "executive"} onClick={() => api(`/api/settings/sla/${settingKey}`, "PUT", { days_before: value })}>{t("saveSla")}</button>
-  </div>;
 }
 function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
   const [stage, setStage] = useState(h.stage_events.at(-1)?.to_stage || "新規予約");
   const [disputeIntro, setDisputeIntro] = useState(null);
-  return <Modal onClose={onClose} wide><div className="modal-heading"><div><div className="eyebrow">HOUSEHOLD 360° · #{String(h.id).padStart(4, "0")}</div><h2>{h.representative_name}</h2><p>{h.store_name} · {h.advisor_name} · {displayEnum(h.area_pref)}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
-    <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={displayEnum(h.area_pref)}/><Fact label={t("land")} value={displayEnum(h.land_status)}/><Fact label={t("stage")} value={displayEnum(h.stage_events.at(-1)?.to_stage)}/></div>
+  const locale = document.documentElement.lang;
+  return <Modal onClose={onClose} wide><div className="modal-heading"><div><div className="eyebrow">HOUSEHOLD 360° · #{String(h.id).padStart(4, "0")}</div><h2>{h.representative_name}</h2><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+    <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={h.stage_events.at(-1)?.to_stage}/></div>
     <div className="household-modal-grid"><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("people")}</h3><span className="count-badge">{h.persons.length}</span></div>
-      {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{displayEnum(p.relation)} · {p.phone}</span></div></div>)}</section>
+      {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{p.relation} · {p.phone}</span></div></div>)}</section>
       <section className="modal-section"><div className="section-title"><h3>{t("firstTouch")} / {t("latestTouch")}</h3></div><div className="touch-compare">{[["first", h.first_touch], ["last", h.latest_touch]].map(([key, touch]) => <div className="touch-card" key={key}><small>{t(key)}</small><b>{touch?.channel || "—"}</b><span>{touch?.touch_at || "—"}</span><em>{touch?.capture_method || "—"}</em></div>)}</div></section>
-      <section className="modal-section"><div className="section-title"><h3>{t("stages")}</h3><div className="inline-stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{h.stage_events.length ? h.stage_events.map((e, i) => <option key={`${e.id}-${i}`} value={e.to_stage}>{displayEnum(e.to_stage)}</option>) : ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"].map((s) => <option key={s} value={s}>{displayEnum(s)}</option>)}</select><button className="mini-action" onClick={() => api(`/api/households/${h.id}/stage`, "POST", { to_stage: stage })}>{t("record")}</button></div></div>
-        <div className="timeline">{h.stage_events.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{displayEnum(e.to_stage)}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
-      <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{displayEnum(c.scope)} · {displayEnum(c.purpose)}</b><span>{t("consented")}: {c.granted_at} {c.revoked_at && ` · ${t("revoked")}: ${c.revoked_at}`}</span></div></div>)}
-        {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{displayEnum(d.scope)} → {d.disclosed_to}</b><span>{t("shared")}: {d.disclosed_at}</span></div></div>)}
-        <div className="privacy-lock"><ShieldCheck size={15}/>{t("privacyNotice")}</div></section>
+      <section className="modal-section"><div className="section-title"><h3>{t("stages")}</h3><div className="inline-stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{h.stage_events.length ? h.stage_events.map((e, i) => <option key={`${e.id}-${i}`} value={e.to_stage}>{e.to_stage}</option>) : ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"].map((s) => <option key={s}>{s}</option>)}</select><button className="mini-action" onClick={() => api(`/api/households/${h.id}/stage`, "POST", { to_stage: stage })}>{t("record")}</button></div></div>
+        <div className="timeline">{h.stage_events.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{e.to_stage}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
+      <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{c.scope} · {c.purpose}</b><span>同意: {c.granted_at} {c.revoked_at && ` · 取消: ${c.revoked_at}`}</span></div></div>)}
+        {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{d.scope} → {d.disclosed_to}</b><span>共有: {d.disclosed_at}</span></div></div>)}
+        <div className="privacy-lock"><ShieldCheck size={15}/>L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。</div></section>
     </div><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("negotiations")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("quickActivity")}</button></div>
-      {h.introductions.map((intro) => <div className="negotiation-mini" key={intro.id}><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{displayEnum(intro.status)} / {displayEnum(intro.negotiation_status)}</div>
-        {intro.contract_id && <small>{t("contract")} ¥{Number(intro.contract_amount).toLocaleString()} · {t("actualStart")} {intro.actual_start_date || "—"} · {t("confirmStart")} {intro.confirmed_start_date || t("unconfirmed")}</small>}</div>
-        {intro.existing_customer_flag ? <StateBadge state="Disputed"/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>{t("existingCustomerDispute")}</button>}</div>)}
+      {h.introductions.map((intro) => <div className="negotiation-mini" key={intro.id}><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{intro.status} / {intro.negotiation_status || "—"}</div>
+        {intro.contract_id && <small>契約 ¥{Number(intro.contract_amount).toLocaleString()} · 着工 {intro.actual_start_date || "未定"} · 確認 {intro.confirmed_start_date || "未確認"}</small>}</div>
+        {intro.existing_customer_flag ? <StateBadge state="Disputed"/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>既存顧客・争議</button>}</div>)}
       {!h.introductions.length && <div className="empty-state">{t("noRows")}</div>}
       {disputeIntro && <DisputeForm introId={disputeIntro} t={t} api={api} onCancel={() => setDisputeIntro(null)}/>}
       </section>
       <section className="modal-section"><div className="section-title"><h3>{t("activitiesHistory")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("addActivity")}</button></div>
-        {h.activities.slice(0, 6).map((a) => <div className="activity-row" key={a.id}><div className="activity-dot"><Activity size={13}/></div><div><b>{displayEnum(a.type)} · {a.user_name}</b><span>{a.acted_at}</span><p>{a.body}</p>{a.next_action && <small>{t("nextAction")}: {a.next_action} · {a.next_action_due}</small>}</div></div>)}</section>
-      <section className="modal-section touch-list"><div className="section-title"><h3>{t("touchHistory")}</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{touch.touch_at}</span><b>{displayEnum(touch.channel)}</b><small>{touch.campaign_id || "—"} · {displayEnum(touch.capture_method)}</small></div>)}</section>
+        {h.activities.slice(0, 6).map((a) => <div className="activity-row" key={a.id}><div className="activity-dot"><Activity size={13}/></div><div><b>{a.type} · {a.user_name}</b><span>{a.acted_at}</span><p>{a.body}</p>{a.next_action && <small>{t("nextAction")}: {a.next_action} · {a.next_action_due}</small>}</div></div>)}</section>
+      <section className="modal-section touch-list"><div className="section-title"><h3>Touch history</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{touch.touch_at}</span><b>{touch.channel}</b><small>{touch.campaign_id || "—"} · {touch.capture_method}</small></div>)}</section>
     </div></div>
   </Modal>;
 }
 function DisputeForm({ introId, t, api, onCancel }) {
   const [reason, setReason] = useState("");
   const [level, setLevel] = useState("B");
-  return <div className="dispute-form">  <label className="field-label">{t("disputeReason")}<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("disputePlaceholder")}/></label>
-  <label className="field-label">{t("evidenceLevel")}<select value={level} onChange={(e) => setLevel(e.target.value)}><option value="A">A {t("evidenceA")}</option><option value="B">B {t("evidenceB")}</option><option value="C">C {t("evidenceC")}</option><option value="D">D {t("evidenceD")}</option></select></label>
+  return <div className="dispute-form"><label className="field-label">争議理由<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="住宅会社から既存顧客の申立て"/></label>
+    <label className="field-label">証拠レベル<select value={level} onChange={(e) => setLevel(e.target.value)}><option value="A">A 契約 + 原始紹介記録</option><option value="B">B 住宅会社 CRM</option><option value="C">C 予約・来電記録</option><option value="D">D 口頭</option></select></label>
     <div className="form-actions"><button className="secondary-btn" onClick={onCancel}>{t("cancel")}</button><button className="danger-btn" disabled={!reason.trim()} onClick={() => api(`/api/introductions/${introId}/dispute`, "POST", { reason, evidence_level: level })}>{t("disputed")}</button></div></div>;
 }
 function Fact({ label, value }) { return <div className="fact-card"><span>{label}</span><b>{value || "—"}</b></div>; }
-function ActivityModal({ households, initialHouseholdId, t, onClose, onSubmit }) {
-  const [householdId, setHouseholdId] = useState(initialHouseholdId || households[0]?.id || "");
+function ActivityModal({ households, t, onClose, onSubmit }) {
+  const [householdId, setHouseholdId] = useState(households[0]?.id || "");
   const [type, setType] = useState("面談");
   const [body, setBody] = useState("");
   const [nextAction, setNextAction] = useState("");

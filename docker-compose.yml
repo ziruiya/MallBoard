@@ -24,7 +24,6 @@ services:
       DB_NAME: ${DB_NAME:?Set DB_NAME in .env}
       DB_USER: ${DB_USER:?Set DB_USER in .env}
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      TZ: Asia/Tokyo
 
   mysql:
     image: mysql:8.0
@@ -35,11 +34,9 @@ services:
       MYSQL_USER: ${DB_USER:?Set DB_USER in .env}
       MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
-      TZ: Asia/Tokyo
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
-      - --default-time-zone=+09:00
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
