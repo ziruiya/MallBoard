@@ -12,6 +12,13 @@ import { todayJst } from "./jst-date.js";
 
 const COPY = {
   ja: {
+    clearSearch: "検索をクリア",
+    searchLoading: "顧客を検索しています…",
+    searchRetry: "再試行", searchNoResults: "該当する顧客が見つかりませんでした。",
+    searchNoResultsHint: "検索キーワードをご確認ください。",
+    searchViewAll: (count) => `すべての顧客を表示 (${count}件)`,
+    searchTruncated: "検索結果が多いため、一部のみ表示しています。条件を絞り込んでください。",
+    searchCount: (count, truncated) => truncated ? `${count}件を表示中` : `${count}件の顧客が見つかりました`,
     product: "MallBoard", subtitle: "住宅相談ビジネス・業務基盤", today: "今日の業務",
     households: "顧客・世帯", introductions: "紹介・商談", revenue: "着工・報酬",
     management: "経営・管理", settings: "設定", search: "顧客・会社を検索…",
@@ -230,6 +237,12 @@ const COPY = {
     copyright: "Copyright SUZIRUI · V3.0.1",
   },
   zh: {
+    clearSearch: "清除搜索",
+    searchLoading: "正在搜索客户…", searchRetry: "重试",
+    searchNoResults: "没有找到匹配的顾客", searchNoResultsHint: "请确认顾客姓名、假名、顾客代码或电话号码。",
+    searchViewAll: (count) => `查看全部 ${count} 位客户`,
+    searchTruncated: "搜索结果较多，仅显示部分结果。请缩小搜索条件。",
+    searchCount: (count, truncated) => truncated ? `显示前 ${count} 位` : `找到 ${count} 位客户`,
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
     households: "客户家庭", introductions: "介绍与洽谈", revenue: "开工与报酬",
     management: "经营管理", settings: "设置", search: "搜索客户或公司…",
@@ -549,6 +562,15 @@ function App() {
   const [modal, setModal] = useState("");
   const [query, setQuery] = useState("");
   const [searchMatches, setSearchMatches] = useState(null);
+  const [searchResultIds, setSearchResultIds] = useState([]);
+  const [searchTruncated, setSearchTruncated] = useState(false);
+  const [searchStatus, setSearchStatus] = useState("idle");
+  const [searchRetry, setSearchRetry] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
+  const searchRequestId = useRef(0);
+  const searchControlRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const t = (key) => COPY[locale][key] || key;
@@ -652,12 +674,20 @@ function App() {
   }, [authenticated, page]);
   useEffect(() => {
     const term = query.trim();
+    const requestId = ++searchRequestId.current;
     if (!authenticated || !term || role === "hr") {
       setSearchMatches(null);
+      setSearchResultIds([]);
+      setSearchTruncated(false);
+      setSearchStatus("idle");
+      if (!term) setSearchActiveIndex(-1);
       return undefined;
     }
     let active = true;
     setSearchMatches(null);
+    setSearchStatus("loading");
+    setSearchTruncated(false);
+    setSearchActiveIndex(-1);
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(`${API_BASE}/api/households/search?q=${encodeURIComponent(term)}`, {
@@ -665,16 +695,31 @@ function App() {
         });
         if (!response.ok) throw new Error("search failed");
         const result = await response.json();
-        if (active) setSearchMatches(new Set(result.household_ids || []));
+        if (active && requestId === searchRequestId.current) {
+          const ids = Array.isArray(result.household_ids) ? result.household_ids : [];
+          setSearchResultIds(ids);
+          setSearchTruncated(Boolean(result.truncated));
+          setSearchMatches(new Set(ids));
+          setSearchStatus("success");
+        }
       } catch {
-        if (active) {
+        if (active && requestId === searchRequestId.current) {
+          setSearchResultIds([]);
+          setSearchTruncated(false);
           setSearchMatches(new Set());
-          setToast(t("searchError"));
+          setSearchStatus("error");
         }
       }
     }, 250);
     return () => { active = false; clearTimeout(timer); };
-  }, [query, authenticated, role, locale]);
+  }, [query, authenticated, role, locale, searchRetry]);
+  useEffect(() => {
+    const closeOnOutsidePointer = (event) => {
+      if (searchControlRef.current && !searchControlRef.current.contains(event.target)) setSearchOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(""), 3000);
@@ -702,6 +747,7 @@ function App() {
   }
 
   async function login(path, body) {
+    resetSearchState();
     setBusy(true);
     setLoginError("");
     try {
@@ -719,6 +765,7 @@ function App() {
   }
 
   async function logout() {
+    resetSearchState();
     await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
     setAuthenticated(false);
     setData(null);
@@ -728,6 +775,17 @@ function App() {
     setNotificationUnreadCount(0);
     notificationRequestId.current += 1;
     setPage("dashboard");
+  }
+  function resetSearchState() {
+    searchRequestId.current += 1;
+    setQuery("");
+    setSearchMatches(null);
+    setSearchResultIds([]);
+    setSearchTruncated(false);
+    setSearchStatus("idle");
+    setSearchRetry(0);
+    setSearchOpen(false);
+    setSearchActiveIndex(-1);
   }
   async function updateNotification(notification, action) {
     const response = await fetch(`${API_BASE}/api/notifications/${notification.id}/${action}`, {
@@ -786,6 +844,35 @@ function App() {
     }
     return rows;
   }, [data, query, searchMatches, businessFilter, tasks]);
+  const searchHouseholds = searchResultIds.map((id) => data?.households?.find((household) => household.id === id)).filter(Boolean).slice(0, 5);
+  function handleSearchKeyDown(event) {
+    if (event.key === "Escape") {
+      setSearchOpen(false);
+      setSearchActiveIndex(-1);
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!query.trim()) return;
+      event.preventDefault();
+      setSearchOpen(true);
+      const count = searchHouseholds.length;
+      if (!count || searchStatus !== "success") return;
+      setSearchActiveIndex((index) => event.key === "ArrowDown"
+        ? (index + 1) % count : (index <= 0 ? count - 1 : index - 1));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (searchStatus !== "success") return;
+      if (searchActiveIndex >= 0 && searchHouseholds[searchActiveIndex]) {
+        openHousehold(searchHouseholds[searchActiveIndex]);
+        setSearchOpen(false);
+      } else {
+        setPage("households");
+        setSearchOpen(false);
+      }
+    }
+  }
   const openHousehold = (household) => { setSelected(household); setModal("household"); };
   if (!authenticated || !data) return <LoginPage locale={locale} setLocale={setLocale} t={t} accounts={demoAccounts}
     demoAvailable={demoAvailable} error={loginError} busy={busy} onLogin={login}/>;
@@ -809,7 +896,54 @@ function App() {
       <header className="topbar">
         <div className="breadcrumb"><span>{t("product")}</span><ChevronRight size={14}/><b>{t(NAV.find(([id]) => id === page)?.[2] || page)}</b></div>
         <div className="top-actions">
-          {data.account_role !== "hr" && <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>}
+          {data.account_role !== "hr" && <div className="search-control" ref={searchControlRef}>
+            <div className="searchbox"><Search size={16}/><input ref={searchInputRef} value={query} aria-label={t("search")}
+              aria-expanded={Boolean(query.trim() && searchOpen)} aria-controls="global-search-results"
+              onFocus={() => { if (query.trim() && searchStatus === "success") setSearchOpen(true); }}
+              onKeyDown={handleSearchKeyDown}
+              onChange={(event) => {
+                const value = event.target.value;
+                setQuery(value);
+                setSearchOpen(Boolean(value.trim()));
+                setSearchActiveIndex(-1);
+                setSearchMatches(null);
+                setSearchResultIds([]);
+                setSearchTruncated(false);
+                setSearchStatus(value.trim() ? "loading" : "idle");
+              }} placeholder={t("search")}/>
+              {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => { resetSearchState(); searchInputRef.current?.focus(); }}><X size={14}/></button>}
+              <kbd>⌘ K</kbd>
+            </div>
+            {query.trim() && searchOpen && <div className="global-search-results" id="global-search-results" role="listbox">
+              {searchStatus === "loading" && <div className="search-result-message" role="status"><span className="spinner"/>{t("searchLoading")}</div>}
+              {searchStatus === "error" && <div className="search-result-message search-result-error" role="alert">
+                <span>{t("searchError")}</span><button type="button" onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button>
+              </div>}
+              {searchStatus === "success" && <>
+                <div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>
+                {searchResultIds.length === 0 && <div className="search-empty">
+                  <strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span>
+                </div>}
+                {searchHouseholds.map((household, index) => <button type="button" role="option"
+                  aria-selected={index === searchActiveIndex} className={`search-result-option ${index === searchActiveIndex ? "active" : ""}`}
+                  key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => {
+                    openHousehold(household); setSearchOpen(false); setSearchActiveIndex(-1);
+                  }}>
+                  <span className="search-result-code">{household.household_code || `#${household.id}`}</span>
+                  <span className="search-result-details"><strong>{household.representative_name || "—"}</strong>
+                    <small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "—"}</small></span>
+                  <span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "—"}</span>
+                </button>)}
+                {searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}
+                {searchResultIds.length > 0 && <button type="button" className="search-view-all"
+                  onClick={() => { setPage("households"); setSearchOpen(false); }}>
+                  {t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/>
+                </button>}
+              </>}
+            </div>}
+          </div>}
           <div className="notification-anchor">
             <button className="icon-btn" title={t("notifications")} aria-label={t("notifications")}
               onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}>
