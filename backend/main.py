@@ -1577,7 +1577,8 @@ def ensure_schema(db):
             if not exists:
                 db.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}")
     for seed_household in db.execute(
-            "SELECT id,household_code FROM households WHERE household_code LIKE 'HH-D%' AND kana IS NULL"):
+            "SELECT id,household_code FROM households WHERE household_code LIKE ? AND kana IS NULL",
+            ("HH-D%",)):
         try:
             seed_number = int(seed_household["household_code"][-3:])
         except (TypeError, ValueError):
