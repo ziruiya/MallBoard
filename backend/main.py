@@ -1,18 +1,29 @@
+import asyncio
+import csv
+import io
 import json
 import hashlib
+import hmac
+import logging
 import os
+import re
+import secrets
 import time
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
+from urllib.parse import quote
 
 import pymysql
 from pymysql.cursors import DictCursor
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from backend.pdf_export import PDF_TEMPLATE_VERSION, build_pdf
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,6 +40,7 @@ DB_CONFIG = {
 }
 
 app = FastAPI(title="MallBoard", version="0.1.0")
+LOGGER = logging.getLogger("mallboard")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -43,7 +55,13 @@ CREATE TABLE IF NOT EXISTS stores (
 );
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL, role VARCHAR(40) NOT NULL,
-  store_id INT NULL, FOREIGN KEY (store_id) REFERENCES stores(id)
+  store_id INT NULL, employee_code VARCHAR(30) NULL UNIQUE, public_id CHAR(36) NULL UNIQUE,
+  display_name VARCHAR(120) NULL, password_hash VARCHAR(255) NULL,
+  account_status VARCHAR(40) NOT NULL DEFAULT 'ACTIVE', failed_login_attempts INT NOT NULL DEFAULT 0,
+  locked_until DATETIME NULL, must_change_password TINYINT NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL, password_changed_at DATETIME NULL, last_password_reset_at DATETIME NULL,
+  version INT NOT NULL DEFAULT 1,
+  FOREIGN KEY (store_id) REFERENCES stores(id)
 );
 CREATE TABLE IF NOT EXISTS households (
   id INT AUTO_INCREMENT PRIMARY KEY, representative_name VARCHAR(120) NOT NULL, store_id INT,
@@ -144,6 +162,16 @@ CREATE TABLE IF NOT EXISTS data_disclosures (
   consent_id INT, FOREIGN KEY (household_id) REFERENCES households(id),
   FOREIGN KEY (disclosed_by) REFERENCES users(id), FOREIGN KEY (consent_id) REFERENCES consents(id)
 );
+CREATE TABLE IF NOT EXISTS data_correction_requests (
+  id CHAR(36) PRIMARY KEY, household_id INT NOT NULL, field_name VARCHAR(80) NOT NULL,
+  before_value TEXT NULL, requested_value TEXT NOT NULL, reason TEXT NOT NULL,
+  requested_by INT NOT NULL, requested_at DATETIME NOT NULL,
+  status ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+  decided_by INT NULL, decided_at DATETIME NULL, decision_note TEXT NULL, version INT NOT NULL DEFAULT 1,
+  INDEX idx_data_corrections_status(status,requested_at),
+  FOREIGN KEY (household_id) REFERENCES households(id), FOREIGN KEY (requested_by) REFERENCES users(id),
+  FOREIGN KEY (decided_by) REFERENCES users(id)
+);
 CREATE TABLE IF NOT EXISTS tasks (
   id INT AUTO_INCREMENT PRIMARY KEY, assignee_id INT NOT NULL, title VARCHAR(255) NOT NULL, due_at DATE NOT NULL,
   source VARCHAR(40) NOT NULL, related_household_id INT, done TINYINT NOT NULL DEFAULT 0,
@@ -152,6 +180,61 @@ CREATE TABLE IF NOT EXISTS tasks (
   status VARCHAR(20) NOT NULL DEFAULT 'open',
   FOREIGN KEY (assignee_id) REFERENCES users(id), FOREIGN KEY (related_household_id) REFERENCES households(id)
 );
+CREATE TABLE IF NOT EXISTS expenses (
+  id CHAR(36) PRIMARY KEY, applicant_id INT NOT NULL, store_id INT NULL,
+  category VARCHAR(80) NOT NULL, amount BIGINT NOT NULL, description TEXT NOT NULL,
+  expense_date DATE NOT NULL, receipt_filename VARCHAR(255) NULL, receipt_mime VARCHAR(80) NULL,
+  receipt_size BIGINT NULL, receipt_sha256 CHAR(64) NULL, receipt_blob LONGBLOB NULL,
+  status ENUM('DRAFT','SUBMITTED','APPROVED','REJECTED','RECORDED') NOT NULL DEFAULT 'DRAFT',
+  rejection_reason TEXT NULL, version INT NOT NULL DEFAULT 1,
+  reviewed_by INT NULL, reviewed_at DATETIME NULL, finance_recorded_by INT NULL,
+  finance_recorded_at DATETIME NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+  INDEX idx_expenses_applicant(applicant_id,status,expense_date),
+  INDEX idx_expenses_store(store_id,status,expense_date)
+);
+CREATE TABLE IF NOT EXISTS external_record_mappings (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, source_system VARCHAR(40) NOT NULL,
+  external_id VARCHAR(160) NOT NULL, object_type VARCHAR(40) NOT NULL,
+  local_id VARCHAR(160) NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL,
+  UNIQUE KEY uq_external_record(source_system,external_id)
+);
+CREATE TABLE IF NOT EXISTS import_jobs (
+  id CHAR(36) PRIMARY KEY, source_system VARCHAR(40) NOT NULL, requested_by INT NOT NULL,
+  filename VARCHAR(255) NOT NULL, total_rows INT NOT NULL DEFAULT 0,
+  success_rows INT NOT NULL DEFAULT 0, skipped_rows INT NOT NULL DEFAULT 0,
+  error_rows INT NOT NULL DEFAULT 0, status VARCHAR(24) NOT NULL,
+  created_at DATETIME NOT NULL, finished_at DATETIME NULL,
+  INDEX idx_import_jobs_requester(requested_by,created_at)
+);
+CREATE TABLE IF NOT EXISTS import_row_results (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, job_id CHAR(36) NOT NULL, source_row_number INT NOT NULL,
+  external_id VARCHAR(160) NULL, status VARCHAR(24) NOT NULL, reason VARCHAR(500) NULL,
+  local_id VARCHAR(160) NULL, created_at DATETIME NOT NULL,
+  INDEX idx_import_rows_job(job_id,source_row_number)
+);
+CREATE TABLE IF NOT EXISTS export_jobs (
+  id CHAR(36) PRIMARY KEY, user_id INT NOT NULL, resource VARCHAR(40) NOT NULL,
+  format VARCHAR(12) NOT NULL DEFAULT 'csv', template_version VARCHAR(40) NOT NULL DEFAULT 'csv-v1',
+  created_role VARCHAR(40) NOT NULL DEFAULT '', scope_store_id INT NULL,
+  include_personal_data TINYINT NOT NULL DEFAULT 0, record_ids_json LONGTEXT NULL,
+  filename VARCHAR(255) NOT NULL, row_count INT NOT NULL, content_sha256 CHAR(64) NOT NULL,
+  content LONGBLOB NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'READY',
+  created_at DATETIME NOT NULL, expires_at DATETIME NOT NULL,
+  INDEX idx_export_jobs_user(user_id,created_at)
+);
+CREATE TABLE IF NOT EXISTS month_closes (
+  id CHAR(36) PRIMARY KEY, period CHAR(7) NOT NULL, snapshot_version INT NOT NULL,
+  status VARCHAR(32) NOT NULL, snapshot_json JSON NOT NULL, snapshot_sha256 CHAR(64) NOT NULL,
+  prepared_by INT NOT NULL, prepared_at DATETIME NOT NULL, closed_by INT NULL,
+  closed_at DATETIME NULL, reopen_requested_by INT NULL, reopen_reason TEXT NULL,
+  reopen_requested_at DATETIME NULL, reopen_approved_by INT NULL, reopened_at DATETIME NULL,
+  version INT NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_month_close_version(period,snapshot_version),
+  INDEX idx_month_closes_period(period,status)
+);
+CREATE TABLE IF NOT EXISTS month_close_period_locks (
+  period CHAR(7) PRIMARY KEY
+);
 CREATE TABLE IF NOT EXISTS daily_report_drafts (
   id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, report_date DATE NOT NULL,
   auto_summary TEXT NOT NULL, manual_note TEXT NOT NULL,
@@ -159,7 +242,8 @@ CREATE TABLE IF NOT EXISTS daily_report_drafts (
 );
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, action VARCHAR(120) NOT NULL, target_type VARCHAR(120) NOT NULL,
-  target_id INT, `at` DATETIME NOT NULL, detail TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(id)
+  target_id INT, target_id_text VARCHAR(160) NULL, `at` DATETIME NOT NULL, detail TEXT NOT NULL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS system_configs (
   config_key VARCHAR(120) PRIMARY KEY, value_json JSON NOT NULL, updated_at DATETIME NOT NULL,
@@ -171,9 +255,62 @@ CREATE TABLE IF NOT EXISTS audit_chain (
 CREATE TABLE IF NOT EXISTS audit_events (
   id BIGINT AUTO_INCREMENT PRIMARY KEY, actor_id INT NULL, actor_role VARCHAR(40) NOT NULL,
   action VARCHAR(120) NOT NULL, object_type VARCHAR(120) NOT NULL, object_id INT NULL,
+  object_id_text VARCHAR(160) NULL,
   reason TEXT NOT NULL, event_at DATETIME NOT NULL, previous_hash CHAR(64) NOT NULL,
-  event_hash CHAR(64) NOT NULL UNIQUE,
+  event_hash CHAR(64) NOT NULL UNIQUE, event_type VARCHAR(80) NULL, before_hash CHAR(64) NULL,
+  after_hash CHAR(64) NULL, request_id CHAR(36) NULL, result VARCHAR(40) NULL, error_code VARCHAR(80) NULL,
   INDEX idx_audit_events_at(event_at), INDEX idx_audit_events_object(object_type, object_id)
+);
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id CHAR(36) PRIMARY KEY, user_id INT NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL, last_seen_at DATETIME NOT NULL, expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL, source_ip VARCHAR(64) NULL, user_agent_hash CHAR(64) NULL,
+  INDEX idx_auth_sessions_user(user_id,revoked_at)
+);
+CREATE TABLE IF NOT EXISTS auth_login_attempts (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, identity_hash CHAR(64) NOT NULL,
+  source_ip VARCHAR(64) NULL, attempted_at DATETIME NOT NULL, succeeded TINYINT NOT NULL DEFAULT 0,
+  INDEX idx_login_attempts_identity(identity_hash,attempted_at),
+  INDEX idx_login_attempts_ip(source_ip,attempted_at)
+);
+CREATE TABLE IF NOT EXISTS password_history (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL,
+  password_hash VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL,
+  INDEX idx_password_history_user(user_id,created_at)
+);
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id CHAR(36) PRIMARY KEY, user_id INT NOT NULL, token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL, used_at DATETIME NULL, created_by INT NOT NULL,
+  verification_method VARCHAR(40) NOT NULL, created_at DATETIME NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id CHAR(36) PRIMARY KEY, user_id INT NOT NULL,
+  notification_type ENUM('TASK','APPROVAL','EXPENSE','DAILY_REPORT','IMPORT','MONTHLY_CLOSE',
+    'DOCUMENT','EXPORT','DATA_CORRECTION','SECURITY','SYSTEM') NOT NULL,
+  system_event_code VARCHAR(80) NULL, title VARCHAR(255) NOT NULL, title_zh VARCHAR(255) NULL,
+  message TEXT NOT NULL, message_zh TEXT NULL,
+  related_record_type VARCHAR(80) NULL, related_record_id VARCHAR(160) NULL,
+  status ENUM('UNREAD','READ','ARCHIVED') NOT NULL DEFAULT 'UNREAD',
+  created_at DATETIME NOT NULL, read_at DATETIME NULL,
+  INDEX idx_notifications_user(user_id,status,created_at)
+);
+CREATE TABLE IF NOT EXISTS notification_deliveries (
+  id CHAR(36) PRIMARY KEY, notification_id CHAR(36) NOT NULL, channel VARCHAR(20) NOT NULL,
+  delivery_status VARCHAR(24) NOT NULL, attempt_count INT NOT NULL DEFAULT 0,
+  last_error VARCHAR(255) NULL, sent_at DATETIME NULL
+);
+CREATE TABLE IF NOT EXISTS migration_mappings (
+  id INT AUTO_INCREMENT PRIMARY KEY, old_demo_role VARCHAR(40) NOT NULL, old_user_id INT NOT NULL,
+  new_user_id INT NULL,
+  store_id INT NULL, mapped_by INT NULL, mapped_at DATETIME NULL, status VARCHAR(32) NOT NULL,
+  old_display_name VARCHAR(120) NULL, UNIQUE KEY uq_migration_user(old_user_id)
+);
+CREATE TABLE IF NOT EXISTS audit_outbox (
+  id CHAR(36) PRIMARY KEY, event_type VARCHAR(80) NOT NULL, aggregate_id VARCHAR(160) NOT NULL,
+  sequence_no BIGINT NOT NULL, payload_hash CHAR(64) NOT NULL,
+  status ENUM('PENDING','PROCESSING','COMPLETED','DEAD_LETTER') NOT NULL DEFAULT 'PENDING',
+  attempt_count INT NOT NULL DEFAULT 0, next_retry_at DATETIME NULL, error_code VARCHAR(80) NULL,
+  created_at DATETIME NOT NULL, UNIQUE KEY uq_outbox_aggregate_sequence(aggregate_id,sequence_no)
 );
 CREATE TABLE IF NOT EXISTS seed_metadata (
   id TINYINT PRIMARY KEY, batch_key VARCHAR(80) NOT NULL, seeded_at DATETIME NOT NULL
@@ -189,7 +326,9 @@ CREATE TABLE IF NOT EXISTS sla_settings (
 """
 
 TABLES = [
-    "user_preferences", "audit_logs", "daily_report_drafts", "tasks", "data_disclosures", "consents", "referral_disputes",
+    "user_preferences", "audit_logs", "daily_report_drafts", "export_jobs", "import_row_results",
+    "import_jobs", "external_record_mappings", "month_closes", "month_close_period_locks", "expenses",
+    "data_correction_requests", "tasks", "data_disclosures", "consents", "referral_disputes",
     "fee_entitlements", "construction_projects", "contracts", "negotiations", "introductions",
     "partner_agreements", "fee_rules", "partner_staff", "partners", "stage_events", "activities",
     "touches", "persons", "households", "users", "stores", "seed_metadata", "sla_settings",
@@ -203,8 +342,28 @@ STORES = [
 STAGES = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"]
 SEED_BATCH = "mallboard-demo-2026-11-full-v2"
 SAMPLE_SURNAMES = ["佐藤", "田中", "鈴木", "高橋", "伊藤", "渡辺", "山本", "中村", "小林", "加藤", "吉田", "山田"]
+JST = ZoneInfo("Asia/Tokyo")
+SESSION_COOKIE = "mallboard_session"
+LEGACY_ROLE_ALIASES = ("advisor", "manager", "hq_finance", "executive", "hr")
+ACCOUNT_ROLES = {
+    "executive": "executive", "administrator": "executive", "hq_staff": "hq_finance",
+    "store_manager": "manager", "advisor": "advisor", "finance": "hq_finance", "hr": "hr",
+}
 
 SYSTEM_CONFIG_DEFAULTS = {
+    "auth.password_min_length": 12,
+    "auth.password_require_uppercase": True,
+    "auth.password_require_lowercase": True,
+    "auth.password_require_number": True,
+    "auth.password_require_symbol": True,
+    "auth.password_history_count": 5,
+    "auth.login_max_failed_attempts": 5,
+    "auth.login_lock_duration_minutes": 15,
+    "auth.login_rate_limit_count": 10,
+    "auth.login_rate_limit_window_minutes": 15,
+    "auth.session_idle_timeout_minutes": 30,
+    "auth.session_absolute_timeout_hours": 12,
+    "auth.password_reset_link_ttl_minutes": 30,
     "fee_rule.applicability_basis": "contract_date",
     "fee.bank_fee_tolerance_yen": 1000,
     "expense.approval_thresholds_yen": [10000, 50000],
@@ -218,6 +377,11 @@ SYSTEM_CONFIG_DEFAULTS = {
     "attachment.allowed_extensions": ["pdf", "jpg", "jpeg", "png", "csv"],
     "attachment.max_file_mb": 10,
     "import.max_csv_rows": 50000,
+    "import.max_csv_mb": 10,
+    "export.max_rows": 5000,
+    "export.max_csv_mb": 10,
+    "export.max_pdf_mb": 10,
+    "export.expiry_hours": 24,
     "construction.expected_start_months": 6,
     "search.alert_queries_per_minute": 30,
     "notification.email_retry_minutes": [1, 5, 15],
@@ -236,10 +400,23 @@ SYSTEM_CONFIG_DEFAULTS = {
     "sla.agreement_renewal_days": 30,
     "sla.fee_rule_validity_days": 30,
     "month_close.lock_working_day": 5,
+    "month_close.locked_resources": [
+        "expenses", "fee_entitlements", "contracts", "construction_projects",
+        "activities", "introductions", "stage_events",
+    ],
     "expense.max_receipt_mb": 10,
 }
 
 SYSTEM_CONFIG_RANGES = {
+    "auth.password_min_length": (8, 128),
+    "auth.password_history_count": (0, 20),
+    "auth.login_max_failed_attempts": (1, 20),
+    "auth.login_lock_duration_minutes": (1, 1440),
+    "auth.login_rate_limit_count": (1, 1000),
+    "auth.login_rate_limit_window_minutes": (1, 1440),
+    "auth.session_idle_timeout_minutes": (1, 1440),
+    "auth.session_absolute_timeout_hours": (1, 168),
+    "auth.password_reset_link_ttl_minutes": (1, 1440),
     "fee.bank_fee_tolerance_yen": (0, 100000),
     "retention.interview_online_years": (1, 10),
     "retention.interview_archive_years": (1, 20),
@@ -249,6 +426,11 @@ SYSTEM_CONFIG_RANGES = {
     "retention.audit_years": (1, 20),
     "attachment.max_file_mb": (1, 100),
     "import.max_csv_rows": (1, 50000),
+    "import.max_csv_mb": (1, 100),
+    "export.max_rows": (1, 50000),
+    "export.max_csv_mb": (1, 100),
+    "export.max_pdf_mb": (1, 100),
+    "export.expiry_hours": (1, 720),
     "construction.expected_start_months": (1, 24),
     "search.alert_queries_per_minute": (1, 10000),
     "calendar.max_retries": (1, 4),
@@ -269,6 +451,170 @@ SYSTEM_CONFIG_RANGES = {
 
 def connect():
     return Database(pymysql.connect(**DB_CONFIG))
+
+
+def now_jst():
+    return datetime.now(JST).replace(tzinfo=None)
+
+
+def demo_mode_enabled():
+    return os.getenv("DEMO_MODE", "false").strip().lower() == "true"
+
+
+def hash_secret(secret):
+    salt = secrets.token_bytes(16)
+    derived = hashlib.scrypt(secret.encode("utf-8"), salt=salt, n=2**14, r=8, p=1, dklen=32)
+    return f"scrypt${salt.hex()}${derived.hex()}"
+
+
+def verify_secret(secret, encoded):
+    try:
+        algorithm, salt_hex, digest_hex = encoded.split("$", 2)
+        if algorithm != "scrypt":
+            return False
+        derived = hashlib.scrypt(secret.encode("utf-8"), salt=bytes.fromhex(salt_hex),
+                                 n=2**14, r=8, p=1, dklen=32)
+        return hmac.compare_digest(derived.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
+
+
+def token_digest(token):
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def config_value(db, key):
+    row = db.execute("SELECT value_json FROM system_configs WHERE config_key=?", (key,)).fetchone()
+    if not row:
+        return SYSTEM_CONFIG_DEFAULTS[key]
+    return json.loads(row["value_json"]) if isinstance(row["value_json"], str) else row["value_json"]
+
+
+def assert_month_period_open(db, event_date, resource):
+    if resource not in config_value(db, "month_close.locked_resources"):
+        return
+    if isinstance(event_date, datetime):
+        event_date = event_date.date()
+    if isinstance(event_date, str):
+        try:
+            event_date = date.fromisoformat(event_date[:10])
+        except ValueError as error:
+            raise HTTPException(422, "日付はYYYY-MM-DD形式で指定してください") from error
+    period = event_date.strftime("%Y-%m")
+    close = db.execute(
+        """SELECT id,status FROM month_closes WHERE period=? AND status IN ('CLOSED','REOPEN_REQUESTED')
+           ORDER BY snapshot_version DESC LIMIT 1""",
+        (period,),
+    ).fetchone()
+    if close:
+        raise HTTPException(423, f"{period} は月次締め済みで、{resource} は変更できません")
+
+
+def build_month_snapshot(db, period):
+    start = datetime.strptime(period, "%Y-%m").date().replace(day=1)
+    if start.month == 12:
+        end = date(start.year + 1, 1, 1)
+    else:
+        end = date(start.year, start.month + 1, 1)
+    contracts = db.execute(
+        """SELECT COUNT(*) AS count,COALESCE(SUM(contract_amount),0) AS amount
+           FROM contracts WHERE contract_date>=? AND contract_date<?""",
+        (start, end),
+    ).fetchone()
+    expense_rows = db.execute(
+        """SELECT status,COUNT(*) AS count,COALESCE(SUM(amount),0) AS amount
+           FROM expenses WHERE expense_date>=? AND expense_date<? GROUP BY status ORDER BY status""",
+        (start, end),
+    ).fetchall()
+    fee_rows = db.execute(
+        """SELECT state,COUNT(*) AS count,COALESCE(SUM(calculated_amount),0) AS amount
+           FROM fee_entitlements WHERE calculated_at>=? AND calculated_at<?
+           GROUP BY state ORDER BY state""",
+        (start, end),
+    ).fetchall()
+    construction_rows = db.execute(
+        """SELECT confirmation_status,COUNT(*) AS count
+           FROM construction_projects WHERE confirmed_start_date>=? AND confirmed_start_date<?
+           GROUP BY confirmation_status ORDER BY confirmation_status""",
+        (start, end),
+    ).fetchall()
+    return {
+        "period": period,
+        "range_start": start.isoformat(),
+        "range_end_exclusive": end.isoformat(),
+        "generated_at": now_jst().isoformat(timespec="seconds"),
+        "contracts": {"count": contracts["count"], "contract_amount": int(contracts["amount"] or 0)},
+        "expenses": [
+            {"status": row["status"], "count": row["count"], "amount": int(row["amount"] or 0)}
+            for row in expense_rows
+        ],
+        "fee_entitlements": [
+            {"state": row["state"], "count": row["count"], "amount": int(row["amount"] or 0)}
+            for row in fee_rows
+        ],
+        "construction_confirmations": [dict(row) for row in construction_rows],
+    }
+
+
+class CurrentActor(str):
+    def __new__(cls, account_role, user_id, store_id):
+        legacy_role = ACCOUNT_ROLES.get(account_role)
+        actor = super().__new__(cls, legacy_role or account_role)
+        actor.user_id = int(user_id)
+        actor.account_role = account_role
+        actor.store_id = store_id
+        return actor
+
+
+async def require_actor(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        raise HTTPException(401, "認証が必要です")
+    now = now_jst()
+    with connect() as db:
+        idle_timeout = config_value(db, "auth.session_idle_timeout_minutes")
+        row = db.execute(
+            """SELECT s.id AS session_id,s.expires_at,s.last_seen_at,u.id,u.role,u.store_id,
+                      u.account_status,u.must_change_password
+               FROM auth_sessions s JOIN users u ON u.id=s.user_id
+               WHERE s.token_hash=? AND s.revoked_at IS NULL""",
+            (token_digest(token),),
+        ).fetchone()
+        if not row or row["account_status"] != "ACTIVE":
+            raise HTTPException(401, "認証が必要です")
+        idle_limit = now - timedelta(minutes=idle_timeout)
+        if row["expires_at"] <= now or row["last_seen_at"] < idle_limit:
+            db.execute("UPDATE auth_sessions SET revoked_at=? WHERE id=?", (now, row["session_id"]))
+            db.commit()
+            raise HTTPException(401, "認証が必要です")
+        if row["must_change_password"] and request.url.path not in (
+                "/api/bootstrap", "/api/auth/change-password", "/api/auth/logout"):
+            raise HTTPException(403, "初回ログイン時にパスワードを変更してください")
+        db.execute("UPDATE auth_sessions SET last_seen_at=? WHERE id=?", (now, row["session_id"]))
+        request.state.actor = dict(row)
+        return CurrentActor(row["role"], row["id"], row["store_id"])
+
+
+def create_session(db, user_id, request):
+    token = secrets.token_urlsafe(48)
+    now = now_jst()
+    timeout_hours = config_value(db, "auth.session_absolute_timeout_hours")
+    session_id = str(uuid.uuid4())
+    ua = request.headers.get("user-agent", "")
+    db.execute(
+        """INSERT INTO auth_sessions(id,user_id,token_hash,created_at,last_seen_at,expires_at,
+           source_ip,user_agent_hash) VALUES(?,?,?,?,?,?,?,?)""",
+        (session_id, user_id, token_digest(token), now, now,
+         now + timedelta(hours=timeout_hours),
+         request.client.host if request.client else None,
+         hashlib.sha256(ua.encode("utf-8")).hexdigest()),
+    )
+    return token
+
+
+def set_session_cookie(request: Request, response: Response, token: str, max_age_hours):
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, secure=request.url.scheme == "https",
+                        samesite="lax", max_age=max_age_hours * 3600, path="/")
 
 
 SLA_CONFIG = [
@@ -304,6 +650,10 @@ class Cursor:
     @property
     def lastrowid(self):
         return self.cursor.lastrowid
+
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
 
 
 class Database:
@@ -341,7 +691,9 @@ class Database:
 
 def audit(db, user_id, action, target_type, target_id, detail):
     actor = db.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone() if user_id else None
-    event_at = datetime.now().isoformat(timespec="seconds")
+    event_at = now_jst().isoformat(timespec="seconds")
+    numeric_target_id = target_id if type(target_id) is int else None
+    text_target_id = str(target_id) if target_id is not None and numeric_target_id is None else None
     previous_hash = db.execute(
         "SELECT last_hash FROM audit_chain WHERE id=1 FOR UPDATE"
     ).fetchone()
@@ -351,24 +703,604 @@ def audit(db, user_id, action, target_type, target_id, detail):
         "actor_role": actor["role"] if actor else "system",
         "action": action,
         "object_type": target_type,
-        "object_id": target_id,
+        "object_id": numeric_target_id,
         "reason": detail,
         "event_at": event_at,
         "previous_hash": previous_hash,
     }
+    if text_target_id is not None:
+        event["object_id_text"] = text_target_id
     event_hash = hashlib.sha256(
         (previous_hash + json.dumps(event, ensure_ascii=False, sort_keys=True)).encode("utf-8")
     ).hexdigest()
     db.execute(
-        "INSERT INTO audit_logs(user_id, action, target_type, target_id, `at`, detail) VALUES(?,?,?,?,?,?)",
-        (user_id, action, target_type, target_id, event_at, detail),
+        """INSERT INTO audit_logs(user_id,action,target_type,target_id,target_id_text,`at`,detail)
+           VALUES(?,?,?,?,?,?,?)""",
+        (user_id, action, target_type, numeric_target_id, text_target_id, event_at, detail),
     )
     db.execute(
         """INSERT INTO audit_events(actor_id,actor_role,action,object_type,object_id,reason,event_at,
-           previous_hash,event_hash) VALUES(?,?,?,?,?,?,?,?,?)""",
-        (user_id, event["actor_role"], action, target_type, target_id, detail, event_at, previous_hash, event_hash),
+           object_id_text,previous_hash,event_hash,event_type,result) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (user_id, event["actor_role"], action, target_type, numeric_target_id, detail, event_at,
+         text_target_id,
+         previous_hash, event_hash, action.upper().replace(".", "_"), "SUCCEEDED"),
     )
     db.execute("UPDATE audit_chain SET last_hash=? WHERE id=1", (event_hash,))
+    aggregate_id = f"{target_type}:{target_id if target_id is not None else user_id or 'system'}"
+    sequence = db.execute(
+        "SELECT COALESCE(MAX(sequence_no),0)+1 AS next_sequence FROM audit_outbox WHERE aggregate_id=? FOR UPDATE",
+        (aggregate_id,),
+    ).fetchone()["next_sequence"]
+    db.execute(
+        """INSERT INTO audit_outbox(id,event_type,aggregate_id,sequence_no,payload_hash,status,
+           attempt_count,created_at) VALUES(?,?,?,?,?,'PENDING',0,?)""",
+        (str(uuid.uuid4()), action.upper().replace(".", "_"), aggregate_id, sequence, event_hash, event_at),
+    )
+
+
+def audit_visibility_clause(actor):
+    account_role = getattr(actor, "account_role", "")
+    if account_role in ("administrator", "executive", "hr"):
+        return "1=1", []
+    if account_role == "store_manager" and actor.store_id:
+        return "actor_id IN (SELECT id FROM users WHERE store_id=?)", [actor.store_id]
+    return "actor_id=?", [actor.user_id]
+
+
+@app.get("/api/audit-events")
+def audit_event_list(limit: int = 50, before_id: Optional[int] = None,
+                     actor: CurrentActor = Depends(require_actor)):
+    if not 1 <= limit <= 100:
+        raise HTTPException(422, "取得件数は1から100まで指定してください")
+    visibility, args = audit_visibility_clause(actor)
+    conditions = [visibility]
+    if before_id is not None:
+        conditions.append("id<?")
+        args.append(before_id)
+    with connect() as db:
+        rows = db.execute(
+            f"""SELECT id,actor_id,actor_role,action,object_type,object_id,object_id_text,reason,event_at,
+                       event_type,result,error_code FROM audit_events
+                WHERE {' AND '.join(conditions)} ORDER BY id DESC LIMIT ?""",
+            (*args, limit),
+        ).fetchall()
+    return {"items": [dict(row) for row in rows]}
+
+
+@app.get("/api/audit-events/{event_id}")
+def audit_event_detail(event_id: int, actor: CurrentActor = Depends(require_actor)):
+    visibility, args = audit_visibility_clause(actor)
+    with connect() as db:
+        row = db.execute(
+            f"""SELECT id,actor_id,actor_role,action,object_type,object_id,object_id_text,reason,event_at,
+                       event_type,before_hash,after_hash,previous_hash,event_hash,request_id,result,error_code
+                FROM audit_events WHERE id=? AND {visibility}""",
+            (event_id, *args),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "監査イベントが見つかりません")
+    return dict(row)
+
+
+def create_notification(db, user_id, notification_type, title, message, related_type=None,
+                        related_id=None, event_code=None, title_zh=None, message_zh=None):
+    allowed_types = {
+        "TASK", "APPROVAL", "EXPENSE", "DAILY_REPORT", "IMPORT", "MONTHLY_CLOSE",
+        "DOCUMENT", "EXPORT", "DATA_CORRECTION", "SECURITY", "SYSTEM",
+    }
+    if notification_type not in allowed_types:
+        raise ValueError(f"Unsupported notification type: {notification_type}")
+    if notification_type == "SYSTEM" and not event_code:
+        raise ValueError("SYSTEM notifications require a system_event_code")
+    notification_id = str(uuid.uuid4())
+    now = now_jst()
+    preference = db.execute(
+        "SELECT notification_preferences FROM user_preferences WHERE user_id=?", (user_id,)
+    ).fetchone()
+    preferences = preference["notification_preferences"] if preference else {"in_app": True, "email": False}
+    if isinstance(preferences, str):
+        preferences = json.loads(preferences)
+    if preferences.get("in_app", True):
+        db.execute(
+            """INSERT INTO notifications(id,user_id,notification_type,system_event_code,title,title_zh,
+               message,message_zh,related_record_type,related_record_id,status,created_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?, 'UNREAD',?)""",
+            (notification_id, user_id, notification_type, event_code, title, title_zh,
+             message, message_zh,
+             related_type, str(related_id) if related_id is not None else None, now),
+        )
+        db.execute(
+            """INSERT INTO notification_deliveries(id,notification_id,channel,delivery_status,
+               attempt_count,sent_at) VALUES(?,?,'IN_APP','DELIVERED',1,?)""",
+            (str(uuid.uuid4()), notification_id, now),
+        )
+    email_requested = bool(preferences.get("email", False))
+    if not preferences.get("in_app", True) or email_requested:
+        related_household_id = None
+        if related_type == "household" and str(related_id or "").isdigit():
+            related_household_id = int(related_id)
+        elif related_type == "introduction":
+            row = db.execute("SELECT household_id FROM introductions WHERE id=?", (related_id,)).fetchone()
+            related_household_id = row["household_id"] if row else None
+        elif related_type == "fee_entitlement":
+            row = db.execute(
+                """SELECT i.household_id FROM fee_entitlements fe JOIN introductions i
+                   ON i.id=fe.introduction_id WHERE fe.id=?""", (related_id,),
+            ).fetchone()
+            related_household_id = row["household_id"] if row else None
+        elif related_type == "construction_project":
+            row = db.execute(
+                """SELECT i.household_id FROM construction_projects cp JOIN contracts c ON c.id=cp.contract_id
+                   JOIN negotiations n ON n.id=c.negotiation_id
+                   JOIN introductions i ON i.id=n.introduction_id WHERE cp.id=?""", (related_id,),
+            ).fetchone()
+            related_household_id = row["household_id"] if row else None
+        task_id = db.execute(
+            """INSERT INTO tasks(assignee_id,title,due_at,source,related_household_id,task_type,
+               priority,related_type,related_id) VALUES(?,?,?,'notification_fallback',?,
+               'notification_fallback','high',?,?)""",
+            (user_id, f"通知対応: {title}"[:255], now.date(), related_household_id,
+             related_type or "notification",
+             int(related_id) if str(related_id or "").isdigit() else None),
+        ).lastrowid
+        if email_requested and preferences.get("in_app", True):
+            db.execute(
+                """INSERT INTO notification_deliveries(id,notification_id,channel,delivery_status,
+                   attempt_count,last_error,sent_at) VALUES(?,?,'EMAIL','FALLBACK_TASK',0,
+                   'EMAIL_NOT_CONFIGURED',?)""",
+                (str(uuid.uuid4()), notification_id, now),
+            )
+        return task_id
+    return notification_id
+
+
+def process_audit_outbox(batch_size=50, max_attempts=5):
+    now = now_jst()
+    processed = 0
+    with connect() as db:
+        rows = db.execute(
+            """SELECT id,event_type,aggregate_id,sequence_no,payload_hash,attempt_count
+               FROM audit_outbox
+               WHERE status='PENDING' AND (next_retry_at IS NULL OR next_retry_at<=?)
+               ORDER BY aggregate_id,sequence_no LIMIT ? FOR UPDATE SKIP LOCKED""",
+            (now, batch_size),
+        ).fetchall()
+        for row in rows:
+            previous = db.execute(
+                """SELECT status FROM audit_outbox WHERE aggregate_id=? AND sequence_no<?
+                   ORDER BY sequence_no DESC LIMIT 1""",
+                (row["aggregate_id"], row["sequence_no"]),
+            ).fetchone()
+            if previous and previous["status"] != "COMPLETED":
+                continue
+            event = db.execute(
+                "SELECT event_hash FROM audit_events WHERE event_hash=?",
+                (row["payload_hash"],),
+            ).fetchone()
+            if event:
+                db.execute(
+                    """UPDATE audit_outbox SET status='COMPLETED',attempt_count=attempt_count+1,
+                       next_retry_at=NULL,error_code=NULL WHERE id=? AND status='PENDING'""",
+                    (row["id"],),
+                )
+                processed += 1
+                continue
+
+            attempts = row["attempt_count"] + 1
+            dead_letter = attempts >= max_attempts
+            retry_at = None if dead_letter else now + timedelta(seconds=min(2 ** attempts, 300))
+            db.execute(
+                """UPDATE audit_outbox SET status=?,attempt_count=?,next_retry_at=?,error_code=?
+                   WHERE id=? AND status='PENDING'""",
+                ("DEAD_LETTER" if dead_letter else "PENDING", attempts, retry_at,
+                 "AUDIT_EVENT_NOT_FOUND", row["id"]),
+            )
+            if dead_letter:
+                recipients = db.execute(
+                    "SELECT id FROM users WHERE role IN ('administrator','executive') AND account_status='ACTIVE'"
+                ).fetchall()
+                for recipient in recipients:
+                    create_notification(
+                        db, recipient["id"], "SYSTEM", "Audit outbox dead letter",
+                        f"監査イベントの配信検証に失敗しました: {row['id']}",
+                        "audit_outbox", row["id"], "AUDIT_OUTBOX_DEAD_LETTER",
+                        title_zh="审计事件已进入死信队列",
+                        message_zh=f"审计事件投递校验失败：{row['id']}",
+                    )
+    return processed
+
+
+async def audit_outbox_worker():
+    while True:
+        try:
+            await asyncio.to_thread(process_audit_outbox)
+        except Exception:
+            LOGGER.exception("Audit outbox processing failed; pending events will be retried.")
+        await asyncio.sleep(5)
+
+
+@app.on_event("startup")
+async def start_audit_outbox_worker():
+    app.state.audit_outbox_task = asyncio.create_task(audit_outbox_worker())
+
+
+@app.on_event("shutdown")
+async def stop_audit_outbox_worker():
+    task = getattr(app.state, "audit_outbox_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+def validate_password(db, password):
+    if len(password) < config_value(db, "auth.password_min_length"):
+        raise HTTPException(422, "パスワードの長さが要件を満たしていません")
+    checks = (
+        ("auth.password_require_uppercase", lambda value: any(c.isupper() for c in value)),
+        ("auth.password_require_lowercase", lambda value: any(c.islower() for c in value)),
+        ("auth.password_require_number", lambda value: any(c.isdigit() for c in value)),
+        ("auth.password_require_symbol", lambda value: any(not c.isalnum() for c in value)),
+    )
+    for key, check in checks:
+        if config_value(db, key) and not check(password):
+            raise HTTPException(422, "パスワードが設定済みポリシーを満たしていません")
+
+
+def privileged_account_management(actor):
+    if getattr(actor, "account_role", None) not in ("administrator", "hr"):
+        raise HTTPException(403, "この操作を行う権限がありません")
+
+
+class DemoLoginInput(BaseModel):
+    account_id: int
+
+
+class PasswordLoginInput(BaseModel):
+    employee_code: str
+    password: str
+
+
+class PasswordResetRequestInput(BaseModel):
+    user_id: int
+    verification_method: str
+
+
+class PasswordResetCompleteInput(BaseModel):
+    reset_token: str
+    new_password: str
+
+
+class ChangePasswordInput(BaseModel):
+    current_password: Optional[str] = None
+    new_password: str
+
+
+@app.get("/api/auth/demo-accounts")
+def demo_accounts(request: Request):
+    if not demo_mode_enabled():
+        with connect() as db:
+            audit(db, None, "demo.login.disabled", "security", None,
+                  json.dumps({"source_ip": request.client.host if request.client else None,
+                              "user_agent": request.headers.get("user-agent", "")[:200]}))
+            db.commit()
+        raise HTTPException(403, "デモモードは無効です")
+    with connect() as db:
+        return {"accounts": [
+            {"id": row["id"], "employee_code": row["employee_code"], "display_name": row["display_name"],
+             "role": row["role"], "store_id": row["store_id"]}
+            for row in db.execute(
+                "SELECT id,employee_code,display_name,role,store_id FROM users "
+                "WHERE account_status='ACTIVE' ORDER BY role,store_id,employee_code"
+            )
+        ]}
+
+
+@app.post("/api/auth/demo-login")
+def demo_login(payload: DemoLoginInput, request: Request, response: Response):
+    if not demo_mode_enabled():
+        with connect() as db:
+            audit(db, None, "demo.login.disabled", "security", None,
+                  json.dumps({"source_ip": request.client.host if request.client else None,
+                              "user_agent": request.headers.get("user-agent", "")[:200]}))
+            db.commit()
+        raise HTTPException(403, "デモモードは無効です")
+    with connect() as db:
+        user = db.execute(
+            "SELECT id,role,store_id,account_status FROM users WHERE id=?", (payload.account_id,)
+        ).fetchone()
+        if not user or user["account_status"] != "ACTIVE":
+            raise HTTPException(401, "認証が必要です")
+        previous = request.cookies.get(SESSION_COOKIE)
+        if previous:
+            db.execute("UPDATE auth_sessions SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL",
+                       (now_jst(), token_digest(previous)))
+        db.execute("UPDATE users SET last_login_at=? WHERE id=?", (now_jst(), user["id"]))
+        token = create_session(db, user["id"], request)
+        audit(db, user["id"], "DEMO_ROLE_SWITCH", "user", user["id"],
+              json.dumps({"role": user["role"], "source_ip": request.client.host if request.client else None,
+                          "user_agent": request.headers.get("user-agent", "")[:200]}))
+        account = {"id": user["id"], "role": user["role"], "store_id": user["store_id"]}
+        session_hours = config_value(db, "auth.session_absolute_timeout_hours")
+    set_session_cookie(request, response, token, session_hours)
+    return {"ok": True, "account": account}
+
+
+@app.post("/api/auth/login")
+def password_login(payload: PasswordLoginInput, request: Request, response: Response):
+    identity = payload.employee_code.strip().upper()
+    identity_hash = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    source_ip = request.client.host if request.client else None
+    now = now_jst()
+    with connect() as db:
+        window_minutes = config_value(db, "auth.login_rate_limit_window_minutes")
+        threshold = config_value(db, "auth.login_rate_limit_count")
+        recent = db.execute(
+            """SELECT COUNT(*) AS count FROM auth_login_attempts
+               WHERE (identity_hash=? OR source_ip=?) AND attempted_at>=?""",
+            (identity_hash, source_ip, now - timedelta(minutes=window_minutes)),
+        ).fetchone()["count"]
+        if recent >= threshold:
+            raise HTTPException(429, "ログイン試行が多すぎます。しばらくしてから再試行してください")
+        user = db.execute("SELECT * FROM users WHERE employee_code=?", (identity,)).fetchone()
+        if not user or user["account_status"] != "ACTIVE":
+            valid = False
+        elif user["locked_until"] and user["locked_until"] > now:
+            valid = False
+        else:
+            valid = bool(user["password_hash"] and verify_secret(payload.password, user["password_hash"]))
+        db.execute(
+            "INSERT INTO auth_login_attempts(identity_hash,source_ip,attempted_at,succeeded) VALUES(?,?,?,?)",
+            (identity_hash, source_ip, now, int(valid)),
+        )
+        if not valid:
+            if user:
+                attempts = user["failed_login_attempts"] + 1
+                max_attempts = config_value(db, "auth.login_max_failed_attempts")
+                lock_minutes = config_value(db, "auth.login_lock_duration_minutes")
+                lock_until = now + timedelta(minutes=lock_minutes) if attempts >= max_attempts else None
+                db.execute("UPDATE users SET failed_login_attempts=?,locked_until=? WHERE id=?",
+                           (attempts, lock_until, user["id"]))
+            db.commit()
+            raise HTTPException(401, "社員番号またはパスワードを確認してください")
+        db.execute("UPDATE users SET failed_login_attempts=0,locked_until=NULL,last_login_at=? WHERE id=?",
+                   (now, user["id"]))
+        token = create_session(db, user["id"], request)
+        audit(db, user["id"], "auth.login", "user", user["id"], "パスワード認証")
+        db.commit()
+        session_hours = config_value(db, "auth.session_absolute_timeout_hours")
+        account = {"id": user["id"], "role": user["role"], "must_change_password": bool(user["must_change_password"])}
+    set_session_cookie(request, response, token, session_hours)
+    return {"ok": True, "account": account}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        with connect() as db:
+            row = db.execute(
+                "SELECT user_id FROM auth_sessions WHERE token_hash=? AND revoked_at IS NULL",
+                (token_digest(token),),
+            ).fetchone()
+            if row:
+                db.execute("UPDATE auth_sessions SET revoked_at=? WHERE token_hash=?",
+                           (now_jst(), token_digest(token)))
+                audit(db, row["user_id"], "auth.logout", "user", row["user_id"], "ログアウト")
+    response.delete_cookie(SESSION_COOKIE, path="/", httponly=True, samesite="lax")
+    return {"ok": True}
+
+
+@app.post("/api/auth/password-reset-requests")
+def password_reset_request(payload: PasswordResetRequestInput, actor: CurrentActor = Depends(require_actor)):
+    privileged_account_management(actor)
+    if payload.verification_method not in ("in_person", "video_call", "identity_checked"):
+        raise HTTPException(422, "本人確認方法が正しくありません")
+    with connect() as db:
+        target = db.execute("SELECT id,account_status FROM users WHERE id=?", (payload.user_id,)).fetchone()
+        if not target or target["account_status"] not in ("ACTIVE", "INVITED", "LOCKED_SECURITY"):
+            raise HTTPException(404, "対象アカウントが見つかりません")
+        token = secrets.token_urlsafe(40)
+        ttl = config_value(db, "auth.password_reset_link_ttl_minutes")
+        expires = now_jst() + timedelta(minutes=ttl)
+        reset_id = str(uuid.uuid4())
+        db.execute(
+            """INSERT INTO password_reset_tokens(id,user_id,token_hash,expires_at,created_by,
+               verification_method,created_at) VALUES(?,?,?,?,?,?,?)""",
+            (reset_id, target["id"], token_digest(token), expires, actor.user_id,
+             payload.verification_method, now_jst()),
+        )
+        audit(db, actor.user_id, "PASSWORD_RESET_REQUESTED", "user", target["id"],
+              json.dumps({"reset_id": reset_id, "verification_method": payload.verification_method}))
+    return {"reset_token": token, "expires_at": expires.isoformat(timespec="seconds")}
+
+
+@app.post("/api/auth/password-reset")
+def complete_password_reset(payload: PasswordResetCompleteInput):
+    with connect() as db:
+        validate_password(db, payload.new_password)
+        row = db.execute(
+            """SELECT id,user_id,expires_at,used_at FROM password_reset_tokens
+               WHERE token_hash=? FOR UPDATE""", (token_digest(payload.reset_token),)
+        ).fetchone()
+        now = now_jst()
+        if not row or row["used_at"] or row["expires_at"] <= now:
+            raise HTTPException(400, "リセットリンクが無効か期限切れです")
+        encoded = hash_secret(payload.new_password)
+        history_limit = config_value(db, "auth.password_history_count")
+        previous_hashes = db.execute(
+            "SELECT password_hash FROM password_history WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+            (row["user_id"], history_limit),
+        ).fetchall() if history_limit else []
+        user = db.execute("SELECT password_hash FROM users WHERE id=? FOR UPDATE", (row["user_id"],)).fetchone()
+        if (user["password_hash"] and verify_secret(payload.new_password, user["password_hash"])) or any(
+                verify_secret(payload.new_password, item["password_hash"]) for item in previous_hashes):
+            raise HTTPException(422, "過去に使用したパスワードは再利用できません")
+        db.execute("UPDATE users SET password_hash=?,must_change_password=1,failed_login_attempts=0,"
+                   "locked_until=NULL,password_changed_at=?,last_password_reset_at=? WHERE id=?",
+                   (encoded, now, now, row["user_id"]))
+        db.execute("UPDATE password_reset_tokens SET used_at=? WHERE id=?", (now, row["id"]))
+        db.execute("DELETE FROM auth_sessions WHERE user_id=?", (row["user_id"],))
+        db.execute("INSERT INTO password_history(user_id,password_hash,created_at) VALUES(?,?,?)",
+                   (row["user_id"], encoded, now))
+        create_notification(db, row["user_id"], "SECURITY", "パスワードを再設定しました",
+                            "管理者が本人確認のうえパスワードを再設定しました。",
+                            "user", row["user_id"], title_zh="密码已重置",
+                            message_zh="管理员已完成本人核验并重置密码。")
+        audit(db, row["user_id"], "PASSWORD_RESET", "user", row["user_id"], "本人確認後のパスワード再設定")
+    return {"ok": True}
+
+
+@app.post("/api/auth/change-password")
+def change_password(payload: ChangePasswordInput, request: Request,
+                    actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        user = db.execute("SELECT password_hash,must_change_password FROM users WHERE id=? FOR UPDATE",
+                          (actor.user_id,)).fetchone()
+        if not user or (not user["must_change_password"] and
+                        (not payload.current_password or
+                         not verify_secret(payload.current_password, user["password_hash"] or ""))):
+            raise HTTPException(401, "認証が必要です")
+        validate_password(db, payload.new_password)
+        encoded = hash_secret(payload.new_password)
+        history_limit = config_value(db, "auth.password_history_count")
+        previous_hashes = db.execute(
+            "SELECT password_hash FROM password_history WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+            (actor.user_id, history_limit),
+        ).fetchall() if history_limit else []
+        if verify_secret(payload.new_password, user["password_hash"]) or any(
+                verify_secret(payload.new_password, item["password_hash"]) for item in previous_hashes):
+            raise HTTPException(422, "過去に使用したパスワードは再利用できません")
+        now = now_jst()
+        db.execute("INSERT INTO password_history(user_id,password_hash,created_at) VALUES(?,?,?)",
+                   (actor.user_id, user["password_hash"], now))
+        db.execute("UPDATE users SET password_hash=?,must_change_password=0,password_changed_at=? WHERE id=?",
+                   (encoded, now, actor.user_id))
+        token = request.cookies.get(SESSION_COOKIE)
+        if token:
+            db.execute("DELETE FROM auth_sessions WHERE user_id=? AND token_hash<>?",
+                       (actor.user_id, token_digest(token)))
+        audit(db, actor.user_id, "auth.password_changed", "user", actor.user_id, "本人によるパスワード変更")
+    return {"ok": True}
+
+
+@app.get("/api/accounts")
+def account_list(actor: CurrentActor = Depends(require_actor)):
+    privileged_account_management(actor)
+    with connect() as db:
+        return {"accounts": [
+            {"id": row["id"], "public_id": row["public_id"], "employee_code": row["employee_code"],
+             "display_name": row["display_name"], "role": row["role"], "store_id": row["store_id"],
+             "account_status": row["account_status"], "must_change_password": bool(row["must_change_password"]),
+             "last_login_at": row["last_login_at"], "version": row["version"]}
+            for row in db.execute(
+                """SELECT id,public_id,employee_code,display_name,role,store_id,account_status,
+                          must_change_password,last_login_at,version FROM users ORDER BY employee_code"""
+            )
+        ]}
+
+
+class AccountStatusInput(BaseModel):
+    account_status: str
+    version: int
+    handoff_to_user_id: Optional[int] = None
+
+
+@app.put("/api/accounts/{user_id}/status")
+def update_account_status(user_id: int, payload: AccountStatusInput,
+                          actor: CurrentActor = Depends(require_actor)):
+    privileged_account_management(actor)
+    if user_id == actor.user_id:
+        raise HTTPException(422, "自分自身のアカウント状態は変更できません")
+    transitions = {
+        "PENDING_PROVISIONING": {"INVITED", "DEACTIVATED"},
+        "INVITED": {"ACTIVE", "DEACTIVATED"},
+        "ACTIVE": {"TRANSFER_PENDING", "LEAVE_RESTRICTED", "SUSPENDED", "LOCKED_SECURITY", "DEACTIVATED"},
+        "TRANSFER_PENDING": {"ACTIVE", "DEACTIVATED"},
+        "LEAVE_RESTRICTED": {"DEACTIVATED"},
+        "SUSPENDED": {"ACTIVE", "DEACTIVATED"},
+        "LOCKED_SECURITY": {"ACTIVE", "DEACTIVATED"},
+        "DEACTIVATED": {"ARCHIVED"},
+        "ARCHIVED": set(),
+    }
+    if payload.account_status not in transitions:
+        raise HTTPException(422, "不明なアカウント状態です")
+    with connect() as db:
+        target = db.execute("SELECT * FROM users WHERE id=? FOR UPDATE", (user_id,)).fetchone()
+        if not target:
+            raise HTTPException(404, "対象アカウントが見つかりません")
+        if target["version"] != payload.version:
+            raise HTTPException(409, "他のユーザーが変更しました。更新して再試行してください")
+        if payload.account_status not in transitions.get(target["account_status"], set()):
+            raise HTTPException(409, "この状態遷移は許可されていません")
+        if payload.account_status in ("DEACTIVATED", "LEAVE_RESTRICTED"):
+            active_households = db.execute(
+                "SELECT COUNT(*) AS count FROM households WHERE advisor_id=?", (user_id,)
+            ).fetchone()["count"]
+            active_tasks = db.execute(
+                "SELECT COUNT(*) AS count FROM tasks WHERE assignee_id=? AND done=0 AND cancelled=0",
+                (user_id,),
+            ).fetchone()["count"]
+            if active_households or active_tasks:
+                successor = db.execute(
+                    "SELECT id,store_id,role,account_status FROM users WHERE id=? FOR UPDATE",
+                    (payload.handoff_to_user_id,),
+                ).fetchone() if payload.handoff_to_user_id else None
+                if (not successor or successor["id"] == user_id or successor["role"] not in
+                        ("advisor", "store_manager") or successor["account_status"] != "ACTIVE"
+                        or successor["store_id"] != target["store_id"]):
+                    raise HTTPException(409, "未完了の顧客・タスクがあります。自店舗の有効な引継ぎ先を指定してください")
+                db.execute("UPDATE households SET advisor_id=? WHERE advisor_id=?",
+                           (successor["id"], user_id))
+                db.execute("UPDATE introductions SET advisor_id=? WHERE advisor_id=?",
+                           (successor["id"], user_id))
+                db.execute("UPDATE tasks SET assignee_id=? WHERE assignee_id=? AND done=0 AND cancelled=0",
+                           (successor["id"], user_id))
+                audit(db, actor.user_id, "account.handoff", "user", user_id,
+                      f"successor_user_id={successor['id']}")
+        db.execute("UPDATE users SET account_status=?,version=version+1 WHERE id=? AND version=?",
+                   (payload.account_status, user_id, payload.version))
+        if payload.account_status != "ACTIVE":
+            db.execute("DELETE FROM auth_sessions WHERE user_id=?", (user_id,))
+        audit(db, actor.user_id, "account.status_changed", "user", user_id,
+              f"status={payload.account_status}; version={payload.version + 1}")
+    return {"ok": True, "account_status": payload.account_status, "version": payload.version + 1}
+
+
+class AccountTransferInput(BaseModel):
+    role: str
+    store_id: Optional[int] = None
+    version: int
+
+
+@app.put("/api/accounts/{user_id}/role")
+def transfer_account(user_id: int, payload: AccountTransferInput,
+                     actor: CurrentActor = Depends(require_actor)):
+    privileged_account_management(actor)
+    roles = {"executive", "administrator", "hq_staff", "store_manager", "advisor", "finance", "hr"}
+    if payload.role not in roles or (payload.role in ("advisor", "store_manager") and not payload.store_id):
+        raise HTTPException(422, "ロールまたは店舗を指定してください")
+    with connect() as db:
+        target = db.execute("SELECT * FROM users WHERE id=? FOR UPDATE", (user_id,)).fetchone()
+        if not target:
+            raise HTTPException(404, "対象アカウントが見つかりません")
+        if target["version"] != payload.version:
+            raise HTTPException(409, "他のユーザーが変更しました。更新して再試行してください")
+        if payload.store_id and not db.execute("SELECT id FROM stores WHERE id=?", (payload.store_id,)).fetchone():
+            raise HTTPException(422, "指定した店舗がありません")
+        store_id = payload.store_id if payload.role in ("advisor", "store_manager") else None
+        db.execute(
+            """UPDATE users SET role=?,store_id=?,account_status='TRANSFER_PENDING',
+               version=version+1 WHERE id=? AND version=?""",
+            (payload.role, store_id, user_id, payload.version),
+        )
+        db.execute("DELETE FROM auth_sessions WHERE user_id=?", (user_id,))
+        audit(db, actor.user_id, "account.role_transferred", "user", user_id,
+              f"role={payload.role}; store_id={store_id}; prior_role={target['role']}; "
+              f"prior_store_id={target['store_id']}")
+    return {"ok": True, "account_status": "TRANSFER_PENDING", "version": payload.version + 1}
 
 
 def ensure_system_config(db):
@@ -415,6 +1347,8 @@ def verify_audit_chain(db):
             "event_at": event_at,
             "previous_hash": previous_hash,
         }
+        if row["object_id_text"] is not None:
+            event["object_id_text"] = row["object_id_text"]
         expected_hash = hashlib.sha256(
             (previous_hash + json.dumps(event, ensure_ascii=False, sort_keys=True)).encode("utf-8")
         ).hexdigest()
@@ -429,6 +1363,31 @@ def verify_audit_chain(db):
 def ensure_schema(db):
     db.executescript(SCHEMA)
     migrations = {
+        "users": {
+            "employee_code": "VARCHAR(30) NULL",
+            "public_id": "CHAR(36) NULL",
+            "display_name": "VARCHAR(120) NULL",
+            "password_hash": "VARCHAR(255) NULL",
+            "account_status": "VARCHAR(40) NOT NULL DEFAULT 'ACTIVE'",
+            "failed_login_attempts": "INT NOT NULL DEFAULT 0",
+            "locked_until": "DATETIME NULL",
+            "must_change_password": "TINYINT NOT NULL DEFAULT 1",
+            "last_login_at": "DATETIME NULL",
+            "password_changed_at": "DATETIME NULL",
+            "last_password_reset_at": "DATETIME NULL",
+            "version": "INT NOT NULL DEFAULT 1",
+        },
+        "audit_events": {
+            "object_id_text": "VARCHAR(160) NULL",
+            "event_type": "VARCHAR(80) NULL",
+            "before_hash": "CHAR(64) NULL",
+            "after_hash": "CHAR(64) NULL",
+            "request_id": "CHAR(36) NULL",
+            "result": "VARCHAR(40) NULL",
+            "error_code": "VARCHAR(80) NULL",
+        },
+        "audit_logs": {"target_id_text": "VARCHAR(160) NULL"},
+        "migration_mappings": {"old_user_id": "INT NULL"},
         "households": {"household_code": "VARCHAR(24) NULL"},
         "stores": {"opened_at": "DATE NULL"},
         "partner_staff": {"branch_name": "VARCHAR(120) NULL"},
@@ -447,6 +1406,18 @@ def ensure_schema(db):
             "due_date": "DATE NULL",
             "dispute_type": "VARCHAR(40) NOT NULL DEFAULT 'referral'",
             "reference_amount": "BIGINT NOT NULL DEFAULT 0",
+        },
+        "notifications": {
+            "title_zh": "VARCHAR(255) NULL",
+            "message_zh": "TEXT NULL",
+        },
+        "export_jobs": {
+            "format": "VARCHAR(12) NOT NULL DEFAULT 'csv'",
+            "template_version": "VARCHAR(40) NOT NULL DEFAULT 'csv-v1'",
+            "created_role": "VARCHAR(40) NOT NULL DEFAULT ''",
+            "scope_store_id": "INT NULL",
+            "include_personal_data": "TINYINT NOT NULL DEFAULT 0",
+            "record_ids_json": "LONGTEXT NULL",
         },
         "tasks": {
             "task_type": "VARCHAR(40) NOT NULL DEFAULT 'followup'",
@@ -470,7 +1441,107 @@ def ensure_schema(db):
             ).fetchone()[0]
             if not exists:
                 db.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}")
+    for index_name, column_name in (("uq_users_employee_code", "employee_code"),
+                                    ("uq_users_public_id", "public_id")):
+        exists = db.execute(
+            """SELECT COUNT(*) FROM information_schema.statistics
+               WHERE table_schema=DATABASE() AND table_name='users' AND index_name=?""",
+            (index_name,),
+        ).fetchone()[0]
+        if not exists:
+            db.execute(f"CREATE UNIQUE INDEX `{index_name}` ON users(`{column_name}`)")
     db.execute("UPDATE tasks SET status=IF(done=1,'done','open') WHERE status IS NULL")
+
+
+def ensure_demo_accounts(db):
+    existing = db.execute(
+        "SELECT id,role,store_id,name,employee_code FROM users ORDER BY id"
+    ).fetchall()
+    if not existing:
+        return
+    now = now_jst()
+    for row in existing:
+        if row["employee_code"]:
+            continue
+        db.execute(
+            """INSERT IGNORE INTO migration_mappings(old_demo_role,old_user_id,new_user_id,store_id,
+               mapped_at,status,old_display_name) VALUES(?,?,?,?,?,'MAPPED',?)""",
+            (row["role"], row["id"], row["id"], row["store_id"], now, row["name"]),
+        )
+
+    def update_user(user_id, role, store_id, employee_code, display_name):
+        db.execute(
+            """UPDATE users SET role=?,store_id=?,employee_code=?,public_id=COALESCE(public_id,?),
+               display_name=?,name=?,password_hash=COALESCE(password_hash,?),account_status='ACTIVE'
+               WHERE id=?""",
+            (role, store_id, employee_code, str(uuid.uuid4()), display_name, display_name,
+             hash_secret(secrets.token_urlsafe(32)), user_id),
+        )
+
+    advisors = db.execute("SELECT id,store_id FROM users WHERE role='advisor' ORDER BY store_id,id").fetchall()
+    advisor_slots = {row["store_id"]: [] for row in advisors}
+    for row in advisors:
+        advisor_slots.setdefault(row["store_id"], []).append(row["id"])
+    for store_id in range(1, 13):
+        letter = chr(64 + store_id)
+        current_ids = advisor_slots.get(store_id, [])
+        if not current_ids:
+            user_id = db.execute(
+                "INSERT INTO users(name,role,store_id) VALUES(?,?,?)",
+                (f"顧問{letter}A", "advisor", store_id),
+            ).lastrowid
+            current_ids = [user_id]
+        for slot, user_id in enumerate(current_ids[:2]):
+            update_user(user_id, "advisor", store_id, f"AD-{store_id:02}-{slot + 1}",
+                        f"佐藤{letter}{chr(65 + slot)}")
+        if len(current_ids) < 2:
+            user_id = db.execute(
+                "INSERT INTO users(name,role,store_id,employee_code,public_id,display_name,password_hash) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (f"田中{letter}B", "advisor", store_id, f"AD-{store_id:02}-2",
+                 str(uuid.uuid4()), f"田中{letter}B", hash_secret(secrets.token_urlsafe(32))),
+            ).lastrowid
+
+    managers = db.execute(
+        "SELECT id,store_id FROM users WHERE role IN ('manager','store_manager') ORDER BY id"
+    ).fetchall()
+    manager_by_store = {row["store_id"]: row["id"] for row in managers if row["store_id"]}
+    for store_id in range(1, 13):
+        letter = chr(64 + store_id)
+        user_id = manager_by_store.get(store_id)
+        if user_id is None:
+            user_id = db.execute(
+                "INSERT INTO users(name,role,store_id) VALUES(?,?,?)",
+                (f"店長{letter}", "manager", store_id),
+            ).lastrowid
+        update_user(user_id, "store_manager", store_id, f"SM-{store_id:02}", f"店長{letter}")
+
+    legacy_roles = {
+        "executive": ("executive", "社長A", "EX-01", None),
+        "hq_finance": ("finance", "財務A", "FN-01", None),
+    }
+    for old_role, (new_role, display_name, employee_code, store_id) in legacy_roles.items():
+        old = db.execute("SELECT id FROM users WHERE role=? ORDER BY id LIMIT 1", (old_role,)).fetchone()
+        if old:
+            update_user(old["id"], new_role, store_id, employee_code, display_name)
+
+    additions = [
+        ("administrator", None, "運用管理者A", "AM-01"),
+        ("finance", None, "財務B", "FN-02"),
+        ("hr", None, "人事A", "HR-01"), ("hr", None, "人事B", "HR-02"),
+    ] + [("hq_staff", None, f"本社担当{chr(65 + index)}", f"HQ-{index + 1:02}")
+         for index in range(4)]
+    for role, store_id, display_name, employee_code in additions:
+        if not db.execute("SELECT id FROM users WHERE employee_code=?", (employee_code,)).fetchone():
+            db.execute(
+                """INSERT INTO users(name,role,store_id,employee_code,public_id,display_name,password_hash)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (display_name, role, store_id, employee_code, str(uuid.uuid4()), display_name,
+                 hash_secret(secrets.token_urlsafe(32))),
+            )
+    count = db.execute("SELECT COUNT(*) AS count FROM users").fetchone()["count"]
+    if count != 46:
+        raise RuntimeError(f"Expected 46 demo accounts; found {count}")
 def valid_config_value(key, value):
     default = SYSTEM_CONFIG_DEFAULTS[key]
     if type(value) is not type(default):
@@ -506,6 +1577,13 @@ def valid_config_value(key, value):
         return False
     if key == "attachment.allowed_extensions" and not set(value).issubset(
         {"pdf", "jpg", "jpeg", "png", "csv", "xlsx"}
+    ):
+        return False
+    if key == "month_close.locked_resources" and (
+        len(value) != len(set(value)) or not set(value).issubset({
+            "expenses", "fee_entitlements", "contracts", "construction_projects",
+            "activities", "introductions", "stage_events",
+        })
     ):
         return False
     if isinstance(value, list) and value and type(value[0]) is int:
@@ -896,6 +1974,21 @@ def seed(db):
              intro_id if task_type == "dispute" else entitlement["id"]),
         )
 
+    for task_owner in db.execute(
+        """SELECT assignee_id,MIN(id) AS task_id FROM tasks
+           WHERE done=0 AND cancelled=0 GROUP BY assignee_id"""
+    ).fetchall():
+        task = db.execute(
+            """SELECT title,due_at,related_type,related_id,related_household_id
+               FROM tasks WHERE id=?""", (task_owner["task_id"],),
+        ).fetchone()
+        create_notification(
+            db, task_owner["assignee_id"], "TASK", "対応が必要なタスクがあります",
+            f"{task['title']}（期限: {task['due_at']}）",
+            task["related_type"], task["related_id"],
+            title_zh="有待处理的任务", message_zh=f"{task['title']}（截止日期：{task['due_at']}）",
+        )
+
     for role, user_id in users.items():
         count = db.execute(
             "SELECT COUNT(*) FROM activities WHERE user_id=? AND DATE(acted_at)=CURRENT_DATE", (user_id,)
@@ -915,6 +2008,7 @@ for attempt in range(60):
         with connect() as db:
             seed(db)
             ensure_system_config(db)
+            ensure_demo_accounts(db)
         break
     except pymysql.MySQLError:
         if attempt == 59:
@@ -937,6 +2031,8 @@ def require_household_access(db, role, user, household_id):
         raise HTTPException(403, "担当世帯以外は操作できません")
     if role == "manager" and household["store_id"] != user["store_id"]:
         raise HTTPException(403, "自店舗以外の世帯は操作できません")
+    if role == "hr":
+        raise HTTPException(403, "人事アカウントから業務データへアクセスできません")
     return household
 
 
@@ -945,6 +2041,8 @@ def role_scope(role, user, household_alias="h"):
         return f"{household_alias}.advisor_id=?", (user["id"],)
     if role == "manager":
         return f"{household_alias}.store_id=?", (user["store_id"],)
+    if role == "hr":
+        return "1=0", ()
     return "1=1", ()
 
 
@@ -1006,42 +2104,43 @@ def get_households(db, role, user):
 
 
 @app.get("/api/bootstrap")
-def bootstrap(x_demo_role: str = Header(default="advisor")):
-    # This selector is demo-only; production must derive the role from the authenticated identity.
-    roles = ("advisor", "manager", "hq_finance", "executive")
-    if x_demo_role not in roles:
-        raise HTTPException(400, "不明なデモロールです")
+def bootstrap(x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=? ORDER BY id LIMIT 1", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "デモユーザーが見つかりません")
+        user = request_user(db, x_demo_role)
+        role = str(x_demo_role)
+        roles = [
+            {"id": "executive", "name": "社長"}, {"id": "administrator", "name": "管理者"},
+            {"id": "hq_staff", "name": "本社担当"}, {"id": "store_manager", "name": "店長"},
+            {"id": "advisor", "name": "顧問"}, {"id": "finance", "name": "財務"},
+            {"id": "hr", "name": "人事"},
+        ]
         return {
-            "user": {"id": user["id"], "name": user["name"], "role": x_demo_role, "store_id": user["store_id"]},
-            "role": x_demo_role,
-            "roles": [
-                {"id": "advisor", "name": "顧問"}, {"id": "manager", "name": "店長"},
-                {"id": "hq_finance", "name": "本社・経理"}, {"id": "executive", "name": "社長"},
-            ],
+            "user": {"id": user["id"], "public_id": user["public_id"],
+                     "employee_code": user["employee_code"], "name": user["display_name"],
+                     "role": user["role"], "store_id": user["store_id"],
+                     "must_change_password": bool(user["must_change_password"])},
+            "role": role, "account_role": user["role"], "roles": roles,
             "permissions": {
                 "advisor": ["households.own", "activities.create", "introductions.create"],
                 "manager": ["households.store", "construction.confirm", "tasks.store"],
-                "hq_finance": ["fees.read", "fees.approve", "invoice_data.manage", "demo.reset"],
+                "hq_finance": ["fees.read", "fees.approve", "invoice_data.manage"],
                 "executive": ["dashboard.all", "management.all", "construction.confirm"],
-            }[x_demo_role],
-            "menus": ["dashboard", "households", "introductions", "revenue", "management", "settings"],
-            "enums": {"stages": STAGES, "roles": list(roles)},
-            "environment": {"demo": True, "seed_batch": SEED_BATCH},
+                "hr": ["accounts.read", "accounts.manage"],
+            }.get(role, ["accounts.read", "accounts.manage"] if user["role"] in
+                  ("administrator", "hr") else ["dashboard.all", "management.all"]),
+            "menus": ["accounts"] if user["role"] == "hr" else
+                     ["dashboard", "households", "introductions", "revenue", "management", "settings"],
+            "enums": {"stages": STAGES, "roles": [item["id"] for item in roles]},
+            "environment": {"demo": demo_mode_enabled()},
         }
 
 
 @app.get("/api/households")
-def household_index(x_demo_role: str = Header(default="advisor")):
-    if x_demo_role not in ("advisor", "manager", "hq_finance", "executive"):
-        raise HTTPException(400, "不明なデモロールです")
+def household_index(x_demo_role: CurrentActor = Depends(require_actor)):
+    if x_demo_role == "hr":
+        raise HTTPException(403, "人事アカウントから業務データへアクセスできません")
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=? ORDER BY id LIMIT 1", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "デモユーザーが見つかりません")
+        user = request_user(db, x_demo_role)
         households = get_households(db, x_demo_role, user)
         scope, args = role_scope(x_demo_role, user)
         entitlements = [dict(row) for row in db.execute(
@@ -1082,11 +2181,15 @@ def household_index(x_demo_role: str = Header(default="advisor")):
 
 
 def request_user(db, role):
-    if role not in ("advisor", "manager", "hq_finance", "executive"):
-        raise HTTPException(400, "不明なデモロールです")
-    user = db.execute("SELECT * FROM users WHERE role=? ORDER BY id LIMIT 1", (role,)).fetchone()
+    if isinstance(role, CurrentActor):
+        user = db.execute("SELECT * FROM users WHERE id=? AND account_status='ACTIVE'",
+                          (role.user_id,)).fetchone()
+    else:
+        if role not in LEGACY_ROLE_ALIASES:
+            raise HTTPException(400, "不明なデモロールです")
+        user = db.execute("SELECT * FROM users WHERE role=? ORDER BY id LIMIT 1", (role,)).fetchone()
     if not user:
-        raise HTTPException(400, "デモユーザーが見つかりません")
+        raise HTTPException(401, "認証が必要です")
     return user
 
 
@@ -1098,11 +2201,13 @@ def dashboard_counter(key, label, count, target_page, filter_value, unit_type="i
 
 
 @app.get("/api/dashboard/summary")
-def dashboard_summary(x_demo_role: str = Header(default="advisor")):
+def dashboard_summary(x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
         user = request_user(db, x_demo_role)
         counters = []
-        if x_demo_role == "advisor":
+        if x_demo_role == "hr":
+            counters = []
+        elif x_demo_role == "advisor":
             counters.extend([
                 dashboard_counter("today_followups", "今日フォロー", db.execute(
                     """SELECT COUNT(*) AS count FROM tasks WHERE assignee_id=? AND done=0 AND cancelled=0
@@ -1168,23 +2273,29 @@ def dashboard_summary(x_demo_role: str = Header(default="advisor")):
 
 
 @app.get("/api/dashboard/my-tasks")
-def dashboard_my_tasks(x_demo_role: str = Header(default="advisor")):
+def dashboard_my_tasks(x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
         user = request_user(db, x_demo_role)
         if x_demo_role == "advisor":
             where = "t.assignee_id=? AND t.done=0 AND t.cancelled=0"
             args = (user["id"],)
         elif x_demo_role == "manager":
-            where = """h.store_id=? AND t.done=0 AND t.cancelled=0"""
-            args = (user["store_id"],)
+            where = """(h.store_id=? OR (t.assignee_id=? AND t.task_type='notification_fallback'))
+                       AND t.done=0 AND t.cancelled=0"""
+            args = (user["store_id"], user["id"])
         elif x_demo_role == "hq_finance":
-            where = """t.task_type IN ('fee_approval','invoice_generation','invoice_unpaid','dispute')
+            where = """(t.task_type IN ('fee_approval','invoice_generation','invoice_unpaid','dispute')
+                       OR (t.assignee_id=? AND t.task_type='notification_fallback'))
                        AND t.done=0 AND t.cancelled=0"""
-            args = ()
-        else:
+            args = (user["id"],)
+        elif x_demo_role == "executive":
             where = """((t.priority='high' AND t.due_at<CURRENT_DATE)
-                       OR t.task_type IN ('dispute','construction_queue'))
+                       OR t.task_type IN ('dispute','construction_queue')
+                       OR (t.assignee_id=? AND t.task_type='notification_fallback'))
                        AND t.done=0 AND t.cancelled=0"""
+            args = (user["id"],)
+        else:
+            where = "1=0"
             args = ()
         rows = db.execute(
             f"""SELECT t.id AS task_id,t.title,t.related_type,t.related_id,t.related_household_id AS household_id,
@@ -1206,7 +2317,7 @@ def dashboard_my_tasks(x_demo_role: str = Header(default="advisor")):
 
 @app.get("/api/dashboard/trends")
 def dashboard_trends(metric: str = "inquiries", period: str = "7d",
-                     x_demo_role: str = Header(default="advisor")):
+                     x_demo_role: CurrentActor = Depends(require_actor)):
     if metric not in ("inquiries", "visits", "introductions", "contracts", "construction"):
         raise HTTPException(422, "不明な指標です")
     if period not in ("7d", "30d", "90d", "180d", "365d"):
@@ -1261,7 +2372,7 @@ def dashboard_trends(metric: str = "inquiries", period: str = "7d",
 
 
 @app.get("/api/management/overview")
-def management_overview(x_demo_role: str = Header(default="advisor")):
+def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("manager", "hq_finance", "executive"))
     with connect() as db:
         user = request_user(db, x_demo_role)
@@ -1397,7 +2508,7 @@ def management_overview(x_demo_role: str = Header(default="advisor")):
 
 
 @app.get("/api/preferences")
-def get_preferences(x_demo_role: str = Header(default="advisor")):
+def get_preferences(x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
         user = request_user(db, x_demo_role)
         row = db.execute("SELECT * FROM user_preferences WHERE user_id=?", (user["id"],)).fetchone()
@@ -1415,11 +2526,12 @@ class PreferencesInput(BaseModel):
 
 
 @app.put("/api/preferences")
-def put_preferences(payload: PreferencesInput, x_demo_role: str = Header(default="advisor")):
+def put_preferences(payload: PreferencesInput, x_demo_role: CurrentActor = Depends(require_actor)):
     allowed_widgets = {"tasks", "overview", "trend", "report"}
     if len(payload.dashboard_widgets) > 4 or not set(payload.dashboard_widgets).issubset(allowed_widgets):
         raise HTTPException(422, "ダッシュボード設定が正しくありません")
-    if set(payload.notification_preferences) - {"in_app", "email"}:
+    if (set(payload.notification_preferences) - {"in_app", "email"} or
+            any(type(value) is not bool for value in payload.notification_preferences.values())):
         raise HTTPException(422, "通知設定が正しくありません")
     with connect() as db:
         user = request_user(db, x_demo_role)
@@ -1442,12 +2554,11 @@ class ActivityInput(BaseModel):
 
 
 @app.post("/api/activities")
-def create_activity(payload: ActivityInput, x_demo_role: str = Header(default="advisor")):
+def create_activity(payload: ActivityInput, x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=?", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "不明なデモロールです")
+        user = request_user(db, x_demo_role)
         require_household_access(db, x_demo_role, user, payload.household_id)
+        assert_month_period_open(db, now_jst().date(), "activities")
         db.execute(
             """INSERT INTO activities(household_id,user_id,type,body,acted_at,next_action,next_action_due)
                VALUES(?,?,?,?,?,?,?)""",
@@ -1474,14 +2585,13 @@ class IntroductionInput(BaseModel):
 
 
 @app.post("/api/introductions")
-def create_introduction(payload: IntroductionInput, x_demo_role: str = Header(default="advisor")):
+def create_introduction(payload: IntroductionInput, x_demo_role: CurrentActor = Depends(require_actor)):
     if x_demo_role not in ("advisor", "manager", "hq_finance"):
         raise HTTPException(403, "権限がありません")
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=?", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "不明なデモロールです")
+        user = request_user(db, x_demo_role)
         household = require_household_access(db, x_demo_role, user, payload.household_id)
+        assert_month_period_open(db, now_jst().date(), "introductions")
         staff = db.execute("SELECT id FROM partner_staff WHERE id=? AND partner_id=?",
                            (payload.partner_staff_id, payload.partner_id)).fetchone()
         if not household or not staff:
@@ -1513,7 +2623,8 @@ class ConfirmInput(BaseModel):
 
 
 @app.post("/api/construction/{project_id}/confirm")
-def confirm_construction(project_id: int, payload: ConfirmInput, x_demo_role: str = Header(default="advisor")):
+def confirm_construction(project_id: int, payload: ConfirmInput,
+                         x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("manager", "hq_finance", "executive"))
     with connect() as db:
         project = db.execute(
@@ -1526,13 +2637,14 @@ def confirm_construction(project_id: int, payload: ConfirmInput, x_demo_role: st
         if not project:
             raise HTTPException(404, "着工プロジェクトが見つかりません")
         if x_demo_role == "manager":
-            manager = db.execute("SELECT store_id FROM users WHERE role=?", (x_demo_role,)).fetchone()
+            manager = request_user(db, x_demo_role)
             if project["store_id"] != manager["store_id"]:
                 raise HTTPException(403, "自店舗以外の着工案件は処理できません")
         if not project["actual_start_date"]:
             raise HTTPException(409, "実際着工日が未登録です")
         if not payload.evidence.strip():
             raise HTTPException(422, "確認証跡を入力してください")
+        assert_month_period_open(db, payload.confirmed_start_date, "construction_projects")
         rule = db.execute(
             """SELECT fr.* FROM partner_agreements pa JOIN fee_rules fr ON fr.id=pa.fee_rule_id
                WHERE pa.partner_id=? AND pa.status='active' AND pa.effective_from<=?
@@ -1552,7 +2664,7 @@ def confirm_construction(project_id: int, payload: ConfirmInput, x_demo_role: st
         else:
             tiers = params["tiers"]
             amount = next((int(t["amount"]) for t in tiers if project["contract_amount"] <= t["up_to"]), int(tiers[-1]["amount"]))
-        user_id = db.execute("SELECT id FROM users WHERE role=?", (x_demo_role,)).fetchone()["id"]
+        user_id = request_user(db, x_demo_role)["id"]
         db.execute("UPDATE construction_projects SET confirmed_start_date=?,confirmation_evidence=? WHERE id=?",
                    (payload.confirmed_start_date, payload.evidence.strip(), project_id))
         db.execute(
@@ -1582,7 +2694,7 @@ class EntitlementAction(BaseModel):
 
 @app.post("/api/entitlements/{entitlement_id}/action")
 def entitlement_action(entitlement_id: int, payload: EntitlementAction,
-                       x_demo_role: str = Header(default="advisor")):
+                       x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
     transitions = {"approve": ("Pending", "Confirmed"), "invoice": ("Confirmed", "Invoiced"),
                    "paid": ("Invoiced", "Paid")}
@@ -1595,7 +2707,8 @@ def entitlement_action(entitlement_id: int, payload: EntitlementAction,
         source, target = transitions[payload.action]
         if entitlement["state"] != source:
             raise HTTPException(409, f"{source} 状態の報酬のみ処理できます")
-        user_id = db.execute("SELECT id FROM users WHERE role='hq_finance'").fetchone()["id"]
+        assert_month_period_open(db, entitlement["calculated_at"], "fee_entitlements")
+        user_id = request_user(db, x_demo_role)["id"]
         db.execute(
             "UPDATE fee_entitlements SET state=?,invoice_data_generated=IF(?='Invoiced',1,invoice_data_generated) WHERE id=?",
             (target, target, entitlement_id),
@@ -1617,11 +2730,9 @@ class DisputeInput(BaseModel):
 
 @app.post("/api/introductions/{introduction_id}/dispute")
 def raise_dispute(introduction_id: int, payload: DisputeInput,
-                  x_demo_role: str = Header(default="advisor")):
+                  x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=?", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "不明なデモロールです")
+        user = request_user(db, x_demo_role)
         intro = db.execute("SELECT id,household_id FROM introductions WHERE id=?", (introduction_id,)).fetchone()
         if not intro:
             raise HTTPException(404, "紹介記録が見つかりません")
@@ -1653,7 +2764,7 @@ class DisputeDecisionInput(BaseModel):
 
 @app.post("/api/referral-disputes/{dispute_id}/decision")
 def decide_referral_dispute(dispute_id: int, payload: DisputeDecisionInput,
-                            x_demo_role: str = Header(default="advisor")):
+                            x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
     if payload.decision not in ("confirm", "write_off", "reassessment"):
         raise HTTPException(422, "不明な裁定です")
@@ -1701,23 +2812,206 @@ def decide_referral_dispute(dispute_id: int, payload: DisputeDecisionInput,
     return {"ok": True, "status": target_status}
 
 
+CORRECTABLE_HOUSEHOLD_FIELDS = {
+    "representative_name": 120, "area_pref": 255, "budget_band": 120, "land_status": 40,
+}
+
+
+class DataCorrectionInput(BaseModel):
+    field_name: str
+    requested_value: str
+    reason: str
+
+
+class DataCorrectionDecisionInput(BaseModel):
+    version: int
+    action: str
+    note: str = ""
+
+
+class DataDisclosureInput(BaseModel):
+    partner_id: int
+    scope: str
+    consent_id: int
+
+
+@app.post("/api/households/{household_id}/disclosures")
+def create_data_disclosure(household_id: int, payload: DataDisclosureInput,
+                           actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    if payload.scope not in ("L2", "L3"):
+        raise HTTPException(422, "第三者提供ではL2またはL3の範囲のみ指定できます")
+    with connect() as db:
+        user = request_user(db, actor)
+        require_household_access(db, actor, user, household_id)
+        partner = db.execute(
+            "SELECT id,name FROM partners WHERE id=? AND active=1", (payload.partner_id,)
+        ).fetchone()
+        if not partner:
+            raise HTTPException(404, "有効な住宅会社が見つかりません")
+        consent = db.execute(
+            """SELECT id FROM consents WHERE id=? AND household_id=? AND scope=?
+               AND revoked_at IS NULL""",
+            (payload.consent_id, household_id, payload.scope),
+        ).fetchone()
+        if not consent:
+            raise HTTPException(409, "同じ範囲の有効な同意が必要です")
+        disclosed_at = now_jst()
+        disclosure_id = db.execute(
+            """INSERT INTO data_disclosures(household_id,disclosed_to,scope,disclosed_by,
+               disclosed_at,consent_id) VALUES(?,?,?,?,?,?)""",
+            (household_id, f"partner:{partner['id']}:{partner['name']}", payload.scope,
+             user["id"], disclosed_at, consent["id"]),
+        ).lastrowid
+        audit(db, user["id"], "data_disclosure.created", "data_disclosure", disclosure_id,
+              f"household_id={household_id}; partner_id={partner['id']}; scope={payload.scope}; consent_id={consent['id']}")
+    return {"ok": True, "id": disclosure_id, "scope": payload.scope}
+
+
+@app.post("/api/households/{household_id}/data-corrections")
+def create_data_correction(household_id: int, payload: DataCorrectionInput,
+                           actor: CurrentActor = Depends(require_actor)):
+    role_guard(actor, ("advisor", "manager", "hq_finance", "executive"))
+    if payload.field_name not in CORRECTABLE_HOUSEHOLD_FIELDS:
+        raise HTTPException(422, "修正できない項目です")
+    value = payload.requested_value.strip()
+    reason = payload.reason.strip()
+    if not value or len(value) > CORRECTABLE_HOUSEHOLD_FIELDS[payload.field_name]:
+        raise HTTPException(422, "修正値の長さが正しくありません")
+    if not 10 <= len(reason) <= 500:
+        raise HTTPException(422, "修正理由は10〜500文字で入力してください")
+    if payload.field_name == "land_status" and value not in ("有", "無", "検討中"):
+        raise HTTPException(422, "土地状況の値が正しくありません")
+    request_id = str(uuid.uuid4())
+    now = now_jst()
+    with connect() as db:
+        user = request_user(db, actor)
+        household = require_household_access(db, actor, user, household_id)
+        current = db.execute(
+            f"SELECT `{payload.field_name}` AS value FROM households WHERE id=?", (household_id,)
+        ).fetchone()["value"]
+        if (current or "") == value:
+            raise HTTPException(409, "現在値と修正値が同じです")
+        db.execute(
+            """INSERT INTO data_correction_requests(id,household_id,field_name,before_value,
+               requested_value,reason,requested_by,requested_at,status,version)
+               VALUES(?,?,?,?,?,?,?,?,'PENDING',1)""",
+            (request_id, household_id, payload.field_name, current, value, reason, user["id"], now),
+        )
+        audit(db, user["id"], "data_correction.requested", "data_correction", request_id,
+              f"household_id={household_id}; field={payload.field_name}; reason={reason}")
+        approvers = db.execute(
+            """SELECT id FROM users WHERE account_status='ACTIVE' AND id<>? AND
+               ((role='store_manager' AND store_id=?) OR role IN ('finance','executive','administrator'))""",
+            (user["id"], household["store_id"]),
+        ).fetchall()
+        for approver in approvers:
+            create_notification(
+                db, approver["id"], "DATA_CORRECTION", "顧客データ修正の確認待ち",
+                f"{household_id} の {payload.field_name} 修正依頼を確認してください。",
+                "data_correction", request_id, title_zh="客户数据修正待审核",
+                message_zh=f"请审核家庭 {household_id} 的 {payload.field_name} 修正申请。",
+            )
+    return {"ok": True, "id": request_id, "status": "PENDING", "version": 1}
+
+
+@app.get("/api/data-corrections")
+def data_correction_list(status: str = "PENDING", actor: CurrentActor = Depends(require_actor)):
+    if status not in ("PENDING", "APPROVED", "REJECTED", "ALL"):
+        raise HTTPException(422, "不明な修正依頼状態です")
+    with connect() as db:
+        user = request_user(db, actor)
+        scope, args = role_scope(actor, user)
+        status_filter = "" if status == "ALL" else "AND d.status=?"
+        query_args = args if status == "ALL" else (*args, status)
+        rows = db.execute(
+            f"""SELECT d.id,d.household_id,h.household_code,h.representative_name,d.field_name,
+                       d.before_value,d.requested_value,d.reason,d.requested_by,ru.display_name AS requester_name,
+                       d.requested_at,d.status,d.decided_by,d.decided_at,d.decision_note,d.version
+                FROM data_correction_requests d JOIN households h ON h.id=d.household_id
+                JOIN users ru ON ru.id=d.requested_by WHERE {scope} {status_filter}
+                ORDER BY (d.status='PENDING') DESC,d.requested_at DESC LIMIT 200""",
+            query_args,
+        ).fetchall()
+    return {"items": [dict(row) for row in rows]}
+
+
+@app.post("/api/data-corrections/{request_id}/decision")
+def decide_data_correction(request_id: str, payload: DataCorrectionDecisionInput,
+                           actor: CurrentActor = Depends(require_actor)):
+    if payload.action not in ("approve", "reject"):
+        raise HTTPException(422, "不明な修正処理です")
+    if actor not in ("manager", "hq_finance", "executive"):
+        raise HTTPException(403, "修正依頼を判断する権限がありません")
+    note = payload.note.strip()
+    if len(note) > 500:
+        raise HTTPException(422, "処理メモは500文字以内で入力してください")
+    if payload.action == "reject" and not 10 <= len(note) <= 500:
+        raise HTTPException(422, "差し戻し理由は10〜500文字で入力してください")
+    now = now_jst()
+    with connect() as db:
+        request = db.execute(
+            """SELECT d.*,h.store_id,h.household_code,h.`representative_name`,h.`area_pref`,
+               h.`budget_band`,h.`land_status`
+               FROM data_correction_requests d JOIN households h ON h.id=d.household_id
+               WHERE d.id=? FOR UPDATE""", (request_id,),
+        ).fetchone()
+        if not request:
+            raise HTTPException(404, "修正依頼が見つかりません")
+        if request["status"] != "PENDING":
+            raise HTTPException(409, "未処理の修正依頼ではありません")
+        if request["version"] != payload.version:
+            raise HTTPException(409, "修正依頼が更新されています。再読み込みしてください")
+        if request["requested_by"] == actor.user_id:
+            raise HTTPException(403, "申請者自身は修正依頼を判断できません")
+        if actor == "manager" and actor.store_id != request["store_id"]:
+            raise HTTPException(403, "他店舗の修正依頼は判断できません")
+        field_name = request["field_name"]
+        if field_name not in CORRECTABLE_HOUSEHOLD_FIELDS:
+            raise HTTPException(409, "修正対象項目が許可リストにありません")
+        if (request[field_name] or "") != (request["before_value"] or ""):
+            raise HTTPException(409, "現在の顧客データが申請時点から変更されています")
+        target_status = "APPROVED" if payload.action == "approve" else "REJECTED"
+        audit_action = "approved" if payload.action == "approve" else "rejected"
+        if payload.action == "approve":
+            db.execute(
+                f"UPDATE households SET `{field_name}`=? WHERE id=?",
+                (request["requested_value"], request["household_id"]),
+            )
+        db.execute(
+            """UPDATE data_correction_requests SET status=?,decided_by=?,decided_at=?,
+               decision_note=?,version=version+1 WHERE id=? AND version=?""",
+            (target_status, actor.user_id, now, note or None, request_id, payload.version),
+        )
+        audit(db, actor.user_id, f"data_correction.{audit_action}", "data_correction", request_id,
+              f"household_id={request['household_id']}; field={field_name}; status={target_status}; note={note}")
+        create_notification(
+            db, request["requested_by"], "DATA_CORRECTION",
+            "顧客データ修正依頼を処理しました",
+            f"{request['household_code']} の {field_name} 修正依頼: {target_status}",
+            "data_correction", request_id, title_zh="客户数据修正已处理",
+            message_zh=f"{request['household_code']} 的 {field_name} 修正申请：{target_status}",
+        )
+    return {"ok": True, "status": target_status, "version": payload.version + 1}
+
+
 class StageInput(BaseModel):
     to_stage: str
 
 
 @app.post("/api/households/{household_id}/stage")
-def change_stage(household_id: int, payload: StageInput, x_demo_role: str = Header(default="advisor")):
+def change_stage(household_id: int, payload: StageInput,
+                 x_demo_role: CurrentActor = Depends(require_actor)):
     if payload.to_stage not in STAGES:
         raise HTTPException(422, "不明なステージです")
     with connect() as db:
-        user = db.execute("SELECT * FROM users WHERE role=?", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "不明なデモロールです")
+        user = request_user(db, x_demo_role)
         require_household_access(db, x_demo_role, user, household_id)
         current = db.execute("SELECT to_stage FROM stage_events WHERE household_id=? ORDER BY changed_at DESC LIMIT 1",
                              (household_id,)).fetchone()
         if not current:
             raise HTTPException(404, "家庭が見つかりません")
+        assert_month_period_open(db, now_jst().date(), "stage_events")
         db.execute(
             """INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at)
                VALUES(?,?,?,?,?)""",
@@ -1739,7 +3033,7 @@ class SystemConfigInput(BaseModel):
 
 
 @app.get("/api/system-config")
-def get_system_config(x_demo_role: str = Header(default="advisor")):
+def get_system_config(x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
     with connect() as db:
         rows = db.execute(
@@ -1759,7 +3053,7 @@ def get_system_config(x_demo_role: str = Header(default="advisor")):
 
 @app.put("/api/system-config/{config_key}")
 def update_system_config(config_key: str, payload: SystemConfigInput,
-                         x_demo_role: str = Header(default="advisor")):
+                         x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
     if config_key not in SYSTEM_CONFIG_DEFAULTS:
         raise HTTPException(404, "不明な設定項目です")
@@ -1769,7 +3063,7 @@ def update_system_config(config_key: str, payload: SystemConfigInput,
     if not 10 <= len(reason) <= 500:
         raise HTTPException(422, "変更理由は10〜500文字で入力してください")
     with connect() as db:
-        user = db.execute("SELECT id FROM users WHERE role=?", (x_demo_role,)).fetchone()
+        user = request_user(db, x_demo_role)
         current = db.execute(
             "SELECT value_json FROM system_configs WHERE config_key=? FOR UPDATE", (config_key,)
         ).fetchone()
@@ -1792,12 +3086,10 @@ def update_system_config(config_key: str, payload: SystemConfigInput,
 
 
 @app.put("/api/report")
-def save_report(payload: ReportInput, x_demo_role: str = Header(default="advisor")):
+def save_report(payload: ReportInput, x_demo_role: CurrentActor = Depends(require_actor)):
     with connect() as db:
-        user = db.execute("SELECT id FROM users WHERE role=?", (x_demo_role,)).fetchone()
-        if not user:
-            raise HTTPException(400, "不明なデモロールです")
-        today = date.today().isoformat()
+        user = request_user(db, x_demo_role)
+        today = now_jst().date().isoformat()
         count = db.execute("SELECT COUNT(*) FROM activities WHERE user_id=? AND DATE(acted_at)=CURRENT_DATE",
                            (user["id"],)).fetchone()[0]
         summary = f"本日の活動 {count} 件。面談・紹介状況を確認してください。"
@@ -1809,19 +3101,1078 @@ def save_report(payload: ReportInput, x_demo_role: str = Header(default="advisor
         else:
             db.execute("INSERT INTO daily_report_drafts(user_id,report_date,auto_summary,manual_note) VALUES(?,?,?,?)",
                        (user["id"], today, summary, payload.manual_note))
+        if user["role"] == "advisor" and user["store_id"]:
+            managers = db.execute(
+                """SELECT id FROM users WHERE role='store_manager' AND store_id=?
+                   AND account_status='ACTIVE' AND id<>?""",
+                (user["store_id"], user["id"]),
+            ).fetchall()
+            for manager in managers:
+                create_notification(
+                    db, manager["id"], "DAILY_REPORT", "日報草稿が保存されました",
+                    f"{user['display_name'] or user['name']} が {today} の日報草稿を保存しました。",
+                    "daily_report", user["id"], title_zh="日报草稿已保存",
+                    message_zh=f"{user['display_name'] or user['name']} 已保存 {today} 的日报草稿。",
+                )
+        audit(db, user["id"], "daily_report.saved", "daily_report", user["id"],
+              f"report_date={today}")
         db.commit()
     return {"ok": True}
 
 
 @app.post("/api/reset")
-def reset_demo(x_demo_role: str = Header(default="advisor")):
+def reset_demo(request: Request, x_demo_role: CurrentActor = Depends(require_actor)):
     role_guard(x_demo_role, ("hq_finance",))
     with connect() as db:
+        session_token = request.cookies.get(SESSION_COOKIE)
+        if session_token:
+            db.execute("DELETE FROM auth_sessions WHERE token_hash<>?", (token_digest(session_token),))
+        db.execute("DELETE FROM password_reset_tokens")
+        db.execute("DELETE FROM auth_login_attempts")
+        db.execute("DELETE FROM password_history")
+        db.execute("DELETE FROM notification_deliveries")
+        db.execute("DELETE FROM notifications")
+        audit(db, x_demo_role.user_id, "DEMO_DATA_RESET", "seed", None, f"batch={SEED_BATCH}")
         for table in TABLES:
             db.execute(f"DROP TABLE IF EXISTS `{table}`")
         seed(db)
         ensure_system_config(db)
+        ensure_demo_accounts(db)
     return {"ok": True}
+
+
+@app.get("/api/notifications")
+def notification_list(limit: int = 50, actor: CurrentActor = Depends(require_actor)):
+    if not 1 <= limit <= 100:
+        raise HTTPException(422, "取得件数は1から100まで指定してください")
+    with connect() as db:
+        unread_count = db.execute(
+            "SELECT COUNT(*) AS count FROM notifications WHERE user_id=? AND status='UNREAD'",
+            (actor.user_id,),
+        ).fetchone()["count"]
+        rows = db.execute(
+            """SELECT id,notification_type,system_event_code,title,title_zh,message,message_zh,
+                      related_record_type,related_record_id,status,created_at,read_at
+               FROM notifications WHERE user_id=? AND status!='ARCHIVED'
+               ORDER BY created_at DESC,id DESC LIMIT ?""",
+            (actor.user_id, limit),
+        ).fetchall()
+    return {"unread_count": unread_count, "items": [dict(row) for row in rows]}
+
+
+@app.put("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: str, actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        row = db.execute(
+            "SELECT id,status FROM notifications WHERE id=? AND user_id=? FOR UPDATE",
+            (notification_id, actor.user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "通知が見つかりません")
+        if row["status"] == "UNREAD":
+            db.execute(
+                "UPDATE notifications SET status='READ',read_at=? WHERE id=? AND user_id=?",
+                (now_jst(), notification_id, actor.user_id),
+            )
+    return {"ok": True}
+
+
+@app.put("/api/notifications/{notification_id}/archive")
+def archive_notification(notification_id: str, actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        cursor = db.execute(
+            "UPDATE notifications SET status='ARCHIVED' WHERE id=? AND user_id=? AND status='READ'",
+            (notification_id, actor.user_id),
+        )
+        if cursor.rowcount == 0:
+            exists = db.execute(
+                "SELECT id FROM notifications WHERE id=? AND user_id=?",
+                (notification_id, actor.user_id),
+            ).fetchone()
+            if not exists:
+                raise HTTPException(404, "通知が見つかりません")
+            raise HTTPException(409, "未読通知は既読にしてからアーカイブしてください")
+    return {"ok": True}
+
+
+class ExpenseInput(BaseModel):
+    category: str
+    amount: int
+    description: str
+    expense_date: date
+    version: Optional[int] = None
+
+
+class ExpenseDecisionInput(BaseModel):
+    version: int
+    reason: Optional[str] = None
+
+
+class ExportJobInput(BaseModel):
+    resource: str
+    include_personal_data: bool = False
+    format: str = "csv"
+
+
+def csv_cell(value):
+    if not isinstance(value, str):
+        return value
+    if value.lstrip(" \t\r\n").startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+def build_csv(headers, rows):
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\r\n")
+    writer.writerow([csv_cell(value) for value in headers])
+    for row in rows:
+        writer.writerow([csv_cell(value) for value in row])
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def household_visibility_clause(actor, alias="h"):
+    account_role = getattr(actor, "account_role", "")
+    if account_role in ("administrator", "executive", "finance", "hq_staff"):
+        return "1=1", []
+    if account_role == "store_manager" and actor.store_id:
+        return f"{alias}.store_id=?", [actor.store_id]
+    if account_role == "advisor":
+        return f"{alias}.advisor_id=?", [actor.user_id]
+    raise HTTPException(403, "世帯データを閲覧する権限がありません")
+
+
+def export_rows(db, actor, resource, include_personal_data, limit):
+    account_role = getattr(actor, "account_role", "")
+    if include_personal_data and account_role not in ("administrator", "executive"):
+        raise HTTPException(403, "個人情報を含む出力には管理権限が必要です")
+    if resource == "households":
+        scope, args = household_visibility_clause(actor)
+        rows = db.execute(
+            f"""SELECT h.id AS record_id,h.household_code,h.representative_name,s.name AS store_name,
+                       u.display_name AS advisor_name,h.area_pref,h.budget_band,h.land_status,
+                       h.status,h.created_at
+                FROM households h LEFT JOIN stores s ON s.id=h.store_id
+                LEFT JOIN users u ON u.id=h.advisor_id
+                WHERE {scope} ORDER BY h.id LIMIT ?""",
+            (*args, limit),
+        ).fetchall()
+        headers = ["household_code", "representative_name", "store", "advisor",
+                   "area_pref", "budget_band", "land_status", "status", "created_at"]
+        record_ids = [row["record_id"] for row in rows]
+        data = [[row["household_code"],
+                 row["representative_name"] if include_personal_data else row["household_code"],
+                 row["store_name"], row["advisor_name"] if include_personal_data else "",
+                 row["area_pref"], row["budget_band"], row["land_status"], row["status"],
+                 row["created_at"]] for row in rows]
+    elif resource == "introductions":
+        scope, args = household_visibility_clause(actor)
+        rows = db.execute(
+            f"""SELECT i.id,h.household_code,p.name AS partner_name,i.status,
+                       n.status AS negotiation_status,i.introduced_at,c.contract_date,c.contract_amount
+                FROM introductions i JOIN households h ON h.id=i.household_id
+                JOIN partners p ON p.id=i.partner_id
+                LEFT JOIN negotiations n ON n.introduction_id=i.id
+                LEFT JOIN contracts c ON c.negotiation_id=n.id
+                WHERE {scope} ORDER BY i.id LIMIT ?""",
+            (*args, limit),
+        ).fetchall()
+        headers = ["introduction_id", "household_code", "partner", "introduction_status",
+                   "negotiation_status", "introduced_at", "contract_date", "contract_amount"]
+        record_ids = [row["id"] for row in rows]
+        data = [[row["id"], row["household_code"], row["partner_name"], row["status"],
+                 row["negotiation_status"], row["introduced_at"], row["contract_date"],
+                 row["contract_amount"]] for row in rows]
+    elif resource == "expenses":
+        scope, args = expense_visibility_clause(actor)
+        rows = db.execute(
+            f"""SELECT e.id,e.applicant_id,u.display_name AS applicant_name,e.category,e.amount,
+                       e.expense_date,e.status,e.created_at
+                FROM expenses e JOIN users u ON u.id=e.applicant_id
+                WHERE {scope} ORDER BY e.created_at,e.id LIMIT ?""",
+            (*args, limit),
+        ).fetchall()
+        headers = ["expense_id", "applicant", "category", "amount", "expense_date", "status", "created_at"]
+        record_ids = [row["id"] for row in rows]
+        data = [[row["id"], row["applicant_name"] if include_personal_data else f"社員#{row['applicant_id']}",
+                 row["category"], row["amount"], row["expense_date"], row["status"],
+                 row["created_at"]] for row in rows]
+    elif resource in ("fee_entitlements", "invoice_data"):
+        if account_role not in ("finance", "executive", "administrator", "hq_staff"):
+            raise HTTPException(403, "報酬・請求データを出力する権限がありません")
+        invoice_only = resource == "invoice_data"
+        conditions = ["fe.state!='Disputed'"]
+        if invoice_only:
+            conditions.extend(["fe.invoice_data_generated=1", "fe.state='Invoiced'"])
+        rows = db.execute(
+            f"""SELECT fe.id,h.household_code,p.name AS partner_name,fe.state,
+                       fr.version AS fee_rule_version,fe.base_amount,fe.calculated_amount,
+                       fe.invoice_data_generated,fe.calculated_at
+                FROM fee_entitlements fe JOIN introductions i ON i.id=fe.introduction_id
+                JOIN households h ON h.id=i.household_id JOIN partners p ON p.id=i.partner_id
+                JOIN fee_rules fr ON fr.id=fe.fee_rule_id
+                WHERE {' AND '.join(conditions)} ORDER BY fe.id LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        headers = ["fee_entitlement_id", "household_code", "partner", "state",
+                   "fee_rule_version", "base_amount", "calculated_amount",
+                   "invoice_data_generated", "calculated_at"]
+        record_ids = [row["id"] for row in rows]
+        data = [[row["id"], row["household_code"], row["partner_name"], row["state"],
+                 row["fee_rule_version"], row["base_amount"], row["calculated_amount"],
+                 row["invoice_data_generated"], row["calculated_at"]] for row in rows]
+    else:
+        raise HTTPException(422, "出力対象を選択してください")
+    return headers, data, record_ids
+
+
+def expense_visibility_clause(actor):
+    account_role = getattr(actor, "account_role", "")
+    if account_role in ("administrator", "executive", "finance", "hq_staff"):
+        return "1=1", []
+    if account_role == "store_manager" and actor.store_id:
+        return "e.store_id=?", [actor.store_id]
+    if account_role == "advisor":
+        return "e.applicant_id=?", [actor.user_id]
+    raise HTTPException(403, "経費データを閲覧する権限がありません")
+
+
+def expense_row(db, actor, expense_id, for_update=False):
+    visibility, args = expense_visibility_clause(actor)
+    suffix = " FOR UPDATE" if for_update else ""
+    row = db.execute(
+        f"SELECT e.* FROM expenses e WHERE e.id=? AND {visibility}{suffix}",
+        (expense_id, *args),
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "経費申請が見つかりません")
+    return row
+
+
+def validate_expense_input(db, payload):
+    categories = config_value(db, "expense.allowed_categories")
+    if payload.category not in categories:
+        raise HTTPException(422, "設定された経費区分を選択してください")
+    if payload.amount <= 0 or payload.amount > 100000000:
+        raise HTTPException(422, "金額は1円から1億円まで指定してください")
+    description = payload.description.strip()
+    if not description or len(description) > 2000:
+        raise HTTPException(422, "内容は1文字以上2000文字以内で入力してください")
+    if payload.expense_date > now_jst().date():
+        raise HTTPException(422, "未来日付の経費は登録できません")
+    return description
+
+
+def expense_notification(db, user_id, title, message, title_zh, message_zh, expense_id,
+                         notification_type="EXPENSE"):
+    create_notification(db, user_id, notification_type, title, message, "expense", expense_id,
+                        title_zh=title_zh, message_zh=message_zh)
+
+
+@app.get("/api/expenses")
+def expense_list(actor: CurrentActor = Depends(require_actor)):
+    visibility, args = expense_visibility_clause(actor)
+    with connect() as db:
+        allowed_categories = config_value(db, "expense.allowed_categories")
+        max_receipt_mb = config_value(db, "expense.max_receipt_mb")
+        approval_thresholds = config_value(db, "expense.approval_thresholds_yen")
+        rows = db.execute(
+            f"""SELECT e.id,e.applicant_id,u.display_name AS applicant_name,e.store_id,e.category,
+                       e.amount,e.description,e.expense_date,e.receipt_filename,e.receipt_size,
+                       e.status,e.rejection_reason,e.version,e.reviewed_by,e.reviewed_at,
+                       e.finance_recorded_by,e.finance_recorded_at,e.created_at,e.updated_at
+                FROM expenses e JOIN users u ON u.id=e.applicant_id
+                WHERE {visibility} ORDER BY e.created_at DESC,e.id DESC""",
+            args,
+        ).fetchall()
+    return {"items": [dict(row) for row in rows], "allowed_categories": allowed_categories,
+            "max_receipt_mb": max_receipt_mb, "approval_thresholds_yen": approval_thresholds}
+
+
+@app.post("/api/expenses")
+def create_expense(payload: ExpenseInput, actor: CurrentActor = Depends(require_actor)):
+    account_role = getattr(actor, "account_role", "")
+    if account_role not in ("advisor", "store_manager", "finance", "executive", "administrator"):
+        raise HTTPException(403, "経費申請を作成する権限がありません")
+    now = now_jst()
+    expense_id = str(uuid.uuid4())
+    with connect() as db:
+        description = validate_expense_input(db, payload)
+        assert_month_period_open(db, payload.expense_date, "expenses")
+        db.execute(
+            """INSERT INTO expenses(id,applicant_id,store_id,category,amount,description,expense_date,
+               status,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'DRAFT',1,?,?)""",
+            (expense_id, actor.user_id, actor.store_id, payload.category, payload.amount,
+             description, payload.expense_date, now, now),
+        )
+        audit(db, actor.user_id, "expense.created", "expense", expense_id,
+              f"category={payload.category}; amount={payload.amount}")
+    return {"ok": True, "id": expense_id, "status": "DRAFT", "version": 1}
+
+
+@app.put("/api/expenses/{expense_id}")
+def update_expense(expense_id: str, payload: ExpenseInput,
+                   actor: CurrentActor = Depends(require_actor)):
+    now = now_jst()
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["applicant_id"] != actor.user_id or row["status"] not in ("DRAFT", "REJECTED"):
+            raise HTTPException(403, "この経費申請は編集できません")
+        if payload.version != row["version"]:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        assert_month_period_open(db, row["expense_date"], "expenses")
+        assert_month_period_open(db, payload.expense_date, "expenses")
+        description = validate_expense_input(db, payload)
+        db.execute(
+            """UPDATE expenses SET category=?,amount=?,description=?,expense_date=?,
+               status='DRAFT',rejection_reason=NULL,reviewed_by=NULL,reviewed_at=NULL,
+               version=version+1,updated_at=? WHERE id=? AND version=?""",
+            (payload.category, payload.amount, description, payload.expense_date,
+             now, expense_id, payload.version),
+        )
+        audit(db, actor.user_id, "expense.updated", "expense", expense_id,
+              f"category={payload.category}; amount={payload.amount}; version={payload.version + 1}")
+    return {"ok": True, "status": "DRAFT", "version": payload.version + 1}
+
+
+@app.post("/api/expenses/{expense_id}/receipt")
+async def upload_expense_receipt(expense_id: str, version: int = Form(...),
+                                 receipt: UploadFile = File(...),
+                                 actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["applicant_id"] != actor.user_id or row["status"] not in ("DRAFT", "REJECTED"):
+            raise HTTPException(403, "この経費申請には証憑を追加できません")
+        assert_month_period_open(db, row["expense_date"], "expenses")
+        if version != row["version"]:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        max_bytes = config_value(db, "expense.max_receipt_mb") * 1024 * 1024
+        allowed = set(config_value(db, "attachment.allowed_extensions")) & {"pdf", "jpg", "jpeg", "png"}
+    filename = Path(receipt.filename or "").name
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if extension not in allowed:
+        raise HTTPException(422, "証憑はPDFまたは画像ファイルを指定してください")
+    content = await receipt.read(max_bytes + 1)
+    if not content or len(content) > max_bytes:
+        raise HTTPException(413, "証憑ファイルが空か、設定されたサイズ上限を超えています")
+    signatures = {
+        "pdf": (content.startswith(b"%PDF-"), "application/pdf"),
+        "jpg": (content.startswith(b"\xff\xd8\xff"), "image/jpeg"),
+        "jpeg": (content.startswith(b"\xff\xd8\xff"), "image/jpeg"),
+        "png": (content.startswith(b"\x89PNG\r\n\x1a\n"), "image/png"),
+    }
+    valid, mime = signatures[extension]
+    if not valid:
+        raise HTTPException(422, "ファイル内容が拡張子と一致しません")
+    safe_filename = f"receipt_{expense_id}.{extension}"
+    now = now_jst()
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["version"] != version or row["applicant_id"] != actor.user_id:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        db.execute(
+            """UPDATE expenses SET receipt_filename=?,receipt_mime=?,receipt_size=?,receipt_sha256=?,
+               receipt_blob=?,version=version+1,updated_at=? WHERE id=? AND version=?""",
+            (safe_filename, mime, len(content), hashlib.sha256(content).hexdigest(),
+             content, now, expense_id, version),
+        )
+        audit(db, actor.user_id, "expense.receipt_uploaded", "expense", expense_id,
+              f"size={len(content)}; sha256={hashlib.sha256(content).hexdigest()}")
+    return {"ok": True, "version": version + 1, "receipt_size": len(content)}
+
+
+@app.get("/api/expenses/{expense_id}/receipt")
+def download_expense_receipt(expense_id: str, actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        row = expense_row(db, actor, expense_id)
+        if not row["receipt_blob"]:
+            raise HTTPException(404, "証憑が登録されていません")
+    return Response(
+        content=row["receipt_blob"], media_type=row["receipt_mime"],
+        headers={"Content-Disposition": f'attachment; filename="{row["receipt_filename"]}"',
+                 "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
+    )
+
+
+@app.post("/api/expenses/{expense_id}/submit")
+def submit_expense(expense_id: str, payload: ExpenseDecisionInput,
+                   actor: CurrentActor = Depends(require_actor)):
+    now = now_jst()
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["applicant_id"] != actor.user_id or row["status"] not in ("DRAFT", "REJECTED"):
+            raise HTTPException(403, "この経費申請は提出できません")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        if not row["receipt_blob"]:
+            raise HTTPException(422, "提出前に証憑を添付してください")
+        assert_month_period_open(db, row["expense_date"], "expenses")
+        db.execute(
+            """UPDATE expenses SET status='SUBMITTED',rejection_reason=NULL,version=version+1,
+               updated_at=? WHERE id=? AND version=?""",
+            (now, expense_id, payload.version),
+        )
+        thresholds = config_value(db, "expense.approval_thresholds_yen")
+        approver_role = ("store_manager" if row["amount"] <= thresholds[0] else
+                         "finance" if row["amount"] <= thresholds[1] else "executive")
+        if approver_role == "store_manager":
+            approvers = db.execute(
+                "SELECT id FROM users WHERE role='store_manager' AND store_id<=>? AND account_status='ACTIVE'",
+                (row["store_id"],),
+            ).fetchall()
+            if not approvers:
+                approvers = db.execute(
+                    "SELECT id FROM users WHERE role IN ('finance','executive') AND account_status='ACTIVE'"
+                ).fetchall()
+        elif approver_role == "finance":
+            approvers = db.execute(
+                "SELECT id FROM users WHERE role IN ('finance','executive') AND account_status='ACTIVE'"
+            ).fetchall()
+        else:
+            approvers = db.execute(
+                "SELECT id FROM users WHERE role IN ('executive','administrator') AND account_status='ACTIVE'"
+            ).fetchall()
+        for approver in approvers:
+            expense_notification(db, approver["id"], "経費申請の承認待ち",
+                                 f"経費申請 {expense_id} の確認が必要です。",
+                                 "费用申请待审批", f"请审核费用申请 {expense_id}。",
+                                 expense_id, "APPROVAL")
+        audit(db, actor.user_id, "expense.submitted", "expense", expense_id,
+              f"amount={row['amount']}; version={payload.version + 1}")
+    return {"ok": True, "status": "SUBMITTED", "version": payload.version + 1}
+
+
+def decide_expense(expense_id, payload, actor, approve):
+    account_role = getattr(actor, "account_role", "")
+    if account_role not in ("finance", "executive", "administrator", "store_manager"):
+        raise HTTPException(403, "経費承認の権限がありません")
+    now = now_jst()
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["status"] != "SUBMITTED":
+            raise HTTPException(409, "提出済みの経費申請ではありません")
+        assert_month_period_open(db, row["expense_date"], "expenses")
+        if row["applicant_id"] == actor.user_id:
+            raise HTTPException(403, "自分の経費申請は承認できません")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        thresholds = config_value(db, "expense.approval_thresholds_yen")
+        if row["amount"] > thresholds[1] and account_role not in ("executive", "administrator"):
+            raise HTTPException(403, "この金額の承認には社長または管理者の承認が必要です")
+        if row["amount"] > thresholds[0] and account_role not in (
+                "finance", "executive", "administrator"):
+            raise HTTPException(403, "この金額の承認には本社・経理の承認が必要です")
+        if account_role == "store_manager" and actor.store_id != row["store_id"]:
+            raise HTTPException(403, "他店舗の経費は承認できません")
+        reason = (payload.reason or "").strip()
+        if not approve and not reason:
+            raise HTTPException(422, "差戻し理由を入力してください")
+        status = "APPROVED" if approve else "REJECTED"
+        db.execute(
+            """UPDATE expenses SET status=?,rejection_reason=?,reviewed_by=?,reviewed_at=?,
+               version=version+1,updated_at=? WHERE id=? AND version=?""",
+            (status, None if approve else reason, actor.user_id, now, now, expense_id, payload.version),
+        )
+        if approve:
+            title_ja, message_ja = "経費申請が承認されました", f"経費申請 {expense_id} が承認されました。"
+            title_zh, message_zh = "费用申请已批准", f"费用申请 {expense_id} 已批准。"
+            action = "expense.approved"
+        else:
+            title_ja, message_ja = "経費申請が差し戻されました", f"差戻し理由: {reason}"
+            title_zh, message_zh = "费用申请已退回", f"退回原因：{reason}"
+            action = "expense.rejected"
+        expense_notification(db, row["applicant_id"], title_ja, message_ja,
+                             title_zh, message_zh, expense_id)
+        audit(db, actor.user_id, action, "expense", expense_id,
+              f"status={status}; version={payload.version + 1}; reason={reason}")
+    return {"ok": True, "status": status, "version": payload.version + 1}
+
+
+@app.post("/api/expenses/{expense_id}/approve")
+def approve_expense(expense_id: str, payload: ExpenseDecisionInput,
+                    actor: CurrentActor = Depends(require_actor)):
+    return decide_expense(expense_id, payload, actor, True)
+
+
+@app.post("/api/expenses/{expense_id}/reject")
+def reject_expense(expense_id: str, payload: ExpenseDecisionInput,
+                   actor: CurrentActor = Depends(require_actor)):
+    return decide_expense(expense_id, payload, actor, False)
+
+
+@app.post("/api/expenses/{expense_id}/record")
+def record_expense(expense_id: str, payload: ExpenseDecisionInput,
+                   actor: CurrentActor = Depends(require_actor)):
+    if getattr(actor, "account_role", "") not in ("finance", "executive", "administrator"):
+        raise HTTPException(403, "経理記録の権限がありません")
+    now = now_jst()
+    with connect() as db:
+        row = expense_row(db, actor, expense_id, for_update=True)
+        if row["status"] != "APPROVED":
+            raise HTTPException(409, "承認済みの経費申請ではありません")
+        assert_month_period_open(db, row["expense_date"], "expenses")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "経費申請が更新されています。再読み込みしてください")
+        db.execute(
+            """UPDATE expenses SET status='RECORDED',finance_recorded_by=?,finance_recorded_at=?,
+               version=version+1,updated_at=? WHERE id=? AND version=?""",
+            (actor.user_id, now, now, expense_id, payload.version),
+        )
+        audit(db, actor.user_id, "expense.recorded", "expense", expense_id,
+              f"version={payload.version + 1}")
+    return {"ok": True, "status": "RECORDED", "version": payload.version + 1}
+
+
+@app.post("/api/export-jobs")
+def create_export_job(payload: ExportJobInput, actor: CurrentActor = Depends(require_actor)):
+    if payload.format not in ("csv", "pdf"):
+        raise HTTPException(422, "CSVまたはPDFを指定してください")
+    now = now_jst()
+    job_id = str(uuid.uuid4())
+    with connect() as db:
+        max_rows = config_value(db, "export.max_rows")
+        max_bytes = config_value(db, "export.max_pdf_mb" if payload.format == "pdf"
+                                 else "export.max_csv_mb") * 1024 * 1024
+        expiry_hours = config_value(db, "export.expiry_hours")
+        db.execute(
+            "UPDATE export_jobs SET status='EXPIRED',content='' WHERE status='READY' AND expires_at<=?",
+            (now,),
+        )
+        headers, rows, record_ids = export_rows(
+            db, actor, payload.resource, payload.include_personal_data, max_rows + 1
+        )
+        if len(rows) > max_rows:
+            raise HTTPException(413, "出力件数が設定上限を超えています。条件を絞ってください")
+        actor_row = db.execute(
+            "SELECT COALESCE(display_name,name) AS display_name FROM users WHERE id=?",
+            (actor.user_id,),
+        ).fetchone()
+        template_version = PDF_TEMPLATE_VERSION if payload.format == "pdf" else "csv-v1"
+        content = (build_pdf(headers, rows, payload.resource, now.isoformat(timespec="seconds"),
+                              actor_row["display_name"] if actor_row else str(actor.user_id))
+                   if payload.format == "pdf" else build_csv(headers, rows))
+        if len(content) > max_bytes:
+            raise HTTPException(413, "出力ファイルが設定サイズ上限を超えています")
+        filename = f"mallboard_{payload.resource}_{now:%Y%m%d%H%M%S}.{payload.format}"
+        expires_at = now + timedelta(hours=expiry_hours)
+        content_hash = hashlib.sha256(content).hexdigest()
+        db.execute(
+            """INSERT INTO export_jobs(id,user_id,resource,format,template_version,created_role,
+               scope_store_id,include_personal_data,record_ids_json,filename,row_count,content_sha256,
+               content,status,created_at,expires_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'READY',?,?)""",
+            (job_id, actor.user_id, payload.resource, payload.format, template_version,
+             actor.account_role, actor.store_id, payload.include_personal_data,
+             json.dumps(record_ids, ensure_ascii=False), filename, len(rows), content_hash,
+             content, now, expires_at),
+        )
+        audit(db, actor.user_id, "export.created", "export_job", job_id,
+              f"resource={payload.resource}; format={payload.format}; template={template_version}; "
+              f"rows={len(rows)}; sha256={content_hash}")
+        create_notification(
+            db, actor.user_id, "EXPORT", f"{payload.format.upper()}出力を作成しました",
+            f"{filename}（{len(rows)} 件）は {expires_at:%Y-%m-%d %H:%M} までダウンロードできます。",
+            "export_job", job_id, title_zh=f"{payload.format.upper()} 导出已生成",
+            message_zh=f"{filename}（{len(rows)} 条）可下载至 {expires_at:%Y-%m-%d %H:%M}。",
+        )
+    return {"id": job_id, "resource": payload.resource, "format": payload.format,
+            "template_version": template_version, "filename": filename,
+            "row_count": len(rows), "sha256": content_hash,
+            "expires_at": expires_at.isoformat(timespec="seconds")}
+
+
+@app.get("/api/export-jobs")
+def export_job_list(actor: CurrentActor = Depends(require_actor)):
+    with connect() as db:
+        rows = db.execute(
+            """SELECT id,resource,format,template_version,filename,row_count,content_sha256,
+                      status,created_at,expires_at
+               FROM export_jobs WHERE user_id=? ORDER BY created_at DESC LIMIT 100""",
+            (actor.user_id,),
+        ).fetchall()
+    return {"items": [dict(row) for row in rows]}
+
+
+@app.get("/api/export-jobs/{job_id}/download")
+def download_export_job(job_id: str, actor: CurrentActor = Depends(require_actor)):
+    expired = False
+    with connect() as db:
+        row = db.execute(
+            """SELECT resource,format,template_version,created_role,scope_store_id,
+                      include_personal_data,record_ids_json,filename,content,status,expires_at
+               FROM export_jobs WHERE id=? AND user_id=? FOR UPDATE""",
+            (job_id, actor.user_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "出力ファイルが見つかりません")
+        if row["status"] != "READY" or row["expires_at"] <= now_jst():
+            db.execute("UPDATE export_jobs SET status='EXPIRED',content='' WHERE id=?", (job_id,))
+            expired = True
+        else:
+            if (row["created_role"] and
+                    (row["created_role"] != actor.account_role or row["scope_store_id"] != actor.store_id)):
+                raise HTTPException(403, "現在の権限範囲では出力ファイルをダウンロードできません")
+            try:
+                headers, current_rows, current_record_ids = export_rows(
+                    db, actor, row["resource"], bool(row["include_personal_data"]),
+                    config_value(db, "export.max_rows") + 1,
+                )
+            except HTTPException as error:
+                if error.status_code == 403:
+                    raise HTTPException(403, "現在の権限範囲では出力ファイルをダウンロードできません") from error
+                raise
+            current_ids = {str(item) for item in current_record_ids}
+            original_ids = set(json.loads(row["record_ids_json"] or "[]"))
+            if not original_ids.issubset(current_ids):
+                raise HTTPException(403, "出力対象の閲覧権限が変更されたためダウンロードできません")
+            filename = row["filename"]
+            content = row["content"]
+            audit(db, actor.user_id, f"export.downloaded.{row['format']}",
+                  "export_job", job_id,
+                  f"resource={row['resource']}; template={row['template_version']}")
+    if expired:
+        raise HTTPException(410, "出力ファイルの有効期限が切れています")
+    return Response(
+        content=content,
+        media_type="application/pdf" if filename.endswith(".pdf") else "text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
+                 "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+class MonthClosePrepareInput(BaseModel):
+    period: str
+
+
+class MonthCloseVersionInput(BaseModel):
+    version: int
+
+
+class MonthCloseReopenInput(BaseModel):
+    version: int
+    reason: str
+
+
+def require_month_close_access(actor, roles):
+    if getattr(actor, "account_role", "") not in roles:
+        raise HTTPException(403, "月次締めを操作する権限がありません")
+
+
+def month_close_summary(row):
+    return {
+        "id": row["id"], "period": row["period"], "snapshot_version": row["snapshot_version"],
+        "status": row["status"], "snapshot_sha256": row["snapshot_sha256"],
+        "prepared_by": row["prepared_by"], "prepared_at": row["prepared_at"],
+        "closed_by": row["closed_by"], "closed_at": row["closed_at"],
+        "reopen_requested_by": row["reopen_requested_by"],
+        "reopen_reason": row["reopen_reason"], "reopen_requested_at": row["reopen_requested_at"],
+        "reopen_approved_by": row["reopen_approved_by"], "reopened_at": row["reopened_at"],
+        "version": row["version"],
+    }
+
+
+@app.get("/api/month-closes")
+def month_close_list(period: Optional[str] = None, actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("finance", "executive", "administrator", "hq_staff"))
+    if period and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
+        raise HTTPException(422, "対象月はYYYY-MM形式で指定してください")
+    with connect() as db:
+        if period:
+            rows = db.execute(
+                """SELECT id,period,snapshot_version,status,snapshot_sha256,prepared_by,prepared_at,
+                   closed_by,closed_at,reopen_requested_by,reopen_reason,reopen_requested_at,
+                   reopen_approved_by,reopened_at,version FROM month_closes
+                   WHERE period=? ORDER BY snapshot_version DESC""", (period,),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                """SELECT id,period,snapshot_version,status,snapshot_sha256,prepared_by,prepared_at,
+                   closed_by,closed_at,reopen_requested_by,reopen_reason,reopen_requested_at,
+                   reopen_approved_by,reopened_at,version FROM month_closes
+                   ORDER BY period DESC,snapshot_version DESC LIMIT 100"""
+            ).fetchall()
+    return {"items": [month_close_summary(row) for row in rows]}
+
+
+@app.get("/api/month-closes/{close_id}/detail")
+def month_close_detail(close_id: str, actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("finance", "executive", "administrator", "hq_staff"))
+    with connect() as db:
+        row = db.execute("SELECT * FROM month_closes WHERE id=?", (close_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "月次締めスナップショットが見つかりません")
+    result = month_close_summary(row)
+    snapshot = row["snapshot_json"]
+    result["snapshot"] = json.loads(snapshot) if isinstance(snapshot, str) else snapshot
+    return result
+
+
+@app.get("/api/month-closes/lock-matrix")
+def month_close_lock_matrix(period: str, actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("finance", "executive", "administrator", "hq_staff"))
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", period):
+        raise HTTPException(422, "対象月はYYYY-MM形式で指定してください")
+    with connect() as db:
+        resources = config_value(db, "month_close.locked_resources")
+        close = db.execute(
+            """SELECT id,snapshot_version,status FROM month_closes WHERE period=?
+               AND status IN ('CLOSED','REOPEN_REQUESTED') ORDER BY snapshot_version DESC LIMIT 1""",
+            (period,),
+        ).fetchone()
+    return {
+        "period": period, "locked_by_close_id": close["id"] if close else None,
+        "snapshot_version": close["snapshot_version"] if close else None,
+        "items": [{"resource": resource, "locked": bool(close)} for resource in resources],
+    }
+
+
+@app.post("/api/month-closes/prepare")
+def prepare_month_close(payload: MonthClosePrepareInput, actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("finance", "administrator", "hq_staff"))
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", payload.period):
+        raise HTTPException(422, "対象月はYYYY-MM形式で指定してください")
+    now = now_jst()
+    close_id = str(uuid.uuid4())
+    with connect() as db:
+        db.execute("INSERT IGNORE INTO month_close_period_locks(period) VALUES(?)", (payload.period,))
+        db.execute("SELECT period FROM month_close_period_locks WHERE period=? FOR UPDATE", (payload.period,))
+        previous = db.execute(
+            """SELECT snapshot_version,status FROM month_closes WHERE period=?
+               ORDER BY snapshot_version DESC LIMIT 1 FOR UPDATE""", (payload.period,),
+        ).fetchone()
+        if previous and previous["status"] != "REOPENED":
+            raise HTTPException(409, "前回の月次締めが完了していないか、再オープンされていません")
+        snapshot_version = previous["snapshot_version"] + 1 if previous else 1
+        snapshot = build_month_snapshot(db, payload.period)
+        snapshot_json = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(snapshot_json.encode("utf-8")).hexdigest()
+        db.execute(
+            """INSERT INTO month_closes(id,period,snapshot_version,status,snapshot_json,snapshot_sha256,
+               prepared_by,prepared_at,version) VALUES(?,?,?,'PREPARED',?,?,?,?,1)""",
+            (close_id, payload.period, snapshot_version, snapshot_json, digest, actor.user_id, now),
+        )
+        audit(db, actor.user_id, "month_close.prepared", "month_close", close_id,
+              f"period={payload.period}; version={snapshot_version}; sha256={digest}")
+        approvers = db.execute(
+            """SELECT id FROM users WHERE role IN ('executive','administrator') AND account_status='ACTIVE'"""
+        ).fetchall()
+        for approver in approvers:
+            create_notification(
+                db, approver["id"], "MONTHLY_CLOSE", "月次締めの確認待ち",
+                f"{payload.period} のスナップショットを確認して締めてください。",
+                "month_close", close_id, title_zh="月度结账待确认",
+                message_zh=f"{payload.period} 的快照已准备，请审核并完成结账。",
+            )
+    return {"id": close_id, "period": payload.period, "snapshot_version": snapshot_version,
+            "status": "PREPARED", "snapshot_sha256": digest, "snapshot": snapshot}
+
+
+@app.post("/api/month-closes/{close_id}/close")
+def close_month(close_id: str, payload: MonthCloseVersionInput,
+                actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("executive", "administrator"))
+    now = now_jst()
+    with connect() as db:
+        row = db.execute("SELECT * FROM month_closes WHERE id=? FOR UPDATE", (close_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "月次締めスナップショットが見つかりません")
+        if row["status"] != "PREPARED":
+            raise HTTPException(409, "準備済みの月次締めではありません")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "月次締めが更新されています。再読み込みしてください")
+        if row["prepared_by"] == actor.user_id:
+            raise HTTPException(403, "準備者とは別の承認者が締め処理を行ってください")
+        db.execute(
+            """UPDATE month_closes SET status='CLOSED',closed_by=?,closed_at=?,version=version+1
+               WHERE id=? AND version=?""", (actor.user_id, now, close_id, payload.version),
+        )
+        audit(db, actor.user_id, "month_close.closed", "month_close", close_id,
+              f"period={row['period']}; snapshot_version={row['snapshot_version']}")
+        create_notification(
+            db, row["prepared_by"], "MONTHLY_CLOSE", "月次締めが完了しました",
+            f"{row['period']} の月次締めが完了しました。対象レコードの編集はロックされています。",
+            "month_close", close_id, title_zh="月度结账已完成",
+            message_zh=f"{row['period']} 已完成月度结账，相关记录已锁定。",
+        )
+    return {"ok": True, "status": "CLOSED", "version": payload.version + 1}
+
+
+@app.post("/api/month-closes/{close_id}/request-reopen")
+def request_month_reopen(close_id: str, payload: MonthCloseReopenInput,
+                         actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("finance", "administrator", "hq_staff"))
+    reason = payload.reason.strip()
+    if len(reason) < 10 or len(reason) > 1000:
+        raise HTTPException(422, "再オープン理由は10〜1000文字で入力してください")
+    now = now_jst()
+    with connect() as db:
+        row = db.execute("SELECT * FROM month_closes WHERE id=? FOR UPDATE", (close_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "月次締めスナップショットが見つかりません")
+        if row["status"] != "CLOSED":
+            raise HTTPException(409, "締め済みの月次データのみ再オープンを申請できます")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "月次締めが更新されています。再読み込みしてください")
+        db.execute(
+            """UPDATE month_closes SET status='REOPEN_REQUESTED',reopen_requested_by=?,
+               reopen_reason=?,reopen_requested_at=?,version=version+1 WHERE id=? AND version=?""",
+            (actor.user_id, reason, now, close_id, payload.version),
+        )
+        audit(db, actor.user_id, "month_close.reopen_requested", "month_close", close_id,
+              f"period={row['period']}; reason={reason}")
+        approvers = db.execute(
+            """SELECT id FROM users WHERE role IN ('executive','administrator') AND account_status='ACTIVE'"""
+        ).fetchall()
+        for approver in approvers:
+            create_notification(
+                db, approver["id"], "MONTHLY_CLOSE", "月次締め再オープンの承認待ち",
+                f"{row['period']} の再オープン申請を確認してください。",
+                "month_close", close_id, title_zh="月度结账重新开放待审批",
+                message_zh=f"请审核 {row['period']} 的重新开放申请。",
+            )
+    return {"ok": True, "status": "REOPEN_REQUESTED", "version": payload.version + 1}
+
+
+@app.post("/api/month-closes/{close_id}/approve-reopen")
+def approve_month_reopen(close_id: str, payload: MonthCloseVersionInput,
+                         actor: CurrentActor = Depends(require_actor)):
+    require_month_close_access(actor, ("executive", "administrator"))
+    now = now_jst()
+    with connect() as db:
+        row = db.execute("SELECT * FROM month_closes WHERE id=? FOR UPDATE", (close_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "月次締めスナップショットが見つかりません")
+        if row["status"] != "REOPEN_REQUESTED":
+            raise HTTPException(409, "再オープン申請がありません")
+        if row["version"] != payload.version:
+            raise HTTPException(409, "月次締めが更新されています。再読み込みしてください")
+        if row["reopen_requested_by"] == actor.user_id:
+            raise HTTPException(403, "申請者とは別の承認者が再オープンを承認してください")
+        db.execute(
+            """UPDATE month_closes SET status='REOPENED',reopen_approved_by=?,reopened_at=?,
+               version=version+1 WHERE id=? AND version=?""",
+            (actor.user_id, now, close_id, payload.version),
+        )
+        audit(db, actor.user_id, "month_close.reopened", "month_close", close_id,
+              f"period={row['period']}; snapshot_version={row['snapshot_version']}")
+        create_notification(
+            db, row["reopen_requested_by"], "MONTHLY_CLOSE", "月次締めを再オープンしました",
+            f"{row['period']} の再オープンが承認されました。変更履歴は監査ログに記録されます。",
+            "month_close", close_id, title_zh="月度结账已重新开放",
+            message_zh=f"{row['period']} 的重新开放已批准，修改将记录在审计日志中。",
+        )
+    return {"ok": True, "status": "REOPENED", "version": payload.version + 1}
+
+
+@app.post("/api/imports/kintone")
+async def import_kintone_csv(file: UploadFile = File(...),
+                             actor: CurrentActor = Depends(require_actor)):
+    if getattr(actor, "account_role", "") not in ("administrator", "hq_staff"):
+        raise HTTPException(403, "kintoneデータを取り込む権限がありません")
+    filename = Path(file.filename or "").name
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(422, "CSVファイルを指定してください")
+    with connect() as db:
+        max_bytes = config_value(db, "import.max_csv_mb") * 1024 * 1024
+        max_rows = config_value(db, "import.max_csv_rows")
+        if "csv" not in set(config_value(db, "attachment.allowed_extensions")):
+            raise HTTPException(403, "CSV取り込みは設定で無効になっています")
+    content = await file.read(max_bytes + 1)
+    if len(content) > max_bytes:
+        raise HTTPException(413, "CSVファイルが設定サイズ上限を超えています")
+    try:
+        text = content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(text, newline=""))
+        required = {"external_id", "representative_name", "store_id"}
+        if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+            raise HTTPException(422, "CSVには external_id、representative_name、store_id 列が必要です")
+        rows = list(reader)
+    except UnicodeDecodeError as error:
+        raise HTTPException(422, "CSVはUTF-8形式で保存してください") from error
+    except csv.Error as error:
+        raise HTTPException(422, "CSV形式を確認してください") from error
+    if len(rows) > max_rows:
+        raise HTTPException(413, "CSV行数が設定上限を超えています")
+
+    now = now_jst()
+    job_id = str(uuid.uuid4())
+    imported = skipped = errors = 0
+    with connect() as db:
+        db.execute(
+            """INSERT INTO import_jobs(id,source_system,requested_by,filename,total_rows,
+               success_rows,skipped_rows,error_rows,status,created_at)
+               VALUES(?,'kintone',?,?,?,0,0,0,'PROCESSING',?)""",
+            (job_id, actor.user_id, filename[:255], len(rows), now),
+        )
+        for row_number, row in enumerate(rows, start=2):
+            external_id = (row.get("external_id") or "").strip()
+            name = (row.get("representative_name") or "").strip()
+            reason = None
+            store_id = None
+            advisor_id = None
+            try:
+                if not external_id or len(external_id) > 160:
+                    reason = "external_id は1〜160文字で指定してください"
+                elif not name or len(name) > 120:
+                    reason = "代表者名は1〜120文字で指定してください"
+                else:
+                    store_id = int((row.get("store_id") or "").strip())
+                    if not db.execute("SELECT id FROM stores WHERE id=?", (store_id,)).fetchone():
+                        reason = "店舗が見つかりません"
+                    advisor_code = (row.get("advisor_employee_code") or "").strip()
+                    if not reason and advisor_code:
+                        advisor = db.execute(
+                            """SELECT id FROM users WHERE employee_code=? AND role='advisor'
+                               AND store_id=? AND account_status='ACTIVE'""",
+                            (advisor_code, store_id),
+                        ).fetchone()
+                        if not advisor:
+                            reason = "担当顧問が店舗と一致しないか、有効なアカウントではありません"
+                        else:
+                            advisor_id = advisor["id"]
+            except (TypeError, ValueError):
+                reason = "store_id は数値で指定してください"
+            mapped = db.execute(
+                "SELECT local_id FROM external_record_mappings WHERE source_system='kintone' AND external_id=?",
+                (external_id,),
+            ).fetchone() if external_id else None
+            if not reason and mapped:
+                db.execute(
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,local_id,created_at)
+                       VALUES(?,?,?,'SKIPPED','既に取り込み済みです',?,?)""",
+                    (job_id, row_number, external_id, mapped["local_id"], now),
+                )
+                skipped += 1
+                continue
+            if reason:
+                db.execute(
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,created_at)
+                       VALUES(?,?,?,'ERROR',?,?)""",
+                    (job_id, row_number, external_id or None, reason, now),
+                )
+                errors += 1
+                continue
+
+            db.execute("SAVEPOINT kintone_import_row")
+            try:
+                household_code = "HH-KT-" + hashlib.sha256(external_id.encode("utf-8")).hexdigest()[:12].upper()
+                household_id = db.execute(
+                    """INSERT INTO households(representative_name,store_id,advisor_id,budget_band,
+                       area_pref,land_status,status,created_at,household_code)
+                       VALUES(?,?,?,?,?,'検討中','active',?,?)""",
+                    (name, store_id, advisor_id, (row.get("budget_band") or "").strip() or None,
+                     (row.get("area_pref") or "").strip() or None, now, household_code),
+                ).lastrowid
+                db.execute(
+                    """INSERT INTO external_record_mappings(source_system,external_id,object_type,
+                       local_id,created_at,updated_at) VALUES('kintone',?,'household',?,?,?)""",
+                    (external_id, str(household_id), now, now),
+                )
+                db.execute(
+                    """INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at)
+                       VALUES(?,NULL,'新規予約',?,?)""",
+                    (household_id, actor.user_id, now),
+                )
+                db.execute("RELEASE SAVEPOINT kintone_import_row")
+                db.execute(
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,local_id,created_at)
+                       VALUES(?,?,?,'IMPORTED',?,?)""",
+                    (job_id, row_number, external_id, str(household_id), now),
+                )
+                imported += 1
+            except pymysql.MySQLError as error:
+                db.execute("ROLLBACK TO SAVEPOINT kintone_import_row")
+                db.execute("RELEASE SAVEPOINT kintone_import_row")
+                db.execute(
+                    """INSERT INTO import_row_results(job_id,source_row_number,external_id,status,reason,created_at)
+                       VALUES(?,?,?,'ERROR',?,?)""",
+                    (job_id, row_number, external_id or None, f"データベース登録エラー: {error.args[0]}", now),
+                )
+                errors += 1
+        status = "COMPLETED" if not errors else "COMPLETED_WITH_ERRORS"
+        db.execute(
+            """UPDATE import_jobs SET success_rows=?,skipped_rows=?,error_rows=?,status=?,finished_at=?
+               WHERE id=?""",
+            (imported, skipped, errors, status, now_jst(), job_id),
+        )
+        audit(db, actor.user_id, "kintone.import_completed", "import_job", job_id,
+              f"imported={imported}; skipped={skipped}; errors={errors}")
+        create_notification(
+            db, actor.user_id, "IMPORT", "kintone CSV取込が完了しました",
+            f"{filename}: 取込 {imported} 件、スキップ {skipped} 件、エラー {errors} 件。",
+            "import_job", job_id, title_zh="kintone CSV 导入完成",
+            message_zh=f"{filename}：导入 {imported} 条，跳过 {skipped} 条，错误 {errors} 条。",
+        )
+    return {"id": job_id, "status": status, "total_rows": len(rows),
+            "success_rows": imported, "skipped_rows": skipped, "error_rows": errors}
+
+
+@app.get("/api/import-jobs/{job_id}")
+def import_job_detail(job_id: str, limit: int = 100, offset: int = 0,
+                      actor: CurrentActor = Depends(require_actor)):
+    if not 1 <= limit <= 500 or offset < 0:
+        raise HTTPException(422, "取得範囲が正しくありません")
+    with connect() as db:
+        job = db.execute(
+            "SELECT * FROM import_jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        if not job or (job["requested_by"] != actor.user_id and
+                       getattr(actor, "account_role", "") not in ("administrator", "hq_staff")):
+            raise HTTPException(404, "取り込み結果が見つかりません")
+        results = db.execute(
+            """SELECT source_row_number,external_id,status,reason,local_id,created_at
+               FROM import_row_results WHERE job_id=? ORDER BY source_row_number LIMIT ? OFFSET ?""",
+            (job_id, limit, offset),
+        ).fetchall()
+    result = dict(job)
+    result["rows"] = [dict(row) for row in results]
+    return result
+
+
+@app.get("/api/operations/status")
+def operations_status(actor: CurrentActor = Depends(require_actor)):
+    if getattr(actor, "account_role", "") not in ("administrator", "executive", "finance", "hq_staff"):
+        raise HTTPException(403, "運用状態を確認する権限がありません")
+    now = now_jst()
+    with connect() as db:
+        audit_chain_status = "OK"
+        try:
+            verify_audit_chain(db)
+        except RuntimeError:
+            audit_chain_status = "DEGRADED"
+            LOGGER.exception("Audit chain integrity check failed during operations status request.")
+        outbox = db.execute(
+            """SELECT COUNT(*) AS pending FROM audit_outbox WHERE status IN ('PENDING','PROCESSING')"""
+        ).fetchone()
+        dead_letters = db.execute(
+            "SELECT COUNT(*) AS count FROM audit_outbox WHERE status='DEAD_LETTER'"
+        ).fetchone()
+        expired_exports = db.execute(
+            "SELECT COUNT(*) AS count FROM export_jobs WHERE status='READY' AND expires_at<=?",
+            (now,),
+        ).fetchone()
+        active_sessions = db.execute(
+            "SELECT COUNT(*) AS count FROM auth_sessions WHERE revoked_at IS NULL AND expires_at>?",
+            (now,),
+        ).fetchone()
+        fallback_tasks = db.execute(
+            "SELECT COUNT(*) AS count FROM tasks WHERE source='notification_fallback' AND done=0 AND cancelled=0"
+        ).fetchone()
+        seed = db.execute("SELECT batch_key,seeded_at FROM seed_metadata WHERE id=1").fetchone()
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "database": "OK",
+        "audit_chain": audit_chain_status,
+        "outbox_pending": outbox["pending"],
+        "outbox_dead_letters": dead_letters["count"],
+        "expired_exports_ready_for_cleanup": expired_exports["count"],
+        "active_sessions": active_sessions["count"],
+        "notification_fallback_tasks": fallback_tasks["count"],
+        "email_integration": "NOT_CONFIGURED",
+        "seed_batch": seed["batch_key"] if seed else None,
+        "seeded_at": seed["seeded_at"] if seed else None,
+    }
 
 
 @app.get("/api/health")

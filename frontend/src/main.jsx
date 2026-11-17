@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, ArrowDownRight, ArrowUpRight, BadgeJapaneseYen, Bell, Building2, CalendarDays,
@@ -109,6 +109,65 @@ const COPY = {
     resetDescription: "世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。",
     financeRoleOnly: "本社・経理ロールで実行できます。",
     workspace: "ワークスペース", demoEnvironment: "デモ環境",
+    loginTitle: "MallBoard にログイン", loginSubtitle: "登録済みアカウントでサインインしてください。",
+    demoLogin: "デモアカウントでワンクリックログイン", employeeCode: "社員番号", password: "パスワード",
+    signIn: "ログイン", signOut: "ログアウト", account: "アカウント",
+    accounts: "アカウント管理", accountStatus: "アカウント状態", lastLogin: "最終ログイン",
+    requestReset: "再設定リンクを発行", resetLink: "一回限りの再設定トークン",
+    activeAccount: "有効", cannotLoadAccounts: "アカウント一覧を読み込めません。",
+    resetRequest: "本人確認後、再設定用リンクを発行します。", verificationMethod: "本人確認方法",
+    inPerson: "対面", verifiedCall: "確認済み通話", identityChecked: "本人確認済み",
+    passwordRequired: "パスワードを入力してください。",
+    changePasswordTitle: "初回パスワードを変更してください", currentPassword: "現在のパスワード",
+    newPassword: "新しいパスワード", confirmPassword: "新しいパスワード（確認）",
+    passwordMismatch: "新しいパスワードが一致しません。", changePassword: "パスワードを変更",
+    notifications: "通知", markRead: "既読にする", archiveNotification: "アーカイブ",
+    noNotifications: "通知はありません。", unreadNotifications: "未読",
+    notificationTASK: "タスク", notificationAPPROVAL: "承認", notificationEXPENSE: "経費",
+    notificationDAILY_REPORT: "日報", notificationIMPORT: "取込", notificationMONTHLY_CLOSE: "月次締め",
+    notificationDOCUMENT: "文書", notificationEXPORT: "出力", notificationDATA_CORRECTION: "データ修正",
+    notificationSECURITY: "セキュリティ", notificationSYSTEM: "システム",
+    emailFallbackNote: "メール送信は未連携です。有効にすると未配信分を対応タスクに登録します。",
+    dataCorrection: "顧客データ修正", requestCorrection: "修正を申請",
+    correctionField: "修正項目", correctionValue: "修正後の値", correctionReason: "修正理由",
+    correctionPending: "修正承認待ち", correctionApprove: "修正を承認", correctionReject: "差し戻す",
+    disclosure: "第三者提供記録", discloseTo: "提供先の住宅会社", disclosureScope: "提供範囲",
+    recordDisclosure: "提供記録を登録", shareConsent: "有効な同意", noActiveConsent: "選択範囲の有効な同意がありません。",
+    disclosureRecordOnly: "この操作は同意と提供の記録のみを作成します。データ送信は行いません。",
+    correctionRepresentative: "代表者名", correctionArea: "希望エリア",
+    correctionBudget: "予算帯", correctionLand: "土地状況",
+    landYes: "有", landNo: "無", landConsidering: "検討中",
+    dataOps: "運用・ガバナンス", opsRefresh: "状態を更新", opsDatabase: "データベース",
+    opsOutbox: "監査 Outbox", opsDeadLetters: "デッドレター", opsExpiredExports: "期限切れ出力",
+    opsSessionCount: "有効セッション", opsEmail: "メール連携", opsConfigured: "未設定・タスクへフォールバック",
+    opsAuditChain: "監査チェーン", opsFallbackTasks: "通知フォールバックタスク",
+    opsSeedBatch: "デモデータバッチ", opsOk: "正常", opsDegraded: "要確認",
+    opsNotConfigured: "未設定", opsRefreshTime: "最終確認",
+    expenses: "経費申請", expenseCategory: "経費区分", expenseAmount: "金額（円）",
+    expenseDescription: "内容", expenseDate: "利用日", attachReceipt: "証憑（PDF・画像）",
+    createDraft: "下書きを作成", submitExpense: "承認申請", approveExpense: "承認",
+    rejectExpense: "差し戻す", recordExpense: "経理記録", receipt: "証憑を開く",
+    expenseStatusDRAFT: "下書き", expenseStatusSUBMITTED: "承認待ち",
+    expenseStatusAPPROVED: "承認済み", expenseStatusREJECTED: "差し戻し",
+    expenseStatusRECORDED: "経理記録済み", expenseReason: "差し戻し理由",
+    dataExchange: "CSV / PDF 入出力", exportResource: "出力データ", exportFile: "ファイルを作成",
+    exportFormat: "出力形式", formatCsv: "CSV", formatPdf: "PDFレポート",
+    importKintone: "kintone CSVを取り込む", includePersonalData: "個人情報を含める（管理者のみ）",
+    exportHouseholds: "顧客一覧", exportIntroductions: "紹介一覧", exportExpenses: "経費一覧",
+    exportFees: "報酬一覧", exportInvoices: "会計連携データ一覧", importResults: "取り込み結果",
+    importedRows: "取り込み済み", skippedRows: "スキップ", errorRows: "エラー",
+    downloadCsv: "ダウンロード", kintoneCsv: "kintone CSVファイル",
+    importStatusIMPORTED: "取り込み済み", importStatusSKIPPED: "スキップ", importStatusERROR: "エラー",
+    invoiceCsvNote: "CSV / PDF は会計連携データの一覧です。請求書の発行や入金消込は行いません。",
+    monthClose: "月次締め", monthCloseDescription: "月次スナップショットはバージョン管理され、締め後の対象レコードはロックされます。",
+    closePeriod: "対象月", prepareClose: "スナップショットを準備", closePeriodAction: "月次締めを確定",
+    requestReopen: "再オープンを申請", approveReopen: "再オープンを承認",
+    reopenReason: "再オープン理由（10〜1000文字）", snapshotHash: "スナップショット SHA-256",
+    lockedRecords: "締めロック", monthCloseError: "月次締めの操作に失敗しました。再読み込みして確認してください。",
+    monthCloseEmpty: "月次締め履歴がありません。", separateApproval: "準備者とは別の承認者が必要です。",
+    accountingNotDeveloped: "本機能は月次集計・ロック管理です。請求書発行や入金消込は行いません。",
+    snapshotDetails: "集計スナップショット", closePrepared: "準備済み", closeClosed: "締め済み",
+    reopenRequested: "再オープン承認待ち", reopened: "再オープン済み", locked: "ロック中", unlocked: "ロックなし",
   },
   zh: {
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
@@ -207,6 +266,65 @@ const COPY = {
     resetDescription: "将家庭、介绍、开工和报酬等演示数据恢复到初始状态。",
     financeRoleOnly: "请切换到总部·财务角色执行。",
     workspace: "工作区", demoEnvironment: "演示环境",
+    loginTitle: "登录 MallBoard", loginSubtitle: "请使用已配置的账号登录。",
+    demoLogin: "演示账号一键登录", employeeCode: "员工编号", password: "密码",
+    signIn: "登录", signOut: "退出登录", account: "账号",
+    accounts: "账号管理", accountStatus: "账号状态", lastLogin: "最近登录",
+    requestReset: "生成重置链接", resetLink: "一次性重置令牌",
+    activeAccount: "启用", cannotLoadAccounts: "无法加载账号列表。",
+    resetRequest: "完成本人核验后生成密码重置链接。", verificationMethod: "身份核验方式",
+    inPerson: "当面", verifiedCall: "已核验的视频通话", identityChecked: "已完成身份核验",
+    passwordRequired: "请输入密码。",
+    changePasswordTitle: "请修改初始密码", currentPassword: "当前密码",
+    newPassword: "新密码", confirmPassword: "确认新密码",
+    passwordMismatch: "两次输入的新密码不一致。", changePassword: "修改密码",
+    notifications: "通知", markRead: "标记为已读", archiveNotification: "归档",
+    noNotifications: "暂无通知。", unreadNotifications: "未读",
+    notificationTASK: "任务", notificationAPPROVAL: "审批", notificationEXPENSE: "费用",
+    notificationDAILY_REPORT: "日报", notificationIMPORT: "导入", notificationMONTHLY_CLOSE: "月度结账",
+    notificationDOCUMENT: "文档", notificationEXPORT: "导出", notificationDATA_CORRECTION: "数据修正",
+    notificationSECURITY: "安全", notificationSYSTEM: "系统",
+    emailFallbackNote: "尚未接入邮件发送。启用后未发送的通知会转为待办任务。",
+    dataCorrection: "客户数据修正", requestCorrection: "申请修正",
+    correctionField: "修正字段", correctionValue: "修正后的值", correctionReason: "修正原因",
+    correctionPending: "待审批修正", correctionApprove: "批准修正", correctionReject: "退回",
+    disclosure: "第三方提供记录", discloseTo: "接收住宅公司", disclosureScope: "提供范围",
+    recordDisclosure: "记录提供", shareConsent: "有效同意", noActiveConsent: "该范围没有有效同意。",
+    disclosureRecordOnly: "此操作仅记录同意和提供事项，不会实际传输数据。",
+    correctionRepresentative: "代表人姓名", correctionArea: "期望地区",
+    correctionBudget: "预算范围", correctionLand: "土地情况",
+    landYes: "有", landNo: "无", landConsidering: "考虑中",
+    dataOps: "运维与治理", opsRefresh: "刷新状态", opsDatabase: "数据库",
+    opsOutbox: "审计 Outbox", opsDeadLetters: "死信", opsExpiredExports: "过期导出",
+    opsSessionCount: "有效会话", opsEmail: "邮件集成", opsConfigured: "未配置，改为待办任务",
+    opsAuditChain: "审计链", opsFallbackTasks: "通知兜底任务",
+    opsSeedBatch: "演示数据批次", opsOk: "正常", opsDegraded: "需检查",
+    opsNotConfigured: "未配置", opsRefreshTime: "最近检查",
+    expenses: "费用申请", expenseCategory: "费用类别", expenseAmount: "金额（日元）",
+    expenseDescription: "内容", expenseDate: "发生日期", attachReceipt: "凭证（PDF/图片）",
+    createDraft: "创建草稿", submitExpense: "提交审批", approveExpense: "批准",
+    rejectExpense: "退回", recordExpense: "财务记账", receipt: "查看凭证",
+    expenseStatusDRAFT: "草稿", expenseStatusSUBMITTED: "待审批",
+    expenseStatusAPPROVED: "已批准", expenseStatusREJECTED: "已退回",
+    expenseStatusRECORDED: "已记账", expenseReason: "退回原因",
+    dataExchange: "CSV / PDF 导入导出", exportResource: "导出数据", exportFile: "生成文件",
+    exportFormat: "导出格式", formatCsv: "CSV", formatPdf: "PDF 报表",
+    importKintone: "导入 kintone CSV", includePersonalData: "包含个人信息（仅管理员）",
+    exportHouseholds: "客户列表", exportIntroductions: "介绍列表", exportExpenses: "费用列表",
+    exportFees: "报酬列表", exportInvoices: "会计对接数据列表", importResults: "导入结果",
+    importedRows: "已导入", skippedRows: "跳过", errorRows: "错误",
+    downloadCsv: "下载", kintoneCsv: "kintone CSV 文件",
+    importStatusIMPORTED: "已导入", importStatusSKIPPED: "跳过", importStatusERROR: "错误",
+    invoiceCsvNote: "CSV / PDF 仅为会计对接数据列表，不会开具发票或进行收款核销。",
+    monthClose: "月度结账", monthCloseDescription: "月度快照按版本保存，结账后锁定指定业务记录。",
+    closePeriod: "目标月份", prepareClose: "准备快照", closePeriodAction: "确认月度结账",
+    requestReopen: "申请重新开放", approveReopen: "批准重新开放",
+    reopenReason: "重新开放原因（10–1000 字）", snapshotHash: "快照 SHA-256",
+    lockedRecords: "结账锁定", monthCloseError: "月度结账操作失败，请刷新后重试。",
+    monthCloseEmpty: "暂无月度结账记录。", separateApproval: "需要由准备人以外的人员审批。",
+    accountingNotDeveloped: "本功能仅做月度汇总和锁定管理，不开具发票或核销收款。",
+    snapshotDetails: "汇总快照", closePrepared: "已准备", closeClosed: "已结账",
+    reopenRequested: "等待重新开放审批", reopened: "已重新开放", locked: "已锁定", unlocked: "未锁定",
   },
 };
 
@@ -218,6 +336,7 @@ const CONFIG_LABELS = {
     "retention.interview_archive_years": "面談データのアーカイブ年数",
     "retention.daily_report_years": "日報保存年数", "retention.monthly_report_years": "月報保存年数",
     "retention.month_close_snapshot_years": "月次締めスナップショット保存年数",
+    "month_close.locked_resources": "月次締め後にロックする対象",
     "retention.audit_years": "監査記録保存年数", "attachment.allowed_extensions": "添付可能な拡張子",
     "attachment.max_file_mb": "添付ファイル上限（MB）", "import.max_csv_rows": "CSV取込上限行数",
     "construction.expected_start_months": "着工予定の標準月数",
@@ -237,6 +356,8 @@ const CONFIG_LABELS = {
     "sla.fee_rule_validity_days": "FeeRule適用期限（仮設定・日）",
     "month_close.lock_working_day": "月次締めロック営業日",
     "expense.max_receipt_mb": "領収書ファイル上限（MB）",
+    "export.max_csv_mb": "CSV出力サイズ上限（MB）", "export.max_pdf_mb": "PDF出力サイズ上限（MB）",
+    "export.max_rows": "一覧出力の最大行数", "export.expiry_hours": "出力ファイル有効期間（時間）",
   },
   zh: {
     "fee_rule.applicability_basis": "报酬规则适用依据", "fee.bank_fee_tolerance_yen": "转账手续费容差",
@@ -245,6 +366,7 @@ const CONFIG_LABELS = {
     "retention.interview_archive_years": "面谈数据归档年限",
     "retention.daily_report_years": "日报保存年限", "retention.monthly_report_years": "月报保存年限",
     "retention.month_close_snapshot_years": "月结快照保存年限", "retention.audit_years": "审计记录保存年限",
+    "month_close.locked_resources": "月度结账后锁定的对象",
     "attachment.allowed_extensions": "允许的附件扩展名", "attachment.max_file_mb": "附件大小上限（MB）",
     "import.max_csv_rows": "CSV 导入最大行数", "construction.expected_start_months": "预计开工标准月数",
     "search.alert_queries_per_minute": "搜索告警阈值（次/分）", "notification.email_retry_minutes": "邮件重试间隔（分）",
@@ -259,12 +381,17 @@ const CONFIG_LABELS = {
     "sla.agreement_renewal_days": "合作协议续约期限（暂定·天）",
     "sla.fee_rule_validity_days": "FeeRule 适用期限（暂定·天）",
     "month_close.lock_working_day": "月结锁定工作日", "expense.max_receipt_mb": "收据文件大小上限（MB）",
+    "export.max_csv_mb": "CSV 导出大小上限（MB）", "export.max_pdf_mb": "PDF 导出大小上限（MB）",
+    "export.max_rows": "列表导出最大行数", "export.expiry_hours": "导出文件有效期（小时）",
   },
 };
 
-const ROLE_LABEL = { ja: { advisor: "顧問", manager: "店長", hq_finance: "本社・経理", executive: "社長" },
-  zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务", executive: "社长" } };
-const ROLE_FALLBACK = [{ id: "advisor" }, { id: "manager" }, { id: "hq_finance" }, { id: "executive" }];
+const ROLE_LABEL = {
+  ja: { advisor: "顧問", manager: "店長", hq_finance: "本社・財務", executive: "社長",
+    store_manager: "店長", finance: "財務", administrator: "管理者", hq_staff: "本社担当", hr: "人事" },
+  zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务", executive: "社长",
+    store_manager: "店长", finance: "财务", administrator: "管理员", hq_staff: "总部担当", hr: "人事" },
+};
 const NAV = [
   ["dashboard", LayoutDashboard, "today"], ["households", Users, "households"],
   ["introductions", ArrowDownRight, "introductions"], ["revenue", BadgeJapaneseYen, "revenue"],
@@ -275,9 +402,17 @@ const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function App() {
   const [locale, setLocale] = useState(localStorage.getItem("mallboard-locale") || "ja");
-  const [role, setRole] = useState(localStorage.getItem("mallboard-role") || "advisor");
+  const [role, setRole] = useState("advisor");
   const [page, setPage] = useState("dashboard");
   const [data, setData] = useState(null);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [demoAccounts, setDemoAccounts] = useState([]);
+  const [demoAvailable, setDemoAvailable] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [notifications, setNotifications] = useState([]);
+  const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const notificationRequestId = useRef(0);
   const [summary, setSummary] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [trend, setTrend] = useState(null);
@@ -292,50 +427,100 @@ function App() {
   const t = (key) => COPY[locale][key] || key;
 
   async function load() {
-    const headers = { "X-Demo-Role": role };
-    const [identityResponse, domainResponse, summaryResponse, tasksResponse, preferencesResponse] = await Promise.all([
-      fetch(`${API_BASE}/api/bootstrap`, { headers }),
-      fetch(`${API_BASE}/api/households`, { headers }),
-      fetch(`${API_BASE}/api/dashboard/summary`, { headers }),
-      fetch(`${API_BASE}/api/dashboard/my-tasks`, { headers }),
-      fetch(`${API_BASE}/api/preferences`, { headers }),
-    ]);
-    if ([identityResponse, domainResponse, summaryResponse, tasksResponse, preferencesResponse].some((response) => !response.ok)) {
-      throw new Error("load failed");
+    const identityResponse = await fetch(`${API_BASE}/api/bootstrap`, { credentials: "include" });
+    if (!identityResponse.ok) throw new Error("session expired");
+    const identity = await identityResponse.json();
+    setRole(identity.role);
+    if (identity.user.must_change_password) {
+      notificationRequestId.current += 1;
+      setData(identity);
+      setSummary({ counters: [] });
+      setTasks([]);
+      setNotifications([]);
+      setNotificationUnreadCount(0);
+      setPage("change-password");
+      setAuthenticated(true);
+      return identity;
     }
-    const [identity, domain, nextSummary, nextTasks, nextPreferences] = await Promise.all([
-      identityResponse.json(), domainResponse.json(), summaryResponse.json(), tasksResponse.json(), preferencesResponse.json(),
-    ]);
-    const result = { ...identity, ...domain };
+    async function refreshNotifications() {
+      const requestId = ++notificationRequestId.current;
+      const response = await fetch(`${API_BASE}/api/notifications`, { credentials: "include" });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (requestId !== notificationRequestId.current) return;
+      setNotifications(result.items || []);
+      setNotificationUnreadCount(result.unread_count || 0);
+    }
+    let result;
+    if (identity.account_role === "hr") {
+      const accountsResponse = await fetch(`${API_BASE}/api/accounts`, { credentials: "include" });
+      if (!accountsResponse.ok) throw new Error("account access denied");
+      result = { ...identity, ...(await accountsResponse.json()) };
+      setPage("accounts");
+      setSummary({ counters: [] });
+      setTasks([]);
+    } else {
+      const [domainResponse, summaryResponse, tasksResponse, preferencesResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/households`, { credentials: "include" }),
+        fetch(`${API_BASE}/api/dashboard/summary`, { credentials: "include" }),
+        fetch(`${API_BASE}/api/dashboard/my-tasks`, { credentials: "include" }),
+        fetch(`${API_BASE}/api/preferences`, { credentials: "include" }),
+      ]);
+      if ([domainResponse, summaryResponse, tasksResponse, preferencesResponse].some((response) => !response.ok)) {
+        throw new Error("business data access denied");
+      }
+      const [domain, nextSummary, nextTasks, nextPreferences] = await Promise.all([
+        domainResponse.json(), summaryResponse.json(), tasksResponse.json(), preferencesResponse.json(),
+      ]);
+      result = { ...identity, ...domain };
+      if (identity.account_role === "administrator") {
+        const accountsResponse = await fetch(`${API_BASE}/api/accounts`, { credentials: "include" });
+        if (!accountsResponse.ok) throw new Error("account access denied");
+        Object.assign(result, await accountsResponse.json());
+      }
+      setSummary(nextSummary);
+      setTasks(nextTasks.items);
+      setPreferences(nextPreferences);
+    }
     setData(result);
-    setSummary(nextSummary);
-    setTasks(nextTasks.items);
-    setPreferences(nextPreferences);
-    if (selected) setSelected(result.households.find((h) => h.id === selected.id) || null);
+    setAuthenticated(true);
+    if (selected) setSelected(result.households?.find((h) => h.id === selected.id) || null);
+    await refreshNotifications();
+    return result;
   }
   useEffect(() => {
     localStorage.setItem("mallboard-locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
   useEffect(() => {
-    localStorage.setItem("mallboard-role", role);
-    load().catch(() => setToast("API connection failed"));
-  }, [role]);
+    load().catch(() => {});
+    fetch(`${API_BASE}/api/auth/demo-accounts`, { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const result = await response.json();
+        setDemoAccounts(Array.isArray(result.accounts) ? result.accounts : []);
+        setDemoAvailable(Array.isArray(result.accounts) && result.accounts.length > 0);
+      }).catch(() => {});
+  }, [userId]);
   useEffect(() => {
     if (page !== "management" || !["manager", "hq_finance", "executive"].includes(role)) return;
-    fetch(`${API_BASE}/api/management/overview`, { headers: { "X-Demo-Role": role } })
+    fetch(`${API_BASE}/api/management/overview`, { credentials: "include" })
       .then(async (response) => {
         if (!response.ok) throw new Error("management load failed");
         setManagement(await response.json());
       }).catch(() => setToast("API connection failed"));
   }, [page, role]);
   useEffect(() => {
-    if (page !== "dashboard") return;
-    fetch(`${API_BASE}/api/dashboard/trends?metric=introductions&period=7d`, { headers: { "X-Demo-Role": role } })
+    if (!authenticated || page !== "dashboard") return;
+    fetch(`${API_BASE}/api/dashboard/trends?metric=introductions&period=7d`, { credentials: "include" })
       .then(async (response) => {
         if (response.ok) setTrend(await response.json());
       }).catch(() => {});
-  }, [page, role]);
+  }, [page, role, authenticated]);
+  useEffect(() => {
+    if (!authenticated || page === "change-password") return;
+    refreshNotifications().catch(() => {});
+  }, [authenticated, page]);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(""), 3000);
@@ -346,7 +531,7 @@ function App() {
     setBusy(true);
     try {
       const response = await fetch(`${API_BASE}${path}`, {
-        method, headers: { "Content-Type": "application/json", "X-Demo-Role": role },
+        method, credentials: "include", headers: { "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined,
       });
       if (!response.ok) {
@@ -360,6 +545,63 @@ function App() {
       setToast(error.message || t("error"));
       throw error;
     } finally { setBusy(false); }
+  }
+
+  async function login(path, body) {
+    setBusy(true);
+    setLoginError("");
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.detail || t("error"));
+      const identity = await load();
+      if (!identity.user.must_change_password && identity.account_role !== "hr") setPage("dashboard");
+    } catch (error) {
+      setLoginError(error.message || t("error"));
+    } finally { setBusy(false); }
+  }
+
+  async function logout() {
+    await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
+    setAuthenticated(false);
+    setData(null);
+    setSummary(null);
+    setTasks([]);
+    setNotifications([]);
+    setNotificationUnreadCount(0);
+    notificationRequestId.current += 1;
+    setPage("dashboard");
+  }
+  async function updateNotification(notification, action) {
+    const response = await fetch(`${API_BASE}/api/notifications/${notification.id}/${action}`, {
+      method: "PUT", credentials: "include",
+    });
+    if (!response.ok) throw new Error(t("error"));
+    await refreshNotifications();
+  }
+  function openNotification(notification) {
+    setNotificationCenterOpen(false);
+    if (notification.related_record_type === "household") {
+      const household = data.households?.find((item) => String(item.id) === notification.related_record_id);
+      if (household) openHousehold(household);
+      else setPage("households");
+    } else if (notification.related_record_type === "introduction") {
+      setBusinessFilter("disputed");
+      setPage("introductions");
+    } else if (notification.related_record_type === "construction_project"
+        || notification.related_record_type === "fee_entitlement") {
+      setBusinessFilter(notification.related_record_type === "construction_project"
+        ? "construction:pending" : "state:Pending");
+      setPage("revenue");
+    } else if (notification.related_record_type === "task") {
+      setBusinessFilter("tasks:overdue");
+      setPage("households");
+    } else if (notification.related_record_type === "audit_outbox") {
+      setPage("settings");
+    }
   }
 
   const filtered = useMemo(() => {
@@ -387,19 +629,23 @@ function App() {
     return rows;
   }, [data, query, businessFilter, tasks]);
   const openHousehold = (household) => { setSelected(household); setModal("household"); };
+  if (!authenticated || !data) return <LoginPage locale={locale} setLocale={setLocale} t={t} accounts={demoAccounts}
+    demoAvailable={demoAvailable} error={loginError} busy={busy} onLogin={login}/>;
+  const navItems = data.account_role === "hr" ? [["accounts", Users, "accounts"]]
+    : data.account_role === "administrator" ? [...NAV, ["accounts", Users, "accounts"]] : NAV;
 
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Home size={21}/></div><div><b>MallBoard</b><span>{t("subtitle")}</span></div></div>
       <div className="workspace-label">{t("workspace")}</div>
-      <nav>{NAV.map(([id, Icon, key]) => <button key={id} onClick={() => setPage(id)}
+      <nav>{navItems.map(([id, Icon, key]) => <button key={id} onClick={() => setPage(id)}
         className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
         {id === "households" && summary?.counters.find((item) => item.key === "overdue")?.count > 0 &&
           <em>{summary.counters.find((item) => item.key === "overdue").count}</em>}
       </button>)}</nav>
       <div className="sidebar-spacer"/>
       <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
-        <div className="role-meta"><b>{data?.user?.name || "Loading…"}</b><span>{ROLE_LABEL[locale][role]}</span></div>
+        <div className="role-meta"><b>{data.user?.name || "—"}</b><span>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</span></div>
         <ChevronDown size={16} className="muted"/></div>
       <div className="sidebar-foot">{t("demoEnvironment")} <span>●</span></div>
     </aside>
@@ -407,16 +653,33 @@ function App() {
       <header className="topbar">
         <div className="breadcrumb"><span>{t("product")}</span><ChevronRight size={14}/><b>{t(NAV.find(([id]) => id === page)?.[2] || page)}</b></div>
         <div className="top-actions">
-          <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>
-          <button className="icon-btn" title={t("notificationPrefs")}><Bell size={18}/></button>
-          <div className="select-wrap"><Users size={15}/><select aria-label={t("role")} value={role} onChange={(e) => setRole(e.target.value)}>
-            {(data?.roles || ROLE_FALLBACK).map((option) => <option value={option.id} key={option.id}>{ROLE_LABEL[locale][option.id]}</option>)}
-          </select><ChevronDown size={13}/></div>
+          {data.account_role !== "hr" && <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>}
+          <div className="notification-anchor">
+            <button className="icon-btn" title={t("notifications")} aria-label={t("notifications")}
+              onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}>
+              <Bell size={18}/>{notificationUnreadCount > 0 && <em>{notificationUnreadCount}</em>}
+            </button>
+            {notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount}
+              locale={locale} t={t} onOpen={openNotification}
+              onRead={(item) => updateNotification(item, "read")}
+              onArchive={(item) => updateNotification(item, "archive")}/>}
+          </div>
+          {demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id}
+            onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>
+            {demoAccounts.map((option) => <option value={option.id} key={option.id}>
+              {option.display_name} · {ROLE_LABEL[locale][option.role] || option.role}{option.store_id ? ` · ${option.store_id}` : ""}
+            </option>)}
+          </select><ChevronDown size={13}/></div>}
+          <button className="icon-btn" title={t("signOut")} onClick={logout}><LogOut size={17}/></button>
           <button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "中文" : "日本語"}</button>
         </div>
       </header>
       <div className="page-content">
         {!data ? <div className="loading"><div className="spinner"/>Loading MallBoard…</div> : <>
+          {page === "accounts" && ["hr", "administrator"].includes(data.account_role) &&
+            <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
+          {page === "change-password" && <PasswordChangePage forced api={api} t={t}
+            onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
           {page === "dashboard" && <Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} onHousehold={openHousehold}
             onActivity={() => setModal("activity")} onNavigate={setPage}
             onReport={(body) => api("/api/report", "PUT", { manual_note: body })}
@@ -459,6 +722,148 @@ function Metric({ label, value, delta, icon: Icon, tone = "blue", small }) {
     <div className="metric-info"><span>{label}</span><strong>{value}</strong>{delta && <small>{delta}</small>}</div>
     {delta && <div className="metric-spark"><ArrowUpRight size={16}/></div>}</div>;
 }
+function NotificationCenter({ items, unreadCount, locale, t, onOpen, onRead, onArchive }) {
+  const [error, setError] = useState("");
+  async function act(event, callback, item) {
+    event.stopPropagation();
+    setError("");
+    try { await callback(item); }
+    catch (requestError) { setError(requestError.message || t("error")); }
+  }
+  return <section className="notification-center" role="dialog" aria-label={t("notifications")}>
+    <header><b>{t("notifications")}</b><span>{t("unreadNotifications")}: {unreadCount}</span></header>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    {items.length === 0 ? <p className="notification-empty">{t("noNotifications")}</p> :
+      <div className="notification-list">{items.map((item) => <article className={`notification-item ${item.status.toLowerCase()}`}
+        key={item.id}>
+        <button className="notification-open" onClick={() => onOpen(item)}>
+          <small className="notification-type">{t(`notification${item.notification_type}`) || item.notification_type}</small>
+          <strong>{locale === "zh" && item.title_zh ? item.title_zh : item.title}</strong>
+          <span>{locale === "zh" && item.message_zh ? item.message_zh : item.message}</span>
+          <small>{new Date(item.created_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</small>
+        </button>
+        <div className="notification-actions">
+          {item.status === "UNREAD" && <button onClick={(event) => act(event, onRead, item)}>{t("markRead")}</button>}
+          {item.status === "READ" && <button onClick={(event) => act(event, onArchive, item)}>{t("archiveNotification")}</button>}
+        </div>
+      </article>)}</div>}
+  </section>;
+}
+
+function LoginPage({ locale, setLocale, t, accounts, demoAvailable, error, busy, onLogin }) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id || "");
+  const [employeeCode, setEmployeeCode] = useState("");
+  const [password, setPassword] = useState("");
+  useEffect(() => {
+    if (!accounts.some((account) => String(account.id) === String(accountId))) {
+      setAccountId(accounts[0]?.id || "");
+    }
+  }, [accounts, accountId]);
+  return <main className="login-shell">
+    <section className="login-card">
+      <div className="brand-mark"><Home size={21}/></div>
+      <p className="eyebrow">MallBoard</p><h1>{t("loginTitle")}</h1><p>{t("loginSubtitle")}</p>
+      {demoAvailable && <form onSubmit={(event) => {
+        event.preventDefault();
+        if (accountId) onLogin("/api/auth/demo-login", { account_id: Number(accountId) });
+      }}>
+        <label>{t("account")}<select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
+          {accounts.map((account) => <option key={account.id} value={account.id}>
+            {account.display_name} · {ROLE_LABEL[locale][account.role] || account.role}
+          </option>)}
+        </select></label>
+        <button className="primary-btn login-submit" disabled={busy || !accountId}>{t("demoLogin")}</button>
+      </form>}
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        if (!password) return;
+        onLogin("/api/auth/login", { employee_code: employeeCode, password });
+      }}>
+        <label>{t("employeeCode")}<input autoComplete="username" value={employeeCode}
+          onChange={(event) => setEmployeeCode(event.target.value)} required/></label>
+        <label>{t("password")}<input autoComplete="current-password" type="password" value={password}
+          onChange={(event) => setPassword(event.target.value)} required/></label>
+        <button className="secondary-btn login-submit" disabled={busy || !password}>{t("signIn")}</button>
+      </form>
+      {error && <div className="config-error" role="alert">{error}</div>}
+      <button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")}
+        type="button">{locale === "ja" ? "中文" : "日本語"}</button>
+      <footer>{t("prototype")} · {t("demoWarning")}</footer>
+    </section>
+  </main>;
+}
+
+function AccountsPage({ accounts, t, api }) {
+  const [selectedId, setSelectedId] = useState("");
+  const [method, setMethod] = useState("in_person");
+  const [resetToken, setResetToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function issueReset() {
+    if (!selectedId) return;
+    setBusy(true);
+    try {
+      const result = await api("/api/auth/password-reset-requests", "POST",
+        { user_id: Number(selectedId), verification_method: method });
+      setResetToken(result.reset_token);
+    } finally { setBusy(false); }
+  }
+  return <><PageTitle eyebrow={t("accounts")} title={t("accounts")} sub={t("resetRequest")}/>
+    <section className="panel setting-card"><div className="account-reset-form">
+      <label>{t("account")}<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+        <option value="">—</option>{accounts.map((account) => <option value={account.id} key={account.id}>
+          {account.display_name} · {account.employee_code}</option>)}
+      </select></label>
+      <label>{t("verificationMethod")}<select value={method} onChange={(event) => setMethod(event.target.value)}>
+        <option value="in_person">{t("inPerson")}</option><option value="video_call">{t("verifiedCall")}</option>
+        <option value="identity_checked">{t("identityChecked")}</option>
+      </select></label>
+      <button className="primary-btn" disabled={busy || !selectedId} onClick={issueReset}>{t("requestReset")}</button>
+      {resetToken && <label>{t("resetLink")}<input readOnly value={resetToken}/></label>}
+    </div></section>
+    <section className="panel table-panel"><div className="panel-head"><h2>{t("accounts")} <span className="count-badge">{accounts.length}</span></h2></div>
+      <div className="table-scroll"><table><thead><tr><th>{t("employeeCode")}</th><th>{t("account")}</th>
+        <th>{t("role")}</th><th>{t("accountStatus")}</th><th>{t("lastLogin")}</th></tr></thead>
+        <tbody>{accounts.map((account) => <tr key={account.id}><td>{account.employee_code}</td>
+          <td>{account.display_name}</td><td>{ROLE_LABEL[document.documentElement.lang][account.role] || account.role}</td>
+          <td>{account.account_status}</td><td>{account.last_login_at || "—"}</td></tr>)}</tbody></table>
+      </div>
+    </section>
+  </>;
+}
+
+function PasswordChangePage({ forced = false, api, t, onChanged }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  async function submit(event) {
+    event.preventDefault();
+    if (newPassword !== confirmation) {
+      setError(t("passwordMismatch"));
+      return;
+    }
+    try {
+      await api("/api/auth/change-password", "POST",
+        { current_password: forced ? null : currentPassword, new_password: newPassword });
+      onChanged();
+    } catch (requestError) {
+      setError(requestError.message || t("error"));
+    }
+  }
+  return <section className="panel change-password-panel"><h1>{t("changePasswordTitle")}</h1>
+    <form onSubmit={submit}>
+      {!forced && <label>{t("currentPassword")}<input type="password" autoComplete="current-password"
+        value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required/></label>}
+      <label>{t("newPassword")}<input type="password" autoComplete="new-password" value={newPassword}
+        onChange={(event) => setNewPassword(event.target.value)} minLength={12} required/></label>
+      <label>{t("confirmPassword")}<input type="password" autoComplete="new-password" value={confirmation}
+        onChange={(event) => setConfirmation(event.target.value)} minLength={12} required/></label>
+      {error && <div className="config-error" role="alert">{error}</div>}
+      <button className="primary-btn" type="submit">{t("changePassword")}</button>
+    </form>
+  </section>;
+}
+
 function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHousehold, onActivity, onNavigate, onReport, onCounter, onTask }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
   const [period, setPeriod] = useState("7d");
@@ -468,7 +873,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
   useEffect(() => { setTrendData(trend); }, [trend]);
   useEffect(() => {
     if (!showManagement) return;
-    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { headers: { "X-Demo-Role": role } })
+    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
       .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
   }, [metric, period, role, showManagement]);
   const visibleTasks = tasks.slice(0, 5);
@@ -686,7 +1091,7 @@ function Management({ data, management, t, role, onReminder }) {
   const [trendData, setTrendData] = useState(null);
   const [focusedReminder, setFocusedReminder] = useState(null);
   useEffect(() => {
-    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { headers: { "X-Demo-Role": role } })
+    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
       .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
   }, [metric, period, role]);
   const stores = management?.stores || [];
@@ -751,6 +1156,287 @@ function Management({ data, management, t, role, onReminder }) {
       </tbody></table>{!data.audit_logs.length && <div className="empty-state">{t("noRows")}</div>}</div></section>
   </>;
 }
+function AuditTrailPanel({ t, userId, locale }) {
+  const [items, setItems] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState("");
+  const activeRequest = useRef(0);
+  useEffect(() => {
+    const requestId = ++activeRequest.current;
+    setItems([]);
+    setSelected(null);
+    fetch(`${API_BASE}/api/audit-events?limit=30`, { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(t("configLoadError"));
+        const result = await response.json();
+        if (requestId === activeRequest.current) setItems(result.items || []);
+      }).catch((loadError) => {
+        if (requestId === activeRequest.current) setError(loadError.message || t("configLoadError"));
+      });
+    return () => { if (requestId === activeRequest.current) activeRequest.current += 1; };
+  }, [userId]);
+  async function showDetails(id) {
+    setError("");
+    const requestId = ++activeRequest.current;
+    try {
+      const response = await fetch(`${API_BASE}/api/audit-events/${id}`, { credentials: "include" });
+      if (!response.ok) throw new Error(t("configLoadError"));
+      const result = await response.json();
+      if (requestId === activeRequest.current) setSelected(result);
+    } catch (loadError) {
+      if (requestId === activeRequest.current) setError(loadError.message || t("configLoadError"));
+    }
+  }
+  return <section className="panel governance-panel"><div className="panel-head"><div>
+    <div className="eyebrow">{t("controls")}</div><h2>{t("audit")}</h2></div></div>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th>
+      <th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead>
+      <tbody>{items.map((item) => <tr key={item.id}><td>{item.event_at}</td>
+        <td>{ROLE_LABEL[locale][item.actor_role] || item.actor_role} #{item.actor_id ?? "—"}</td><td>{item.action}</td>
+        <td>{item.object_type} #{item.object_id_text || item.object_id || "—"}</td>
+        <td><button className="text-button" onClick={() => showDetails(item.id)}>{t("detailLabel")}</button></td>
+      </tr>)}</tbody></table>
+      {!items.length && !error && <div className="empty-state">{t("noRows")}</div>}</div>
+    {selected && <details className="audit-detail" open><summary>{t("detailLabel")} #{selected.id}</summary>
+      <p>{selected.reason}</p><small>{selected.previous_hash} → {selected.event_hash}</small></details>}
+  </section>;
+}
+function ExpensePanel({ data, t, role, accountRole, locale }) {
+  const [items, setItems] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receipt, setReceipt] = useState(null);
+  const [receiptInputKey, setReceiptInputKey] = useState(0);
+  const [rowReceipts, setRowReceipts] = useState({});
+  const [rejectReason, setRejectReason] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function load() {
+    const response = await fetch(`${API_BASE}/api/expenses`, { credentials: "include" });
+    if (!response.ok) throw new Error(t("configLoadError"));
+    const result = await response.json();
+    setItems(result.items || []);
+    setCategories(result.allowed_categories || []);
+    setCategory((current) => current || result.allowed_categories?.[0] || "");
+  }
+  useEffect(() => {
+    let active = true;
+    setItems([]);
+    setError("");
+    fetch(`${API_BASE}/api/expenses`, { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(t("configLoadError"));
+        const result = await response.json();
+        if (!active) return;
+        setItems(result.items || []);
+        setCategories(result.allowed_categories || []);
+        setCategory((current) => current || result.allowed_categories?.[0] || "");
+      }).catch((loadError) => { if (active) setError(loadError.message || t("configLoadError")); });
+    return () => { active = false; };
+  }, [role, data.user.id]);
+  function categoryLabel(value) {
+    if (locale !== "zh") return value;
+    return ({ "交通費": "交通费", "消耗品費": "办公耗材", "会議費": "会议费",
+      "通信費": "通信费", "その他": "其他" })[value] || value;
+  }
+  async function request(url, method, body, isForm = false) {
+    const response = await fetch(`${API_BASE}${url}`, {
+      method, credentials: "include",
+      headers: isForm ? undefined : { "Content-Type": "application/json" },
+      body: body ? (isForm ? body : JSON.stringify(body)) : undefined,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || t("error"));
+    return result;
+  }
+  async function upload(expense, file) {
+    const body = new FormData();
+    body.append("version", String(expense.version));
+    body.append("receipt", file);
+    await request(`/api/expenses/${expense.id}/receipt`, "POST", body, true);
+    await load();
+  }
+  async function create(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setBusy(true); setError("");
+    try {
+      const created = await request("/api/expenses", "POST", {
+        category, amount: Number(amount), description, expense_date: expenseDate,
+      });
+      if (receipt) await upload({ id: created.id, version: created.version }, receipt);
+      form.reset();
+      setAmount(""); setDescription(""); setReceipt(null);
+      setReceiptInputKey((key) => key + 1);
+      await load();
+    } catch (requestError) { setError(requestError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  async function action(expense, actionName, body = {}) {
+    setBusy(true); setError("");
+    try {
+      await request(`/api/expenses/${expense.id}/${actionName}`, "POST", { version: expense.version, ...body });
+      await load();
+    } catch (requestError) { setError(requestError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  const maySubmit = ["advisor", "manager", "hq_finance", "executive"].includes(role);
+  const mayApprove = ["store_manager", "finance", "executive", "administrator"].includes(accountRole);
+  const mayRecord = ["finance", "executive", "administrator"].includes(accountRole);
+  return <section className="panel expense-panel"><div className="panel-head"><div>
+    <div className="eyebrow">{t("settings")}</div><h2>{t("expenses")}</h2></div></div>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    {maySubmit && <form className="expense-form" onSubmit={create}>
+      <label>{t("expenseCategory")}<select value={category} onChange={(event) => setCategory(event.target.value)} required>
+        {categories.map((item) => <option value={item} key={item}>{categoryLabel(item)}</option>)}</select></label>
+      <label>{t("expenseAmount")}<input type="number" min="1" max="100000000" value={amount}
+        onChange={(event) => setAmount(event.target.value)} required/></label>
+      <label>{t("expenseDate")}<input type="date" value={expenseDate}
+        onChange={(event) => setExpenseDate(event.target.value)} required/></label>
+      <label>{t("expenseDescription")}<input value={description}
+        onChange={(event) => setDescription(event.target.value)} maxLength={2000} required/></label>
+      <label>{t("attachReceipt")}<input key={receiptInputKey} type="file" accept=".pdf,.jpg,.jpeg,.png" required
+        onChange={(event) => setReceipt(event.target.files?.[0] || null)}/></label>
+      <button className="primary-btn" disabled={busy || !categories.length}>{t("createDraft")}</button>
+    </form>}
+    {mayApprove && <label className="expense-reason">{t("expenseReason")}<input value={rejectReason}
+      onChange={(event) => setRejectReason(event.target.value)}/></label>}
+    <div className="table-scroll"><table><thead><tr><th>{t("userLabel")}</th><th>{t("expenseCategory")}</th>
+      <th>{t("expenseAmount")}</th><th>{t("expenseDate")}</th><th>{t("status")}</th><th>{t("actionLabel")}</th></tr></thead>
+      <tbody>{items.map((item) => <tr key={item.id}><td>{item.applicant_name}</td><td>{categoryLabel(item.category)}</td>
+        <td>¥{Number(item.amount).toLocaleString()}</td><td>{item.expense_date?.toString().slice(0, 10)}</td>
+        <td>{t(`expenseStatus${item.status}`)}</td><td className="expense-actions">
+          {item.receipt_filename && <a href={`${API_BASE}/api/expenses/${item.id}/receipt`} target="_blank" rel="noreferrer">{t("receipt")}</a>}
+          {item.applicant_id === data.user.id && ["DRAFT", "REJECTED"].includes(item.status) && <>
+            <input aria-label={t("attachReceipt")} type="file" accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(event) => setRowReceipts((current) => ({ ...current, [item.id]: event.target.files?.[0] || null }))}/>
+            <button disabled={busy || !rowReceipts[item.id]} onClick={() => upload(item, rowReceipts[item.id]).catch((e) => setError(e.message))}>{t("attachReceipt")}</button>
+            {item.receipt_filename && <button disabled={busy} onClick={() => action(item, "submit")}>{t("submitExpense")}</button>}
+          </>}
+          {item.status === "SUBMITTED" && mayApprove && <>
+            <button disabled={busy} onClick={() => action(item, "approve")}>{t("approveExpense")}</button>
+            <button disabled={busy || !rejectReason.trim()} onClick={() => action(item, "reject", { reason: rejectReason })}>{t("rejectExpense")}</button>
+          </>}
+          {item.status === "APPROVED" && mayRecord &&
+            <button disabled={busy} onClick={() => action(item, "record")}>{t("recordExpense")}</button>}
+        </td></tr>)}</tbody></table>
+      {!items.length && !error && <div className="empty-state">{t("noRows")}</div>}</div>
+  </section>;
+}
+function DataExchangePanel({ data, t, locale }) {
+  const [jobs, setJobs] = useState([]);
+  const [resource, setResource] = useState("households");
+  const [format, setFormat] = useState("csv");
+  const [includePersonalData, setIncludePersonalData] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const accountRole = data.account_role;
+  const canImport = ["administrator", "hq_staff"].includes(accountRole);
+  const canExportFinance = ["administrator", "executive", "finance", "hq_staff"].includes(accountRole);
+  const canIncludePersonal = ["administrator", "executive"].includes(accountRole);
+  const options = [["households", "exportHouseholds"], ["introductions", "exportIntroductions"],
+    ["expenses", "exportExpenses"]];
+  if (canExportFinance) options.push(["fee_entitlements", "exportFees"], ["invoice_data", "exportInvoices"]);
+  const tResource = (key) => t(`export${key[0].toUpperCase()}${key.slice(1)}`);
+  async function loadJobs(active = () => true) {
+    const response = await fetch(`${API_BASE}/api/export-jobs`, { credentials: "include" });
+    if (!response.ok) throw new Error(t("configLoadError"));
+    const result = await response.json();
+    if (active()) setJobs(result.items || []);
+  }
+  useEffect(() => {
+    let active = true;
+    setJobs([]);
+    setImportResult(null);
+    setError("");
+    if (!canIncludePersonal) setIncludePersonalData(false);
+    if (!options.some(([key]) => key === resource)) setResource("households");
+    loadJobs(() => active).catch((loadError) => { if (active) setError(loadError.message); });
+    return () => { active = false; };
+  }, [data.user.id]);
+  const resourceLabels = {
+    households: t("exportHouseholds"), introductions: t("exportIntroductions"),
+    expenses: t("exportExpenses"), fee_entitlements: t("exportFees"), invoice_data: t("exportInvoices"),
+  };
+  async function createExport(event) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/export-jobs`, {
+        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resource, include_personal_data: includePersonalData, format }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || t("error"));
+      await loadJobs();
+    } catch (requestError) { setError(requestError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  async function importCsv(event) {
+    event.preventDefault();
+    if (!importFile) return;
+    const form = event.currentTarget;
+    setBusy(true); setError(""); setImportResult(null);
+    try {
+      const body = new FormData();
+      body.append("file", importFile);
+      const response = await fetch(`${API_BASE}/api/imports/kintone`, {
+        method: "POST", credentials: "include", body,
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.detail || t("error"));
+      const detailResponse = await fetch(`${API_BASE}/api/import-jobs/${result.id}`, { credentials: "include" });
+      if (!detailResponse.ok) throw new Error(t("configLoadError"));
+      setImportResult(await detailResponse.json());
+      setImportFile(null);
+      form.reset();
+    } catch (requestError) { setError(requestError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  const reasonZh = {
+    "既に取り込み済みです": "已导入，跳过。",
+    "店舗が見つかりません": "找不到门店。",
+    "store_id は数値で指定してください": "store_id 必须为数字。",
+    "external_id は1〜160文字で指定してください": "external_id 长度须为 1–160 个字符。",
+    "代表者名は1〜120文字で指定してください": "代表者姓名长度须为 1–120 个字符。",
+  };
+  return <section className="panel data-exchange-panel"><div className="panel-head"><div>
+    <div className="eyebrow">{t("settings")}</div><h2>{t("dataExchange")}</h2></div></div>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    <form className="export-form" onSubmit={createExport}>
+      <label>{t("exportResource")}<select value={resource} onChange={(event) => setResource(event.target.value)}>
+        {options.map(([key, label]) => <option value={key} key={key}>{t(label)}</option>)}</select></label>
+      <label>{t("exportFormat")}<select value={format} onChange={(event) => setFormat(event.target.value)}>
+        <option value="csv">{t("formatCsv")}</option><option value="pdf">{t("formatPdf")}</option></select></label>
+      {canIncludePersonal && <label className="inline-check"><input type="checkbox" checked={includePersonalData}
+        onChange={(event) => setIncludePersonalData(event.target.checked)}/>{t("includePersonalData")}</label>}
+      <button className="primary-btn" disabled={busy}>{t("exportFile")}</button>
+    </form>
+    <div className="export-job-list">{jobs.map((job) => <div key={job.id}>
+      <span>{resourceLabels[job.resource] || job.resource} · {String(job.format || "csv").toUpperCase()} · {job.row_count} · {job.status}</span>
+      {job.status === "READY" && <a href={`${API_BASE}/api/export-jobs/${job.id}/download`}>{t("downloadCsv")}</a>}
+    </div>)}</div>
+    {canImport && <form className="import-form" onSubmit={importCsv}>
+      <label>{t("kintoneCsv")}<input type="file" accept=".csv,text/csv" required
+        onChange={(event) => setImportFile(event.target.files?.[0] || null)}/></label>
+      <button className="secondary-btn" disabled={busy || !importFile}>{t("importKintone")}</button>
+    </form>}
+    {resource === "invoice_data" && <p className="config-note">{t("invoiceCsvNote")}</p>}
+    {importResult && <div className="import-result"><h3>{t("importResults")} · {importResult.status}</h3>
+      <p>{t("importedRows")}: {importResult.success_rows} · {t("skippedRows")}: {importResult.skipped_rows} · {t("errorRows")}: {importResult.error_rows}</p>
+      <div className="table-scroll"><table><thead><tr><th>#</th><th>external_id</th><th>{t("status")}</th><th>{t("detailLabel")}</th></tr></thead>
+        <tbody>{importResult.rows.map((row) => <tr key={row.source_row_number}>
+          <td>{row.source_row_number}</td><td>{row.external_id}</td>
+          <td>{t(`importStatus${row.status}`)}</td><td>{locale === "zh" ? reasonZh[row.reason] || row.reason : row.reason}</td>
+        </tr>)}</tbody></table></div></div>}
+  </section>;
+}
 function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferences, onSavePreferences }) {
   return <><PageTitle eyebrow={t("systemPreferences")} title={t("settings")} sub={t("settingsSub")}/>
     <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{ROLE_LABEL[locale][role]}。{t("roleDescription")}</p>
@@ -760,12 +1446,223 @@ function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferenc
       <section className="panel setting-card danger-setting"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>{t("resetDescription")}</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>{t("financeRoleOnly")}</small>}</div></section>
     </div>
     <PreferencePanel preferences={preferences} t={t} onSave={onSavePreferences}/>
+    <AuditTrailPanel t={t} userId={data.user.id} locale={locale}/>
+    <ExpensePanel data={data} t={t} role={role} accountRole={data.account_role} locale={locale}/>
+    <DataExchangePanel data={data} t={t} locale={locale}/>
+    <MonthClosePanel accountRole={data.account_role} userId={data.user.id} t={t}/>
+    <DataCorrectionPanel accountRole={data.account_role} t={t} locale={locale}/>
+    <OperationsPanel accountRole={data.account_role} locale={locale} t={t}/>
     <section className="panel config-panel"><div className="panel-head"><div><div className="eyebrow">{t("versionedOperations")}</div><h2>{t("systemConfig")}</h2></div><ShieldCheck size={17} className="green-text"/></div>
       {role === "hq_finance" ? <SystemConfigPanel role={role} locale={locale} t={t} onSaved={onConfigSaved}/> :
         <p className="config-permission">{t("configPermission")}</p>}
       <p className="config-note">{t("slaPending")} {t("accountingNote")}</p>
     </section>
   </>;
+}
+
+function MonthClosePanel({ accountRole, userId, t }) {
+  const canAccess = ["finance", "executive", "administrator", "hq_staff"].includes(accountRole);
+  const canPrepare = ["finance", "administrator", "hq_staff"].includes(accountRole);
+  const canApprove = ["executive", "administrator"].includes(accountRole);
+  const [period, setPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [items, setItems] = useState([]);
+  const [locks, setLocks] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const statusLabels = {
+    PREPARED: t("closePrepared"), CLOSED: t("closeClosed"),
+    REOPEN_REQUESTED: t("reopenRequested"), REOPENED: t("reopened"),
+  };
+  async function load() {
+    const [closeResponse, lockResponse] = await Promise.all([
+      fetch(`${API_BASE}/api/month-closes?period=${encodeURIComponent(period)}`, { credentials: "include" }),
+      fetch(`${API_BASE}/api/month-closes/lock-matrix?period=${encodeURIComponent(period)}`, { credentials: "include" }),
+    ]);
+    if (!closeResponse.ok || !lockResponse.ok) throw new Error(t("monthCloseError"));
+    const [closeData, lockData] = await Promise.all([closeResponse.json(), lockResponse.json()]);
+    setItems(closeData.items);
+    setLocks(lockData.items);
+    setSelected((current) => current ? closeData.items.find((item) => item.id === current.id) || null : null);
+  }
+  useEffect(() => {
+    if (!canAccess) return;
+    load().catch((loadError) => setError(loadError.message || t("monthCloseError")));
+  }, [period, canAccess, accountRole]);
+  async function action(path, body) {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(t("monthCloseError"));
+      const result = await response.json();
+      if (result.snapshot) setSelected({ ...result, snapshot: result.snapshot });
+      setReason("");
+      await load();
+    } catch (actionError) { setError(actionError.message || t("monthCloseError")); }
+    finally { setBusy(false); }
+  }
+  async function showSnapshot(item) {
+    try {
+      const response = await fetch(`${API_BASE}/api/month-closes/${item.id}/detail`, { credentials: "include" });
+      if (!response.ok) throw new Error(t("monthCloseError"));
+      setSelected(await response.json());
+      setError("");
+    } catch (loadError) { setError(loadError.message || t("monthCloseError")); }
+  }
+  if (!canAccess) return null;
+  const latest = items[0];
+  const active = selected || latest;
+  const status = active?.status;
+  const version = active?.version;
+  const mayClose = canApprove && status === "PREPARED" && active.prepared_by !== userId;
+  const mayRequestReopen = canPrepare && status === "CLOSED";
+  const mayApproveReopen = canApprove && status === "REOPEN_REQUESTED" && active.reopen_requested_by !== userId;
+  const resourceLabels = {
+    expenses: t("expenses"), fee_entitlements: t("revenueLedger"), contracts: t("contract"),
+    construction_projects: t("constructionConfirmation"), activities: t("activities"),
+    introductions: t("introduction"), stage_events: t("stages"),
+  };
+  return <section className="panel month-close-panel">
+    <div className="panel-head"><div><div className="eyebrow">{t("systemPreferences")}</div><h2>{t("monthClose")}</h2></div></div>
+    <p className="config-note">{t("monthCloseDescription")} {t("accountingNotDeveloped")}</p>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    <div className="month-close-controls">
+      <label>{t("closePeriod")}<input type="month" value={period} onChange={(event) => {
+        setPeriod(event.target.value); setSelected(null); setError("");
+      }}/></label>
+      {canPrepare && (!latest || latest.status === "REOPENED") &&
+        <button className="primary-btn" disabled={busy} onClick={() => action("/api/month-closes/prepare", { period })}>
+          {t("prepareClose")}</button>}
+      {mayClose && <button className="primary-btn" disabled={busy}
+        onClick={() => action(`/api/month-closes/${active.id}/close`, { version })}>{t("closePeriodAction")}</button>}
+      {mayRequestReopen && <div className="month-reopen-action">
+        <input value={reason} onChange={(event) => setReason(event.target.value)} minLength={10} maxLength={1000}
+          placeholder={t("reopenReason")}/>
+        <button className="secondary-btn" disabled={busy || reason.trim().length < 10}
+          onClick={() => action(`/api/month-closes/${active.id}/request-reopen`, { version, reason })}>{t("requestReopen")}</button>
+      </div>}
+      {mayApproveReopen && <button className="primary-btn" disabled={busy}
+        onClick={() => action(`/api/month-closes/${active.id}/approve-reopen`, { version })}>{t("approveReopen")}</button>}
+    </div>
+    <div className="month-close-layout">
+      <div className="month-close-history"><h3>{t("monthClose")}</h3>
+        {items.length ? items.map((item) => <button key={item.id} className={`month-close-item ${active?.id === item.id ? "selected" : ""}`}
+          onClick={() => showSnapshot(item)}><span>{item.period} · v{item.snapshot_version}</span>
+          <b>{statusLabels[item.status] || item.status}</b></button>) :
+          <p className="empty-state">{t("monthCloseEmpty")}</p>}
+      </div>
+      <div className="month-close-detail">
+        {active ? <><div className="month-close-meta"><span>{statusLabels[active.status] || active.status} · v{active.snapshot_version}</span>
+          <small>{t("snapshotHash")}: {active.snapshot_sha256}</small></div>
+          {selected?.snapshot && <details open><summary>{t("snapshotDetails")}</summary>
+            <pre>{JSON.stringify(selected.snapshot, null, 2)}</pre></details>}</> :
+          <p className="empty-state">{t("monthCloseEmpty")}</p>}
+        <h3>{t("lockedRecords")}</h3>
+        <div className="month-lock-list">{locks.map((item) => <span key={item.resource}>
+          {resourceLabels[item.resource] || item.resource} · {item.locked ? t("locked") : t("unlocked")}</span>)}</div>
+      </div>
+    </div>
+    {status === "PREPARED" && active?.prepared_by === userId && <small className="config-note">{t("separateApproval")}</small>}
+  </section>;
+}
+
+function DataCorrectionPanel({ accountRole, t, locale }) {
+  const canReview = ["finance", "executive", "administrator", "hq_staff", "store_manager"].includes(accountRole);
+  const [items, setItems] = useState([]);
+  const [notes, setNotes] = useState({});
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  async function load() {
+    const response = await fetch(`${API_BASE}/api/data-corrections?status=PENDING`, { credentials: "include" });
+    if (!response.ok) throw new Error(t("monthCloseError"));
+    const result = await response.json();
+    setItems(result.items);
+  }
+  useEffect(() => {
+    if (canReview) load().catch((loadError) => setError(loadError.message || t("error")));
+  }, [canReview, accountRole]);
+  async function decide(item, action) {
+    setBusy(item.id);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/data-corrections/${item.id}/decision`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: item.version, action, note: notes[item.id] || "" }),
+      });
+      if (!response.ok) throw new Error(t("monthCloseError"));
+      setNotes((current) => ({ ...current, [item.id]: "" }));
+      await load();
+    } catch (decisionError) { setError(decisionError.message || t("error")); }
+    finally { setBusy(""); }
+  }
+  if (!canReview) return null;
+  const fieldLabels = {
+    representative_name: t("correctionRepresentative"), area_pref: t("correctionArea"),
+    budget_band: t("correctionBudget"), land_status: t("correctionLand"),
+  };
+  return <section className="panel data-correction-panel">
+    <div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("correctionPending")}</h2></div>
+      <button className="mini-action" disabled={busy !== ""} onClick={() => load().catch((loadError) => setError(loadError.message || t("error")))}>{t("opsRefresh")}</button></div>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    {items.length ? items.map((item) => <article className="correction-card" key={item.id}>
+      <div><b>{item.household_code} · {item.representative_name}</b><span>{item.requester_name} · {new Date(item.requested_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</span></div>
+      <div className="correction-values"><strong>{fieldLabels[item.field_name] || item.field_name}</strong>
+        <span>{item.before_value || "—"} → {item.requested_value}</span><small>{item.reason}</small></div>
+      <label>{t("correctionReason")}<input value={notes[item.id] || ""} maxLength={500}
+        onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))}/></label>
+      <div className="form-actions"><button className="danger-btn" disabled={busy !== "" || (notes[item.id] || "").trim().length < 10}
+        onClick={() => decide(item, "reject")}>{t("correctionReject")}</button>
+        <button className="primary-btn" disabled={busy !== ""} onClick={() => decide(item, "approve")}>{t("correctionApprove")}</button></div>
+    </article>) : <p className="empty-state">{t("noRows")}</p>}
+  </section>;
+}
+
+function OperationsPanel({ accountRole, locale, t }) {
+  const canView = ["administrator", "executive", "finance", "hq_staff"].includes(accountRole);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function refresh() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_BASE}/api/operations/status`, { credentials: "include" });
+      if (!response.ok) throw new Error(t("monthCloseError"));
+      setStatus(await response.json());
+    } catch (loadError) { setError(loadError.message || t("error")); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (canView) refresh(); }, [canView, accountRole]);
+  if (!canView) return null;
+  const cards = status ? [
+    [t("opsDatabase"), status.database],
+    [t("opsAuditChain"), status.audit_chain === "OK" ? t("opsOk") : t("opsDegraded")],
+    [t("opsOutbox"), status.outbox_pending],
+    [t("opsDeadLetters"), status.outbox_dead_letters],
+    [t("opsExpiredExports"), status.expired_exports_ready_for_cleanup],
+    [t("opsSessionCount"), status.active_sessions],
+    [t("opsFallbackTasks"), status.notification_fallback_tasks],
+    [t("opsEmail"), t("opsNotConfigured")],
+    [t("opsSeedBatch"), status.seed_batch || "—"],
+  ] : [];
+  return <section className="panel operations-status-panel">
+    <div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("dataOps")}</h2></div>
+      <button className="mini-action" disabled={busy} onClick={refresh}>{busy ? "…" : t("opsRefresh")}</button></div>
+    {error && <p className="config-error" role="alert">{error}</p>}
+    {status && <><p className="config-note">{t("opsRefreshTime")}: {new Date(status.generated_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</p>
+      <div className="ops-status-grid">{cards.map(([label, value]) => <div key={label}>
+        <span>{label}</span><b className={value === t("opsDegraded") || value === "DEGRADED" ? "ops-degraded" : ""}>{value}</b>
+      </div>)}</div></>}
+  </section>;
 }
 
 function PreferencePanel({ preferences, t, onSave }) {
@@ -783,6 +1680,7 @@ function PreferencePanel({ preferences, t, onSave }) {
       {["in_app", "email"].map((key) => <label key={key}><input type="checkbox" checked={Boolean(notifications[key])}
         onChange={(event) => setNotifications((current) => ({ ...current, [key]: event.target.checked }))}/>
         {t(key === "in_app" ? "inApp" : "emailNotice")}</label>)}</div>
+    <p className="config-note">{t("emailFallbackNote")}</p>
     <button className="secondary-btn" onClick={() => onSave({ dashboard_widgets: widgets, notification_preferences: notifications })}>
       <Check size={15}/>{t("savePreferences")}</button>
   </section>;
@@ -795,7 +1693,7 @@ function SystemConfigPanel({ role, locale, t, onSaved }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState("");
   useEffect(() => {
-    fetch(`${API_BASE}/api/system-config`, { headers: { "X-Demo-Role": role } })
+    fetch(`${API_BASE}/api/system-config`, { credentials: "include" })
       .then(async (response) => {
         if (!response.ok) throw new Error(t("configLoadError"));
         return response.json();
@@ -815,7 +1713,7 @@ function SystemConfigPanel({ role, locale, t, onSaved }) {
     try {
       const response = await fetch(`${API_BASE}/api/system-config/${encodeURIComponent(item.key)}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Demo-Role": role },
+        credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value, reason }),
       });
       if (!response.ok) {
@@ -854,7 +1752,12 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
         <div className="timeline">{h.stage_events.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{e.to_stage}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
       <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{c.scope} · {c.purpose}</b><span>同意: {c.granted_at} {c.revoked_at && ` · 取消: ${c.revoked_at}`}</span></div></div>)}
         {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{d.scope} → {d.disclosed_to}</b><span>共有: {d.disclosed_at}</span></div></div>)}
-        <div className="privacy-lock"><ShieldCheck size={15}/>L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。</div></section>
+        <div className="privacy-lock"><ShieldCheck size={15}/>L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。</div>
+        {["advisor", "manager", "hq_finance", "executive"].includes(role) &&
+          <DisclosureForm household={h} t={t} api={api}/>}
+        {["advisor", "manager", "hq_finance", "executive"].includes(role) &&
+          <DataCorrectionForm household={h} t={t} api={api}/>}
+      </section>
     </div><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("negotiations")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("quickActivity")}</button></div>
       {h.introductions.map((intro) => <div className="negotiation-mini" key={intro.id}><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{intro.status} / {intro.negotiation_status || "—"}</div>
         {intro.contract_id && <small>契約 ¥{Number(intro.contract_amount).toLocaleString()} · 着工 {intro.actual_start_date || "未定"} · 確認 {intro.confirmed_start_date || "未確認"}</small>}</div>
@@ -867,6 +1770,76 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
       <section className="modal-section touch-list"><div className="section-title"><h3>Touch history</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{touch.touch_at}</span><b>{touch.channel}</b><small>{touch.campaign_id || "—"} · {touch.capture_method}</small></div>)}</section>
     </div></div>
   </Modal>;
+}
+function DisclosureForm({ household, t, api }) {
+  const partners = [...new Map(household.introductions.map((item) => [item.partner_id, item])).values()];
+  const consents = household.consents.filter((item) => !item.revoked_at && ["L2", "L3"].includes(item.scope));
+  const [partnerId, setPartnerId] = useState(String(partners[0]?.partner_id || ""));
+  const [scope, setScope] = useState(consents[0]?.scope || "L2");
+  const matchingConsents = consents.filter((item) => item.scope === scope);
+  const [consentId, setConsentId] = useState(String(matchingConsents[0]?.id || ""));
+  useEffect(() => { setConsentId(String(matchingConsents[0]?.id || "")); }, [scope, household.consents]);
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await api(`/api/households/${household.id}/disclosures`, "POST", {
+        partner_id: Number(partnerId), scope, consent_id: Number(consentId),
+      });
+    } catch { return; }
+  }
+  if (!partners.length) return null;
+  return <form className="governance-inline-form" onSubmit={submit}>
+    <h4>{t("disclosure")}</h4>
+    <p>{t("disclosureRecordOnly")}</p>
+    <label>{t("discloseTo")}<select value={partnerId} onChange={(event) => setPartnerId(event.target.value)}>
+      {partners.map((partner) => <option key={partner.partner_id} value={partner.partner_id}>{partner.partner_name}</option>)}
+    </select></label>
+    <div className="disclosure-fields">
+      <label>{t("disclosureScope")}<select value={scope} onChange={(event) => setScope(event.target.value)}>
+        <option value="L2">L2</option><option value="L3">L3</option>
+      </select></label>
+      <label>{t("shareConsent")}<select value={consentId} onChange={(event) => setConsentId(event.target.value)} required>
+        {matchingConsents.map((consent) => <option key={consent.id} value={consent.id}>{consent.scope} · {consent.purpose}</option>)}
+      </select></label>
+    </div>
+    {!matchingConsents.length && <small>{t("noActiveConsent")}</small>}
+    <button className="secondary-btn" disabled={!matchingConsents.length || !partnerId}>{t("recordDisclosure")}</button>
+  </form>;
+}
+function DataCorrectionForm({ household, t, api }) {
+  const [field, setField] = useState("representative_name");
+  const [value, setValue] = useState(household.representative_name || "");
+  const [reason, setReason] = useState("");
+  const fieldLabels = {
+    representative_name: t("correctionRepresentative"), area_pref: t("correctionArea"),
+    budget_band: t("correctionBudget"), land_status: t("correctionLand"),
+  };
+  function changeField(nextField) {
+    setField(nextField);
+    setValue(household[nextField] || "");
+  }
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await api(`/api/households/${household.id}/data-corrections`, "POST", {
+        field_name: field, requested_value: value, reason,
+      });
+      setReason("");
+    } catch { return; }
+  }
+  return <form className="governance-inline-form" onSubmit={submit}>
+    <h4>{t("requestCorrection")}</h4>
+    <div className="disclosure-fields"><label>{t("correctionField")}<select value={field} onChange={(event) => changeField(event.target.value)}>
+      {Object.entries(fieldLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+    </select></label>
+      {field === "land_status" ? <label>{t("correctionValue")}<select value={value} onChange={(event) => setValue(event.target.value)}>
+        {[["有", t("landYes")], ["無", t("landNo")], ["検討中", t("landConsidering")]].map(([item, label]) =>
+          <option key={item} value={item}>{label}</option>)}
+      </select></label> : <label>{t("correctionValue")}<input value={value} onChange={(event) => setValue(event.target.value)}/></label>}
+    </div>
+    <label>{t("correctionReason")}<input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500}/></label>
+    <button className="secondary-btn" disabled={!value.trim() || reason.trim().length < 10}>{t("requestCorrection")}</button>
+  </form>;
 }
 function DisputeForm({ introId, t, api, onCancel }) {
   const [reason, setReason] = useState("");

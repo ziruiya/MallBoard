@@ -40,7 +40,7 @@ cd /opt/mallboard
 ls -la
 ```
 
-**期待結果:** `Dockerfile`、`docker-compose.yml`、`.env.example`、`backend/`、`frontend/`、`DEPLOY.md` が表示されること。サーバーに Node.js をインストールする必要はありません。フロントエンド `dist` は Docker のビルド時にアプリイメージへ含まれます。
+**期待結果:** `Dockerfile`、`docker-compose.yml`、`.env.example`、`backend/`、`frontend/`、`DEPLOY.md` が表示されること。サーバーに Node.js や PDF ソフトをインストールする必要はありません。フロントエンド `dist` と PDF 生成用 WeasyPrint/Pango/HarfBuzz/Noto CJK フォントは Docker のビルド時にアプリイメージへ含まれます。
 
 ## 3. `.env` を設定
 
@@ -49,13 +49,15 @@ cd /opt/mallboard
 cp .env.example .env
 nano .env
 chmod 600 .env
-awk -F= '/^(DB_NAME|DB_USER|DB_PASSWORD|MYSQL_ROOT_PASSWORD)=/ {print $1 " は設定済み"}' .env
+awk -F= '/^(DB_NAME|DB_USER|DB_PASSWORD|MYSQL_ROOT_PASSWORD|DEMO_MODE)=/ {print $1 " は設定済み"}' .env
 stat -c '%a %n' .env
 ```
 
 `DB_NAME` と `DB_USER` は英数字とアンダースコアで指定し、`DB_PASSWORD` と `MYSQL_ROOT_PASSWORD` はそれぞれ別の長いランダム値に置き換えます。例の値のまま運用しないでください。`openssl rand -hex 32` で値を生成できます。`.env` は Git に登録せず、バックアップもアクセス制限してください。
 
-**期待結果:** `.env` の4項目名が表示され、権限表示が `600 .env` になること。パスワード値は以後の画面出力やチャットへ貼り付けないでください。
+`DEMO_MODE=true` は演示アカウント選択と、顧問・店長・本社／経理・社長のロール切替を有効にするパスワード不要の演示専用モードです。一般公開の本番運用では `false` にし、通常の社員番号・パスワード認証を使用してください。`true` のまま公開する場合は、アクセス元を制限した演示環境として扱ってください。
+
+**期待結果:** `.env` の5項目名が表示され、権限表示が `600 .env` になること。パスワード値は以後の画面出力やチャットへ貼り付けないでください。
 
 ## 4. Compose でビルド・起動
 
@@ -67,6 +69,8 @@ curl -fsS http://127.0.0.1:8000/api/health
 ```
 
 初回は React のビルド、MySQL 初期化のため数分かかることがあります。Compose は MySQL の healthcheck が成功してからアプリを起動します。アプリ起動時に空の MySQL データベースへテーブルとデモデータを投入します。
+
+PDF 一覧レポートは Settings のデータ入出力から作成できます。PDF レンダリング依存関係と日本語・中文フォントはアプリイメージにインストールされます。コンテナ再ビルド時の apt/pip 取得にはインターネット接続が必要です。
 
 **期待結果:** `app` と `mysql` の両方が `Up` / `healthy` になり、health API が `{"status":"ok"}` を返すこと。MySQL コンテナに公開ポート設定がなく、ホストの 3306 番ポートでは接続できないこと。初回の状態確認は `sudo docker compose logs --tail=100 app mysql` で行えます。
 
@@ -90,9 +94,9 @@ curl -fsS https://demo.example.com/api/health
 
 `demo.example.com` は設定したドメインに置き換えます。
 
-**期待結果:** HTTPS が成功し、health API が `{"status":"ok"}` を返すこと。ブラウザーで演示ページを開き、右上で「顧問／店長／本社・経理」を切り替えられることを確認します。初期表示言語は日本語で、右上の言語切替で中文表示にもできます。
+**期待結果:** HTTPS が成功し、health API が `{"status":"ok"}` を返すこと。ブラウザーで演示ページを開き、顧問・店長・本社／経理・社長の役割ごとに Dashboard の待ち件数が切り替わることを確認します。初期表示言語は日本語で、右上の言語切替で中文表示にもできます。
 
-演示链は「紹介・商談」→ 佐々木様（青葉ホーム・みらい住建・木の香デザインの並行商談）→「着工・報酬」で店長または本社・経理ロールに切替→実際着工済み案件に確認証跡を入力して着工確認→本社・経理ロールで報酬を請求・入金へ進めます。Settings からデモデータをリセットできます。
+演示链は Households の `HH-D020`（住宅会社 3 社への並行紹介）→ Introductions で各商談を確認→ Revenue で契約・着工情報を確認し、証跡を入力して着工確認→ FeeEntitlement の根拠を確認→本社／経理ロールで承認・請求データ生成・請求・入金へ進めます。店舗名は店舗A〜L、住宅会社名は住宅会社A〜Lで、実在企業名は使いません。Settings からデモデータをリセットすると HH-D001〜HH-D060 など規定の演示データへ戻ります。
 
 ## 7. VPS 再起動・自動復帰・データ永続性の確認
 
