@@ -2529,12 +2529,19 @@ def search_households(q: str, x_demo_role: CurrentActor = Depends(require_actor)
     terms = [term for term in re.split(r"\s+", normalized) if term]
     if not terms or len(normalized) > 128:
         raise HTTPException(422, "検索語は1〜128文字で入力してください")
-    terms = [re.sub(r"[^0-9]", "", term) if re.search(r"\d", term) else term for term in terms]
+    code_terms = {term for term in terms if re.fullmatch(r"[a-z]+(?:-[a-z]+)*-\d+", term)}
+    terms = [term if term in code_terms else
+             (re.sub(r"[^0-9]", "", term) if re.search(r"\d", term) else term)
+             for term in terms]
     searchable_text = """LOWER(CONCAT_WS(' ',h.household_code,h.representative_name,h.kana,
         pe.name,pe.kana,pe.phone))"""
     clauses = []
     args = []
     for term in terms:
+        if term in code_terms:
+            clauses.append("LOWER(h.household_code)=?")
+            args.append(term)
+            continue
         digits = re.sub(r"\D", "", term)
         clause = f"(LOCATE(?,{searchable_text})>0"
         args.append(term)
