@@ -3722,7 +3722,7 @@ def download_export_job(job_id: str, actor: CurrentActor = Depends(require_actor
                     raise HTTPException(403, "現在の権限範囲では出力ファイルをダウンロードできません") from error
                 raise
             current_ids = {str(item) for item in current_record_ids}
-            original_ids = set(json.loads(row["record_ids_json"] or "[]"))
+            original_ids = {str(item) for item in json.loads(row["record_ids_json"] or "[]")}
             if not original_ids.issubset(current_ids):
                 raise HTTPException(403, "出力対象の閲覧権限が変更されたためダウンロードできません")
             filename = row["filename"]
