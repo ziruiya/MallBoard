@@ -2881,22 +2881,22 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
             f"""SELECT DATE_FORMAT(h.created_at,'%%Y-%%m') AS cohort,
                COUNT(DISTINCT h.id) AS households,
                COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
-                 AND e.to_stage='新規予約' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
-                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS reservation_households,
+                 AND e.to_stage='新規予約' AND e.changed_at>=h.created_at
+                 AND e.changed_at<?) THEN h.id END) AS reservation_households,
                COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
-                 AND e.to_stage='紹介済' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
-                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS introduction_households,
+                 AND e.to_stage='紹介済' AND e.changed_at>=h.created_at
+                 AND e.changed_at<?) THEN h.id END) AS introduction_households,
                COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events e WHERE e.household_id=h.id
-                 AND e.to_stage='契約' AND e.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01')
-                 AND e.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS contract_households,
+                 AND e.to_stage='契約' AND e.changed_at>=h.created_at
+                 AND e.changed_at<?) THEN h.id END) AS contract_households,
                COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events a JOIN stage_events b ON b.household_id=a.household_id
                  WHERE a.household_id=h.id AND a.to_stage='新規予約' AND b.to_stage='紹介済'
-                 AND a.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND a.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)
-                 AND b.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND b.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS reservation_introduction_households,
+                 AND a.changed_at>=h.created_at AND a.changed_at<?
+                 AND b.changed_at>=h.created_at AND b.changed_at<?) THEN h.id END) AS reservation_introduction_households,
                COUNT(DISTINCT CASE WHEN EXISTS(SELECT 1 FROM stage_events a JOIN stage_events b ON b.household_id=a.household_id
                  WHERE a.household_id=h.id AND a.to_stage='紹介済' AND b.to_stage='契約'
-                 AND a.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND a.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)
-                 AND b.changed_at>=DATE_FORMAT(h.created_at,'%%Y-%%m-01') AND b.changed_at<LEAST(DATE_ADD(DATE_FORMAT(h.created_at,'%%Y-%%m-01'),INTERVAL 1 MONTH),?)) THEN h.id END) AS introduction_contract_households
+                 AND a.changed_at>=h.created_at AND a.changed_at<?
+                 AND b.changed_at>=h.created_at AND b.changed_at<?) THEN h.id END) AS introduction_contract_households
                FROM households h WHERE 1=1{store_filter}
                GROUP BY cohort ORDER BY cohort""", (now_jst(),) * 7 + store_args,
         ).fetchall()

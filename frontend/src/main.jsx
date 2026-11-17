@@ -1557,7 +1557,7 @@ function ExpensePanel({ data, t, role, accountRole, locale }) {
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseDate, setExpenseDate] = useState(todayJst());
   const [receipt, setReceipt] = useState(null);
   const [receiptInputKey, setReceiptInputKey] = useState(0);
   const [rowReceipts, setRowReceipts] = useState({});
