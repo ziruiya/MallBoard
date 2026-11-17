@@ -518,6 +518,7 @@ const ROLE_LABEL = {
 const NAV = [
   ["dashboard", LayoutDashboard, "today"], ["households", Users, "households"],
   ["introductions", ArrowDownRight, "introductions"], ["revenue", BadgeJapaneseYen, "revenue"],
+  ["team", CalendarDays, "collaboration"],
   ["management", Building2, "management"], ["settings", Settings, "settings"],
 ];
 const STAGES = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"];
@@ -598,7 +599,8 @@ function App() {
       const [domain, nextSummary, nextTasks, nextPreferences] = await Promise.all([
         domainResponse.json(), summaryResponse.json(), tasksResponse.json(), preferencesResponse.json(),
       ]);
-      result = { ...identity, ...domain };
+      result = { ...identity, ...domain,
+        construction_confirmation_backlog: nextSummary.construction_confirmation_backlog };
       if (identity.account_role === "administrator") {
         const accountsResponse = await fetch(`${API_BASE}/api/accounts`, { credentials: "include" });
         if (!accountsResponse.ok) throw new Error("account access denied");
@@ -847,6 +849,12 @@ function App() {
           {page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold}
             onAdd={(household) => { setSelected(household); setModal("introduction"); }}/>}
           {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+          {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/>
+            <div className="trend-controls">{[["calendar", "schedule"], ["bulletin", "bulletin"], ["queue", "negotiationQueue"]].map(([view, label]) =>
+              <button className="secondary-btn" key={view} onClick={() => setWorkspaceView(view)}>{t(label)}</button>)}</div>
+            <CollaborationWorkspace view={workspaceView === "home" ? "calendar" : workspaceView} data={data} locale={locale}
+              role={role} t={t} api={api} onBack={() => setWorkspaceView("home")} onTask={() => {}}
+              onHousehold={openHousehold}/></section>}
           {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role}
             onReminder={(item) => { setBusinessFilter(item.filter); setPage(item.target_page); }}
             onException={(card, record) => {
@@ -1026,8 +1034,13 @@ function PasswordChangePage({ forced = false, api, t, onChanged }) {
 
 function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
   const today = new Date().toLocaleDateString("sv-SE");
-  const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) === today).length;
+  const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) <= today).length;
   const overdue = tasks.filter((task) => task.days_overdue > 0).length;
+  const dueSoon = tasks.filter((task) => {
+    const due = new Date(`${String(task.due_at).slice(0, 10)}T00:00:00`);
+    const days = Math.ceil((due - new Date(`${today}T00:00:00`)) / 86400000);
+    return days >= 0 && days <= 3;
+  }).length;
   return <div className="employee-workstation">
     <PageTitle title={<>{t("workToday")}<span>{data.user.name}さん</span></>}
       sub={t("todaySub")} eyebrow={new Date().toLocaleDateString("ja-JP", {
@@ -1039,7 +1052,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
         <b>{t("openTodayWork")} <ChevronRight size={14}/></b>
       </button>
       <button className="employee-action-card tone-amber" onClick={() => onOpenTasks("tasks:overdue")}>
-        <span>{t("deadlineReminder")}</span><strong>{overdue}</strong><small>{t("overdueCount")}</small>
+        <span>{t("deadlineReminder")}</span><strong>{overdue + dueSoon}</strong><small>{t("overdueCount")}: {overdue} · 3 {t("days")}: {dueSoon} · 不可相加</small>
         <b>{t("openOverdue")} <ChevronRight size={14}/></b>
       </button>
       <section className="employee-action-card tone-green">
@@ -1182,6 +1195,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
     {showManagement && preferences.dashboard_widgets.includes("overview") && <section className="panel household-panel">
       <div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
+      <small className="muted">現在の段階分布</small>
       <div className="pipeline-summary"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div>
         <div className="pipeline-divider"/><div><strong>{data.households.reduce((count, item) => count + item.introductions.length, 0)}</strong><span>{t("introductions")}</span></div>
         <div className="pipeline-divider"/><div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div>
@@ -1273,8 +1287,7 @@ function Revenue({ data, t, role, api, onOpen, filter }) {
   const sumState = (states) => data.entitlements.filter((item) => states.includes(item.state))
     .reduce((sum, item) => sum + Number(item.calculated_amount || 0), 0);
   const plannedAmount = projectItems.reduce((sum, item) => sum + Math.round(Number(item.contract_amount || 0) * 0.02), 0);
-  const overdueProjects = projectItems.filter(({ project }) => project.confirmation_due_date
-    && project.confirmation_due_date.toString().slice(0, 10) < new Date().toISOString().slice(0, 10)).length;
+  const overdueProjects = Number(data.construction_confirmation_backlog || 0);
   const freezeAmount = disputes.reduce((sum, item) => sum + Number(item.calculated_amount || 0), 0);
   const referenceAmount = disputes.reduce((sum, item) => sum + Number(item.reference_amount || 0), 0);
   const feeRuleParams = (value) => typeof value === "string" ? JSON.parse(value) : value;
@@ -1417,7 +1430,7 @@ function Management({ data, management, t, role, onReminder, onException }) {
       </section></div>
     {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
       <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
-      <span className="muted">{t("conversionRate")}</span></div>
+      <span className="muted">参考値 · {t("conversionRate")}</span></div>
       <div className="management-funnel-list">{funnel.map((item, index) => <div className="management-funnel-row" key={item.stage}>
         <span>{String(index + 1).padStart(2, "0")} · {localeLabel(document.documentElement.lang, item.stage)}</span>
         <div className="funnel-track"><i style={{ width: `${Math.min(100, item.count / Math.max(...funnel.map((entry) => entry.count), 1) * 100)}%` }}/></div>

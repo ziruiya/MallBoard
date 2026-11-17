@@ -71,12 +71,12 @@ CREATE TABLE IF NOT EXISTS households (
   id INT AUTO_INCREMENT PRIMARY KEY, representative_name VARCHAR(120) NOT NULL, store_id INT,
   advisor_id INT, budget_band VARCHAR(120), area_pref VARCHAR(255), land_status VARCHAR(40),
   status VARCHAR(40) NOT NULL DEFAULT 'active', lost_reason TEXT, created_at DATETIME NOT NULL,
-  household_code VARCHAR(24) UNIQUE,
+  household_code VARCHAR(24) UNIQUE, kana VARCHAR(120) NULL,
   FOREIGN KEY (store_id) REFERENCES stores(id), FOREIGN KEY (advisor_id) REFERENCES users(id)
 );
 CREATE TABLE IF NOT EXISTS persons (
   id INT AUTO_INCREMENT PRIMARY KEY, household_id INT NOT NULL, name VARCHAR(120) NOT NULL,
-  relation VARCHAR(80), phone VARCHAR(50), email VARCHAR(255),
+  relation VARCHAR(80), phone VARCHAR(50), email VARCHAR(255), kana VARCHAR(120) NULL,
   FOREIGN KEY (household_id) REFERENCES households(id)
 );
 CREATE TABLE IF NOT EXISTS touches (
@@ -412,6 +412,7 @@ STORES = [
 STAGES = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"]
 SEED_BATCH = "mallboard-demo-2026-11-full-v2"
 SAMPLE_SURNAMES = ["佐藤", "田中", "鈴木", "高橋", "伊藤", "渡辺", "山本", "中村", "小林", "加藤", "吉田", "山田"]
+SAMPLE_SURNAMES_KANA = ["サトウ", "タナカ", "スズキ", "タカハシ", "イトウ", "ワタナベ", "ヤマモト", "ナカムラ", "コバヤシ", "カトウ", "ヨシダ", "ヤマダ"]
 JST = ZoneInfo("Asia/Tokyo")
 SESSION_COOKIE = "mallboard_session"
 LEGACY_ROLE_ALIASES = ("advisor", "manager", "hq_finance", "executive", "hr")
@@ -534,6 +535,26 @@ def connect():
 
 def now_jst():
     return datetime.now(JST).replace(tzinfo=None)
+
+
+def normalize_kana(value):
+    normalized = unicodedata.normalize("NFKC", value or "")
+    return "".join(chr(ord(char) + 0x60) if "ぁ" <= char <= "ゖ" else char
+                   for char in normalized)
+
+
+def construction_confirmation_backlog(db, store_id=None):
+    sql = """SELECT COUNT(DISTINCT cp.id) AS count FROM construction_projects cp
+             JOIN contracts c ON c.id=cp.contract_id
+             JOIN negotiations n ON n.id=c.negotiation_id
+             JOIN introductions i ON i.id=n.introduction_id
+             JOIN households h ON h.id=i.household_id
+             WHERE cp.planned_start_date<CURRENT_DATE AND cp.confirmed_start_date IS NULL"""
+    args = ()
+    if store_id is not None:
+        sql += " AND h.store_id=?"
+        args = (store_id,)
+    return int(db.execute(sql, args).fetchone()["count"])
 
 
 def demo_mode_enabled():
@@ -1468,7 +1489,8 @@ def ensure_schema(db):
         },
         "audit_logs": {"target_id_text": "VARCHAR(160) NULL"},
         "migration_mappings": {"old_user_id": "INT NULL"},
-        "households": {"household_code": "VARCHAR(24) NULL"},
+        "households": {"household_code": "VARCHAR(24) NULL", "kana": "VARCHAR(120) NULL"},
+        "persons": {"kana": "VARCHAR(120) NULL"},
         "stores": {"opened_at": "DATE NULL"},
         "partner_staff": {"branch_name": "VARCHAR(120) NULL"},
         "fee_rules": {"effective_to": "DATE NULL"},
@@ -1554,6 +1576,19 @@ def ensure_schema(db):
             ).fetchone()[0]
             if not exists:
                 db.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}")
+    for seed_household in db.execute(
+            "SELECT id,household_code FROM households WHERE household_code LIKE 'HH-D%' AND kana IS NULL"):
+        try:
+            seed_number = int(seed_household["household_code"][-3:])
+        except (TypeError, ValueError):
+            continue
+        seed_kana = f"{SAMPLE_SURNAMES_KANA[(seed_number - 1) % 12]}{chr(65 + (seed_number - 1) // 12)}"
+        db.execute("UPDATE households SET kana=? WHERE id=?", (seed_kana, seed_household["id"]))
+        db.execute("UPDATE persons SET kana=? WHERE household_id=? AND kana IS NULL",
+                   (seed_kana, seed_household["id"]))
+    db.execute("""UPDATE consents SET expires_at='2027-12-31 23:59:59'
+                WHERE consent_method='DEMO_WRITTEN' AND content_version='referral-consent-v1'
+                AND partner_id IS NOT NULL""")
     for index_name, column_name in (("uq_users_employee_code", "employee_code"),
                                     ("uq_users_public_id", "public_id")):
         exists = db.execute(
@@ -1762,7 +1797,7 @@ def seed(db):
     if db.execute("SELECT COUNT(*) FROM stores").fetchone()[0]:
         return
     now = datetime.now().replace(microsecond=0)
-    today = date.today()
+    today = now_jst().date()
     db.executemany(
         "INSERT INTO stores(id,name,area,opened_at) VALUES(?,?,?,?)",
         [(index + 1, name, area, date(2020 + index % 5, index % 12 + 1, 1))
@@ -1855,20 +1890,21 @@ def seed(db):
         status = "lost" if status_name == "解約済" else "completed" if status_name == "入金済" else "active"
         intake_at = datetime.combine(intake_dates[number - 1], datetime.min.time())
         name = f"{SAMPLE_SURNAMES[(number - 1) % 12]}{chr(65 + (number - 1) // 12)}"
+        kana = f"{SAMPLE_SURNAMES_KANA[(number - 1) % 12]}{chr(65 + (number - 1) // 12)}"
         household_id = db.execute(
             """INSERT INTO households(household_code,representative_name,store_id,advisor_id,budget_band,
-               area_pref,land_status,status,created_at,lost_reason)
-               VALUES(?,?,?,?,?,?,?,?,?,?)""",
+               area_pref,land_status,status,created_at,lost_reason,kana)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (code, name, store_id, advisor_id,
              ("4,000〜5,000万円", "5,000〜6,000万円", "6,000〜7,000万円")[number % 3],
              f"{STORES[store_id - 1][1]}エリア", ("有", "無", "検討中")[number % 3],
-             status, intake_at, "デモ見送り" if status == "lost" else None),
+             status, intake_at, "デモ見送り" if status == "lost" else None, kana),
         ).lastrowid
         spread_households[number] = {"id": household_id, "code": code, "store_id": store_id,
                                      "advisor_id": advisor_id, "name": name}
         db.execute(
-            "INSERT INTO persons(household_id,name,relation,phone,email) VALUES(?,?,?,?,?)",
-            (household_id, name, "本人", f"090-0000-{number:04}", f"demo{number:03}@example.test"),
+            "INSERT INTO persons(household_id,name,relation,phone,email,kana) VALUES(?,?,?,?,?,?)",
+            (household_id, name, "本人", f"090-0000-{number:04}", f"demo{number:03}@example.test", kana),
         )
         for touch_index, channel in enumerate(("Web広告", "直接来店")):
             touch_at = intake_at + timedelta(days=touch_index * 3)
@@ -2488,31 +2524,29 @@ def household_index(x_demo_role: CurrentActor = Depends(require_actor)):
 def search_households(q: str, x_demo_role: CurrentActor = Depends(require_actor)):
     if x_demo_role == "hr":
         raise HTTPException(403, "人事アカウントから業務データへアクセスできません")
-    normalized = unicodedata.normalize("NFKC", q).casefold().strip()
+    normalized = normalize_kana(q).casefold().strip()
     terms = [term for term in re.split(r"\s+", normalized) if term]
     if not terms or len(normalized) > 128:
         raise HTTPException(422, "検索語は1〜128文字で入力してください")
-    phone_search = bool(re.fullmatch(r"[+\d()\-\s]+", normalized))
-    phone_digits = re.sub(r"\D", "", normalized) if phone_search else ""
-    searchable_text = """LOWER(CONCAT_WS(' ',h.household_code,h.representative_name,
-        h.area_pref,h.budget_band,pe.name,pe.phone,pe.email,p.name,ps.name,ps.branch_name))"""
-    clauses = [f"LOCATE(?,{searchable_text})>0" for _ in terms]
-    args = list(terms)
-    if len(phone_digits) >= 4:
-        clauses.append(
-            """EXISTS(SELECT 1 FROM persons pp WHERE pp.household_id=h.id AND
-               LOCATE(?,REGEXP_REPLACE(COALESCE(pp.phone,''),'[^0-9]',''))>0)"""
-        )
-        args.append(phone_digits)
+    terms = [re.sub(r"[^0-9]", "", term) if re.search(r"\d", term) else term for term in terms]
+    searchable_text = """LOWER(CONCAT_WS(' ',h.household_code,h.representative_name,h.kana,
+        pe.name,pe.kana,pe.phone))"""
+    clauses = []
+    args = []
+    for term in terms:
+        digits = re.sub(r"\D", "", term)
+        clause = f"(LOCATE(?,{searchable_text})>0"
+        args.append(term)
+        if len(digits) >= 4:
+            clause += " OR EXISTS(SELECT 1 FROM persons pp WHERE pp.household_id=h.id AND LOCATE(?,REGEXP_REPLACE(COALESCE(pp.phone,''),'[^0-9]',''))>0)"
+            args.append(digits)
+        clauses.append(clause + ")")
     with connect() as db:
         user = request_user(db, x_demo_role)
         scope, scope_args = role_scope(x_demo_role, user)
         rows = db.execute(
             f"""SELECT DISTINCT h.id FROM households h
                 LEFT JOIN persons pe ON pe.household_id=h.id
-                LEFT JOIN introductions i ON i.household_id=h.id
-                LEFT JOIN partners p ON p.id=i.partner_id
-                LEFT JOIN partner_staff ps ON ps.id=i.partner_staff_id
                 WHERE {scope} AND ({' AND '.join(clauses)})
                 ORDER BY h.id LIMIT 101""",
             (*scope_args, *args),
@@ -2603,13 +2637,12 @@ def dashboard_summary(x_demo_role: CurrentActor = Depends(require_actor)):
                 dashboard_counter("disputes", "紹介帰属争議", db.execute(
                     "SELECT COUNT(*) AS count FROM introductions WHERE status='帰属争議中'"
                 ).fetchone()["count"], "introductions", "disputed"),
-                dashboard_counter("construction_queue", "着工確認滞留", db.execute(
-                    """SELECT COUNT(*) AS count FROM construction_projects WHERE confirmed_start_date IS NULL
-                       AND confirmation_status IN ('planned_due','planned_due_today','evidence_missing','pending_review','delayed')"""
-                ).fetchone()["count"], "revenue", "construction:pending"),
+                dashboard_counter("construction_queue", "着工確認滞留", construction_confirmation_backlog(db),
+                                  "revenue", "construction:pending"),
             ])
-        return {"role": x_demo_role, "generated_at": datetime.now().isoformat(timespec="seconds"),
-                "counters": counters}
+        return {"role": x_demo_role, "generated_at": now_jst().isoformat(timespec="seconds"),
+                "counters": counters, "construction_confirmation_backlog":
+                    construction_confirmation_backlog(db, user["store_id"] if x_demo_role == "manager" else None)}
 
 
 @app.get("/api/dashboard/my-tasks")
@@ -2689,7 +2722,7 @@ def dashboard_trends(metric: str = "inquiries", period: str = "7d",
                         JOIN introductions i ON i.id=n.introduction_id JOIN households h ON h.id=i.household_id
                         WHERE {scope} AND cp.confirmed_start_date>=? GROUP BY DATE(cp.confirmed_start_date)"""
         days = int(period[:-1])
-        current_start = date.today() - timedelta(days=days - 1)
+        current_start = now_jst().date() - timedelta(days=days - 1)
         previous_start = current_start - timedelta(days=days)
         results = db.execute(query, (*args, previous_start)).fetchall()
         by_date = {row["bucket"].isoformat(): int(row["value"]) for row in results}
@@ -2702,7 +2735,7 @@ def dashboard_trends(metric: str = "inquiries", period: str = "7d",
             weeks = []
             for week in range((days + 6) // 7):
                 start = current_start + timedelta(days=week * 7)
-                end = min(start + timedelta(days=6), date.today())
+                end = min(start + timedelta(days=6), now_jst().date())
                 weeks.append({"start": start.isoformat(), "value": sum(
                     value for key, value in by_date.items() if start.isoformat() <= key <= end.isoformat()
                 )})
@@ -2732,30 +2765,42 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                {store_clause} GROUP BY s.id ORDER BY s.id""", store_clause_args,
         ).fetchall()
         funnel_stages = [
-               "新規予約", "初回相談済", "FP診断済", "紹介済",
+               "反響", "初回相談済", "FP診断済", "紹介済",
                "訪問・商談中", "契約", "着工",
         ]
-        funnel_start = date.today() - timedelta(days=89)
+        funnel_start = now_jst().date() - timedelta(days=89)
+        funnel_end = now_jst().date()
         funnel_rows = db.execute(
                f"""WITH cohort AS (
-                       SELECT h.id,MIN(e.changed_at) AS intake_at FROM households h
-                       JOIN stage_events e ON e.household_id=h.id AND e.to_stage='新規予約'
-                       WHERE e.changed_at>=? GROUP BY h.id
+                       SELECT h.id,h.created_at AS intake_at FROM households h
+                       WHERE h.created_at>=? AND h.created_at<?{store_filter}
                    )
                    SELECT e.to_stage,COUNT(DISTINCT h.id) AS count FROM cohort c
                    JOIN households h ON h.id=c.id
                    JOIN stage_events e ON e.household_id=h.id AND e.changed_at>=c.intake_at
                    WHERE 1=1{store_filter} GROUP BY e.to_stage""",
-               (funnel_start, *store_args),
+               (funnel_start, funnel_end + timedelta(days=1), *store_args, *store_args),
         ).fetchall()
         funnel_counts = {row["to_stage"]: int(row["count"]) for row in funnel_rows}
+        funnel_counts["反響"] = int(db.execute(
+            f"SELECT COUNT(DISTINCT h.id) AS count FROM households h WHERE h.created_at>=? AND h.created_at<?{store_filter}",
+            (funnel_start, funnel_end + timedelta(days=1), *store_args),
+        ).fetchone()["count"])
+        funnel_counts["着工"] = int(db.execute(
+            f"""SELECT COUNT(DISTINCT h.id) AS count FROM construction_projects cp
+                JOIN contracts c ON c.id=cp.contract_id JOIN negotiations n ON n.id=c.negotiation_id
+                JOIN introductions i ON i.id=n.introduction_id JOIN households h ON h.id=i.household_id
+                WHERE cp.confirmed_start_date>=? AND cp.confirmed_start_date<=? AND cp.confirmed_start_date>=DATE(h.created_at){store_filter}""",
+            (funnel_start, funnel_end, *store_args),
+        ).fetchone()["count"])
         funnel = []
         prior_count = None
         for stage_name in funnel_stages:
                count = funnel_counts.get(stage_name, 0)
                funnel.append({
                    "stage": stage_name, "count": count,
-                   "conversion_rate": round(count / prior_count, 4) if prior_count else None,
+                   "conversion_rate": round(min(count, prior_count) / prior_count, 4) if prior_count else None,
+                   "reference_value": True,
                })
                prior_count = count
         dimensions = []
@@ -2861,7 +2906,7 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
             item = dict(row)
             opened = item["opened_at"]
             if opened:
-                item["tenure_months"] = max(0, (date.today().year - opened.year) * 12 + date.today().month - opened.month)
+                item["tenure_months"] = max(0, (now_jst().date().year - opened.year) * 12 + now_jst().date().month - opened.month)
             else:
                 item["tenure_months"] = None
             item["case_volume_band"] = f"{(item['households'] // 5) * 5}–{(item['households'] // 5) * 5 + 4}"
@@ -2894,8 +2939,7 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
                  JOIN negotiations n ON n.id=c.negotiation_id
                  JOIN introductions i ON i.id=n.introduction_id
                  JOIN households h ON h.id=i.household_id
-                 WHERE cp.confirmed_start_date IS NULL AND cp.confirmation_due_date<CURRENT_DATE
-                 AND cp.confirmation_status IN ('planned_due','evidence_missing','pending_review')
+                 WHERE cp.planned_start_date<CURRENT_DATE AND cp.confirmed_start_date IS NULL
                  {store_filter} ORDER BY cp.confirmation_due_date,cp.id""", store_args),
             ("open_disputes", "introductions", "disputed",
              f"""SELECT d.id AS record_id,h.id AS household_id,h.representative_name,
@@ -2922,6 +2966,8 @@ def management_overview(x_demo_role: CurrentActor = Depends(require_actor)):
         return {
             "stores": store_results,
             "funnel": funnel,
+            "construction_confirmation_backlog": construction_confirmation_backlog(
+                db, user["store_id"] if x_demo_role == "manager" else None),
             "exception_cards": exception_cards,
             "operations_dimensions": dimensions,
             "reminders": [{**item, "items": [dict(row) for row in item["items"]]} for item in reminders],
@@ -3280,7 +3326,7 @@ def negotiation_queue(actor: CurrentActor = Depends(require_actor)):
                               WHEN n.next_action_due IS NULL THEN 3 ELSE 2 END,
                          n.next_action_due,h.id,n.id LIMIT 500""", args,
         )]
-        today = date.today()
+        today = now_jst().date()
         for row in rows:
             due = row["next_action_due"]
             row["risk_level"] = (
@@ -3501,7 +3547,7 @@ def create_bulletin_post(payload: BulletinPostInput, actor: CurrentActor = Depen
         validate_bulletin_access(actor, user, payload)
         if payload.post_type == "daily_report":
             try:
-                report_date = date.fromisoformat(payload.report_date or date.today().isoformat())
+                report_date = date.fromisoformat(payload.report_date or now_jst().date().isoformat())
             except ValueError as error:
                 raise HTTPException(422, "日報の日付が正しくありません") from error
             title = payload.title.strip() or f"{report_date.isoformat()} 日報"
@@ -3771,7 +3817,7 @@ def list_referral_documents(introduction_id: int,
     with connect() as db:
         user = request_user(db, actor)
         intro = db.execute(
-            "SELECT id,household_id FROM introductions WHERE id=?", (introduction_id,)
+            "SELECT id,household_id,partner_id FROM introductions WHERE id=?", (introduction_id,)
         ).fetchone()
         if not intro:
             raise HTTPException(404, "紹介記録が見つかりません")
@@ -4148,7 +4194,7 @@ def confirm_construction(project_id: int, payload: ConfirmInput,
     role_guard(x_demo_role, ("manager", "hq_finance", "executive"))
     with connect() as db:
         project = db.execute(
-            """SELECT cp.*,c.contract_amount,i.id AS introduction_id,i.partner_id,h.store_id
+            """SELECT cp.*,c.contract_amount,i.id AS introduction_id,i.partner_id,h.id AS household_id,h.store_id
                FROM construction_projects cp JOIN contracts c ON c.id=cp.contract_id
                JOIN negotiations n ON n.id=c.negotiation_id
                JOIN introductions i ON i.id=n.introduction_id
@@ -4169,7 +4215,7 @@ def confirm_construction(project_id: int, payload: ConfirmInput,
             """SELECT fr.* FROM partner_agreements pa JOIN fee_rules fr ON fr.id=pa.fee_rule_id
                WHERE pa.partner_id=? AND pa.status='active' AND pa.effective_from<=?
                AND (pa.effective_to IS NULL OR pa.effective_to>=?) ORDER BY pa.effective_from DESC LIMIT 1""",
-            (project["partner_id"], date.today().isoformat(), date.today().isoformat()),
+            (project["partner_id"], now_jst().date().isoformat(), now_jst().date().isoformat()),
         ).fetchone()
         if not rule:
             raise HTTPException(409, "適用可能な報酬ルールがありません")
@@ -4187,6 +4233,15 @@ def confirm_construction(project_id: int, payload: ConfirmInput,
         user_id = request_user(db, x_demo_role)["id"]
         db.execute("UPDATE construction_projects SET confirmed_start_date=?,confirmation_evidence=? WHERE id=?",
                    (payload.confirmed_start_date, payload.evidence.strip(), project_id))
+        previous_stage = db.execute(
+            "SELECT to_stage FROM stage_events WHERE household_id=? ORDER BY changed_at DESC,id DESC LIMIT 1",
+            (project["household_id"],),
+        ).fetchone()
+        db.execute(
+            "INSERT INTO stage_events(household_id,from_stage,to_stage,changed_by,changed_at) VALUES(?,?,?,?,?)",
+            (project["household_id"], previous_stage["to_stage"] if previous_stage else None,
+             "着工", request_user(db, x_demo_role)["id"], now_jst()),
+        )
         db.execute(
             """UPDATE tasks SET done=1,status='done' WHERE related_type='construction_project'
                AND related_id=? AND task_type='construction_queue'""", (project_id,)
@@ -5549,10 +5604,11 @@ def approve_month_reopen(close_id: str, payload: MonthCloseVersionInput,
 
 KINTONE_IMPORT_FIELDS = (
     "external_id", "representative_name", "store_id",
-    "advisor_employee_code", "budget_band", "area_pref",
+    "advisor_employee_code", "budget_band", "area_pref", "kana",
 )
 KINTONE_IMPORT_REQUIRED = ("external_id", "representative_name", "store_id")
 KINTONE_IMPORT_ALIASES = {
+    "kana": ("kana", "フリガナ", "ふりがな", "カナ"),
     "external_id": ("external_id", "record_id", "レコード番号", "顧客番号"),
     "representative_name": ("representative_name", "代表者名", "顧客名", "氏名"),
     "store_id": ("store_id", "店舗ID", "store"),
@@ -5673,6 +5729,7 @@ def analyze_kintone_rows(db, rows, mapping):
                 reason = "担当顧問が店舗と一致しないか、有効なアカウントではありません"
         budget = mapped_value(row, mapping, "budget_band")
         area = mapped_value(row, mapping, "area_pref")
+        kana = normalize_kana(mapped_value(row, mapping, "kana"))
         if not reason and (len(budget) > 120 or len(area) > 255):
             reason = "予算帯または希望エリアが文字数上限を超えています"
         local_id = existing.get(external_id)
@@ -5691,6 +5748,7 @@ def analyze_kintone_rows(db, rows, mapping):
             "status": status, "reason": reason, "local_id": local_id,
             "representative_name": name[:120], "store_id": store_id,
             "advisor_id": advisor_id, "budget_band": budget or None, "area_pref": area or None,
+            "kana": kana or None,
         })
     return result
 
@@ -5821,10 +5879,10 @@ async def import_kintone_csv(file: UploadFile = File(...),
                 ).hexdigest()[:12].upper()
                 household_id = db.execute(
                     """INSERT INTO households(representative_name,store_id,advisor_id,budget_band,
-                       area_pref,land_status,status,created_at,household_code)
-                       VALUES(?,?,?,?,?,'検討中','active',?,?)""",
+                       area_pref,land_status,status,created_at,household_code,kana)
+                       VALUES(?,?,?,?,?,'検討中','active',?,?,?)""",
                     (item["representative_name"], item["store_id"], item["advisor_id"],
-                     item["budget_band"], item["area_pref"], now, household_code),
+                     item["budget_band"], item["area_pref"], now, household_code, item["kana"]),
                 ).lastrowid
                 db.execute(
                     """INSERT INTO external_record_mappings(source_system,external_id,object_type,
