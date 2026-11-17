@@ -88,6 +88,27 @@ const COPY = {
     systemConfig: "運用設定", changeReason: "変更理由（10〜500文字）", saveConfig: "設定を保存",
     configSaved: "設定を保存しました。", configLoadError: "設定を読み込めません。",
     configPermission: "運用設定の変更は本社・経理ロールに限定されています。",
+    actionQueue: "対応待ち", actionRequired: "対応が必要", businessTrend: "業務トレンド",
+    dailySummary: "日報サマリー", businessOverview: "業務概況", businessIntelligence: "経営分析",
+    storeComparison: "店舗比較", storeOperations: "店舗運営", deadlineReminders: "期限リマインダー",
+    marketingAttribution: "マーケティング流入分析", cohortConversion: "相談月別転換",
+    partnerSettlementQuality: "住宅会社別報酬処理品質", governance: "ガバナンス",
+    versionedOperations: "バージョン管理された運用設定", personalWorkspace: "個人ワークスペース",
+    touch: "接点", customerRelationship: "顧客関係", partnerJourney: "住宅会社との紹介",
+    constructionRevenue: "着工・報酬", constructionConfirmation: "着工確認", revenueLedger: "報酬台帳",
+    projectMilestone: "工事マイルストーン", systemPreferences: "システム設定",
+    household360: "世帯360°", activityLog: "活動記録", partnerIntroduction: "住宅会社紹介",
+    appendOnlyAudit: "追記専用監査", l1Protected: "L1 保護",
+    settingsSub: "デモ環境の表示とデータを管理",
+    householdsSub: "顧客情報・接点・商談状況を一元管理",
+    introductionsSub: "一つの家庭に対する複数住宅会社との並行商談を追跡",
+    revenueSub: "予定・実際・確認を分けて記録し、報酬の根拠と状態を追跡",
+    roleDescription: "役割ごとに表示と操作権限が異なります。",
+    languageDescription: "日本語を標準表示とし、中文へ切り替えられます。",
+    consentDescription: "L1 原始診断データは初期状態で非表示です。共有履歴は対象世帯の詳細画面で確認できます。",
+    resetDescription: "世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。",
+    financeRoleOnly: "本社・経理ロールで実行できます。",
+    workspace: "ワークスペース", demoEnvironment: "デモ環境",
   },
   zh: {
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
@@ -165,6 +186,27 @@ const COPY = {
     systemConfig: "系统运行设置", changeReason: "修改原因（10–500字）", saveConfig: "保存设置",
     configSaved: "设置已保存。", configLoadError: "无法加载设置。",
     configPermission: "系统运行设置仅限总部·财务角色修改。",
+    actionQueue: "待处理队列", actionRequired: "需要处理", businessTrend: "业务趋势",
+    dailySummary: "日报汇总", businessOverview: "业务概况", businessIntelligence: "经营分析",
+    storeComparison: "门店对比", storeOperations: "门店运营", deadlineReminders: "期限提醒",
+    marketingAttribution: "营销来源分析", cohortConversion: "咨询月份转化",
+    partnerSettlementQuality: "住宅公司报酬处理质量", governance: "治理审计",
+    versionedOperations: "版本化运营设置", personalWorkspace: "个人工作区",
+    touch: "触点", customerRelationship: "客户关系", partnerJourney: "住宅公司介绍流程",
+    constructionRevenue: "开工与报酬", constructionConfirmation: "开工确认", revenueLedger: "报酬台账",
+    projectMilestone: "项目节点", systemPreferences: "系统设置",
+    household360: "家庭360°", activityLog: "活动记录", partnerIntroduction: "住宅公司介绍",
+    appendOnlyAudit: "仅追加审计记录", l1Protected: "L1 已保护",
+    settingsSub: "管理演示环境的显示与数据",
+    householdsSub: "统一管理客户信息、接点和洽谈状态",
+    introductionsSub: "追踪同一家庭与多家住宅公司的并行洽谈",
+    revenueSub: "分别记录计划、实际与确认日期，并追踪报酬依据和状态",
+    roleDescription: "不同角色拥有不同的数据视图和操作权限。",
+    languageDescription: "默认显示日语，并可切换为中文。",
+    consentDescription: "L1 原始诊断数据默认隐藏。共享记录可在家庭详情中查看。",
+    resetDescription: "将家庭、介绍、开工和报酬等演示数据恢复到初始状态。",
+    financeRoleOnly: "请切换到总部·财务角色执行。",
+    workspace: "工作区", demoEnvironment: "演示环境",
   },
 };
 
@@ -348,7 +390,7 @@ function App() {
   return <div className="app-shell">
     <aside className="sidebar">
       <div className="brand"><div className="brand-mark"><Home size={21}/></div><div><b>MallBoard</b><span>{t("subtitle")}</span></div></div>
-      <div className="workspace-label">WORKSPACE</div>
+      <div className="workspace-label">{t("workspace")}</div>
       <nav>{NAV.map(([id, Icon, key]) => <button key={id} onClick={() => setPage(id)}
         className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
         {id === "households" && summary?.counters.find((item) => item.key === "overdue")?.count > 0 &&
@@ -358,14 +400,14 @@ function App() {
       <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
         <div className="role-meta"><b>{data?.user?.name || "Loading…"}</b><span>{ROLE_LABEL[locale][role]}</span></div>
         <ChevronDown size={16} className="muted"/></div>
-      <div className="sidebar-foot">DEMO ENVIRONMENT <span>●</span></div>
+      <div className="sidebar-foot">{t("demoEnvironment")} <span>●</span></div>
     </aside>
     <main className="main">
       <header className="topbar">
         <div className="breadcrumb"><span>{t("product")}</span><ChevronRight size={14}/><b>{t(NAV.find(([id]) => id === page)?.[2] || page)}</b></div>
         <div className="top-actions">
           <label className="searchbox"><Search size={16}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("search")}/><kbd>⌘ K</kbd></label>
-          <button className="icon-btn" title="Notifications"><Bell size={18}/></button>
+          <button className="icon-btn" title={t("notificationPrefs")}><Bell size={18}/></button>
           <div className="select-wrap"><Users size={15}/><select aria-label={t("role")} value={role} onChange={(e) => setRole(e.target.value)}>
             {roleOptions.map((option) => <option value={option.id} key={option.id}>{ROLE_LABEL[locale][option.id]}</option>)}
           </select><ChevronDown size={13}/></div>
@@ -432,7 +474,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
   return <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
     title={<>{t("todayTitle")}<span>{data.user.name}さん</span></>} sub={t("todaySub")}
     actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
-    <section className="panel queue-panel"><div className="panel-head"><div><div className="eyebrow">ACTION QUEUE</div><h2>{t("taskQueues")}</h2></div>
+    <section className="panel queue-panel"><div className="panel-head"><div><div className="eyebrow">{t("actionQueue")}</div><h2>{t("taskQueues")}</h2></div>
       {summary && <span className="muted">{summary.generated_at}</span>}</div>
       <div className="queue-counters">{(summary?.counters || []).slice(0, 3).map((counter) =>
         <button className={`queue-counter ${counter.key === "overdue" || counter.key === "critical_risk" ? "queue-danger" : ""}`}
@@ -442,7 +484,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
         </button>)}</div>
     </section>
     <div className="dashboard-grid">
-      {preferences.dashboard_widgets.includes("tasks") && <section className="panel tasks-panel"><div className="panel-head"><div><div className="eyebrow">ACTION REQUIRED</div><h2>{t("taskQueues")}</h2></div>
+      {preferences.dashboard_widgets.includes("tasks") && <section className="panel tasks-panel"><div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div>
         <span className="pill pill-red">{tasks.length}</span></div>
         {visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}>
           <div className={`task-check ${task.days_overdue > 0 ? "text-danger" : ""}`}>
@@ -453,7 +495,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
         <div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span>
           <button className="text-button" onClick={() => onNavigate(role === "hq_finance" ? "revenue" : "households")}>{t("viewAll")} <ChevronRight size={14}/></button></div>
       </section>}
-      {showManagement && preferences.dashboard_widgets.includes("trend") ? <section className="panel pipeline-panel"><div className="panel-head"><div><div className="eyebrow">BUSINESS TREND</div><h2>{t("trendEntry")}</h2></div>
+      {showManagement && preferences.dashboard_widgets.includes("trend") ? <section className="panel pipeline-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
         <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
           <option value="inquiries">{localeLabel(document.documentElement.lang, "inquiries")}</option>
@@ -465,14 +507,14 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, onHouseh
           <option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option>
         </select></div>
         <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")}: {period} · {t("introductions")}</span></div>
-      </section> : preferences.dashboard_widgets.includes("report") && <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">DAILY SUMMARY</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
+      </section> : preferences.dashboard_widgets.includes("report") && <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
         <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div>
         <label className="field-label">{t("note")}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows="3"/></label>
         <button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button>
       </section>}
     </div>
     {showManagement && preferences.dashboard_widgets.includes("overview") && <section className="panel household-panel">
-      <div className="panel-head"><div><div className="eyebrow">BUSINESS OVERVIEW</div><h2>{t("pipeline")}</h2></div>
+      <div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
       <div className="pipeline-summary"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div>
         <div className="pipeline-divider"/><div><strong>{data.households.reduce((count, item) => count + item.introductions.length, 0)}</strong><span>{t("introductions")}</span></div>
@@ -508,7 +550,7 @@ function Households({ items, stores, t, onOpen }) {
   const [stage, setStage] = useState("all");
   const rows = items.filter((household) => (storeId === "all" || household.store_id === Number(storeId))
     && (stage === "all" || household.stage_events.at(-1)?.to_stage === stage));
-  return <><PageTitle eyebrow="CUSTOMER RELATIONSHIP" title={t("households")} sub="顧客情報・接点・商談状況を一元管理"/>
+  return <><PageTitle eyebrow={t("customerRelationship")} title={t("households")} sub={t("householdsSub")}/>
     <section className="panel table-panel"><div className="panel-head"><div><h2>{t("households")} <span className="count-badge">{rows.length}</span></h2></div>
       <div className="table-tools"><label className="filter-select">{t("filterStore")}<select value={storeId} onChange={(event) => setStoreId(event.target.value)}>
         <option value="all">{t("allStores")}</option>{stores.map((store) => <option value={store.id} key={store.id}>{store.name}</option>)}</select></label>
@@ -520,7 +562,7 @@ function Introductions({ items, t, onOpen, onAdd }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
   useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
   const household = items.find((h) => h.id === activeHousehold);
-  return <><PageTitle eyebrow="PARTNER JOURNEY" title={t("introductions")} sub="一つの家庭に対する複数住宅会社との並行商談を追跡"/>
+  return <><PageTitle eyebrow={t("partnerJourney")} title={t("introductions")} sub={t("introductionsSub")}/>
     <div className="intro-layout"><section className="panel intro-list"><div className="panel-head"><h2>{t("households")}</h2><span className="count-badge">{items.length}</span></div>
       {items.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
         <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div><span className="intro-count">{h.introductions.length}</span>
@@ -560,21 +602,21 @@ function Revenue({ data, t, role, api, onOpen, filter }) {
   const freezeAmount = disputes.reduce((sum, item) => sum + Number(item.calculated_amount || 0), 0);
   const referenceAmount = disputes.reduce((sum, item) => sum + Number(item.reference_amount || 0), 0);
   const feeRuleParams = (value) => typeof value === "string" ? JSON.parse(value) : value;
-  return <><PageTitle eyebrow="CONSTRUCTION & REVENUE" title={t("revenue")} sub="予定・実際・確認を分けて記録し、報酬の根拠と状態を追跡"/>
+  return <><PageTitle eyebrow={t("constructionRevenue")} title={t("revenue")} sub={t("revenueSub")}/>
     <div className="revenue-metrics"><Metric small label={t("plannedFee")} value={`¥${plannedAmount.toLocaleString()}`} icon={CalendarDays}/>
       <Metric small label={t("feeReview")} value={`¥${sumState(["Pending"]).toLocaleString()}`} icon={Clock3} tone="orange"/>
       <Metric small label={t("approvedFee")} value={`¥${sumState(["Confirmed"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="green"/>
       <Metric small label={t("invoiceAmount")} value={`¥${sumState(["Invoiced"]).toLocaleString()}`} icon={FileText}/>
       <Metric small label={t("paidAmount")} value={`¥${sumState(["Paid"]).toLocaleString()}`} icon={WalletCards} tone="green"/>
       <Metric small label={t("confirmedRevenue")} value={`¥${sumState(["Confirmed", "Invoiced", "Paid"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="blue"/></div>
-    <section className="panel construction-queue-panel"><div className="panel-head"><div><div className="eyebrow">CONSTRUCTION CONFIRMATION</div><h2>{t("confirmStart")} · {queue.length}</h2></div>
+    <section className="panel construction-queue-panel"><div className="panel-head"><div><div className="eyebrow">{t("constructionConfirmation")}</div><h2>{t("confirmStart")} · {queue.length}</h2></div>
       <span className="pill pill-orange">{t("overdueLabel")} {overdueProjects}</span></div>
       <div className="construction-queue">{queue.map(({ household, project }) => <ConstructionCard key={project.project_id}
         household={household} project={project} t={t} role={role} api={api}/>)}
       {!queue.length && <div className="empty-state">{t("noRows")}</div>}</div>
     </section>
-    <section className="panel entitlement-panel"><div className="panel-head"><div><div className="eyebrow">REVENUE LEDGER</div><h2>{t("entitlement")}</h2></div>
-      <span className="pill pill-green">APPEND-ONLY AUDIT</span></div>
+    <section className="panel entitlement-panel"><div className="panel-head"><div><div className="eyebrow">{t("revenueLedger")}</div><h2>{t("entitlement")}</h2></div>
+      <span className="pill pill-green">{t("appendOnlyAudit")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("partner")}</th><th>{t("basis")}</th><th>{t("rule")}</th><th>{t("amount")}</th><th>{t("status")}</th><th/></tr></thead><tbody>
       {data.entitlements.filter((e) => filter !== "disputed" || e.state === "Disputed").filter((e) => !filter.startsWith("entitlements:") || (
         filter === "entitlements:Pending" ? e.state === "Pending" :
@@ -594,7 +636,7 @@ function ConstructionCard({ household, project, data, t, role, api }) {
   const [evidence, setEvidence] = useState(project.confirmation_evidence || "");
   const canConfirm = role === "manager" || role === "hq_finance" || role === "executive";
   const stateLabel = t(`construction_${project.confirmation_status}`);
-  return <section className="panel construction-panel"><div className="panel-head"><div><div className="eyebrow">PROJECT MILESTONE</div><h2>{household.representative_name} · {project.partner_name}</h2>
+  return <section className="panel construction-panel"><div className="panel-head"><div><div className="eyebrow">{t("projectMilestone")}</div><h2>{household.representative_name} · {project.partner_name}</h2>
     <small>{stateLabel} · {t("due")}: {project.confirmation_due_date || "—"}</small></div><StateBadge state={project.confirmed_start_date ? "Confirmed" : "PendingConfirmation"} t={t}/></div>
     <div className="milestone-line"><div className="milestone done"><div><Check size={15}/></div><span>{t("contract")}</span><b>{project.contract_date}</b></div><div className="milestone done"><div><Check size={15}/></div><span>{t("startPlanned")}</span><b>{project.planned_start_date}</b></div>
       <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{project.actual_start_date || "—"}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{project.confirmed_start_date || "未確認"}</b></div></div>
@@ -653,13 +695,13 @@ function Management({ data, management, t, role, onReminder }) {
     ["next_action_rate", t("nextActionRate")], ["report_submission_rate", t("reportRate")],
     ["response_rate", t("responseQuality")],
   ];
-  return <><PageTitle eyebrow="BUSINESS INTELLIGENCE" title={t("management")} sub={t("managementSub")}/>
-    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">STORE COMPARISON</div><h2>{t("storeCompare")}</h2></div></div>
+  return <><PageTitle eyebrow={t("businessIntelligence")} title={t("management")} sub={t("managementSub")}/>
+    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeComparison")}</div><h2>{t("storeCompare")}</h2></div></div>
       <div className="store-bars">{stores.map((store) => <div className="store-bar-row store-comparison-row" key={store.id}>
         <span>{store.name}</span><div className="bar-track"><i style={{ width: `${store.households / max * 100}%` }}/></div>
         <b>{store.households}</b><small>{store.tenure_months}{t("months")} · {store.case_volume_band} {t("caseVolume")}</small>
       </div>)}</div><div className="chart-footnote">{t("sampleSize")} · {t("households")} · {t("demoWarning")}</div></section>
-      <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">BUSINESS TREND</div><h2>{t("trendEntry")}</h2></div></div>
+      <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div></div>
         <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
           {["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option value={key} key={key}>{localeLabel(document.documentElement.lang, key)}</option>)}
         </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
@@ -669,12 +711,12 @@ function Management({ data, management, t, role, onReminder }) {
           title={`${point.date || point.start}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
         <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · 前期間 {trendData?.previous_total ?? 0}</span></div>
       </section></div>
-    {management?.operations_dimensions?.length > 0 && <section className="panel operations-panel"><div className="panel-head"><div><div className="eyebrow">STORE OPERATIONS</div><h2>{t("operationsStatus")}</h2></div><span className="pill pill-blue">{t("noScore")}</span></div>
+    {management?.operations_dimensions?.length > 0 && <section className="panel operations-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeOperations")}</div><h2>{t("operationsStatus")}</h2></div><span className="pill pill-blue">{t("noScore")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("stores")}</th>{dimensionLabels.map(([,label]) => <th key={label}>{label}</th>)}<th>{t("sampleSize")}</th></tr></thead>
         <tbody>{management.operations_dimensions.map((row) => <tr key={row.store_id}><td>{stores.find((store) => store.id === row.store_id)?.name}</td>
           {dimensionLabels.map(([key]) => <td key={key}>{Math.round((row[key] || 0) * 100)}%</td>)}<td>{row.sample_size}</td></tr>)}</tbody></table></div>
     </section>}
-    {management && <><section className="panel reminders-panel"><div className="panel-head"><div><div className="eyebrow">DEADLINE REMINDERS</div><h2>{t("reminders")}</h2></div></div>
+    {management && <><section className="panel reminders-panel"><div className="panel-head"><div><div className="eyebrow">{t("deadlineReminders")}</div><h2>{t("reminders")}</h2></div></div>
       <div className="reminder-grid">{management.reminders.map((reminder) => <article className="reminder-card" key={reminder.key}>
         <h3>{t(`reminder_${reminder.key}`)}<span>{reminder.items.length}</span></h3>
         {reminder.items.map((item) => <button key={`${reminder.key}-${item.id}`} onClick={() => {
@@ -689,35 +731,35 @@ function Management({ data, management, t, role, onReminder }) {
         <span>{t("deadlineRecord")}: {focusedReminder.item.representative_name} · {focusedReminder.item.due_at || "—"} · #{focusedReminder.item.id}</span>
       </div>}
     </section>
-    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">MARKETING ATTRIBUTION</div><h2>{t("attribution")}</h2></div></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("firstTouch")}</th><th>Touch</th><th>{t("households")}</th><th>{t("contract")}</th></tr></thead>
+    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("marketingAttribution")}</div><h2>{t("attribution")}</h2></div></div>
+      <div className="table-scroll"><table><thead><tr><th>{t("firstTouch")}</th><th>{t("touch")}</th><th>{t("households")}</th><th>{t("contract")}</th></tr></thead>
         <tbody>{management.attribution.map((row) => <tr key={row.channel}><td>{row.channel}</td><td>{row.touches}</td><td>{row.households}</td><td>{row.contracts}</td></tr>)}</tbody></table></div>
-    </section><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">COHORT CONVERSION</div><h2>{t("cohort")}</h2></div></div>
+    </section><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("cohortConversion")}</div><h2>{t("cohort")}</h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>{t("cohort")}</th><th>{t("appointments")}</th><th>{t("introductions")}</th><th>{t("contract")}</th></tr></thead>
         <tbody>{management.cohorts.map((row) => <tr key={row.cohort}><td>{row.cohort}</td><td>{row.inquiries}</td><td>{row.introductions} ({row.inquiries ? Math.round(row.introductions / row.inquiries * 100) : 0}%)</td>
           <td>{row.contracts} ({row.inquiries ? Math.round(row.contracts / row.inquiries * 100) : 0}%)</td></tr>)}</tbody></table></div>
     </section></div>
-    <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">PARTNER SETTLEMENT QUALITY</div><h2>{t("partnerQuality")}</h2></div></div>
+    <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("partnerSettlementQuality")}</div><h2>{t("partnerQuality")}</h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>{t("partner")}</th><th>{t("introductions")}</th><th>{t("disputed")}</th><th>{t("paid")}</th><th>{t("amount")}</th></tr></thead>
         <tbody>{management.partner_quality.map((row) => <tr key={row.id}><td>{row.name}</td><td>{row.introductions}</td><td>{row.disputes}</td>
           <td>{row.paid}</td><td>¥{Number(row.paid_amount).toLocaleString()}</td></tr>)}</tbody></table></div>
     </section></>}
-    <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">GOVERNANCE</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>{t("audit")}</span></div>
+    <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>{t("audit")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th><th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead><tbody>
         {data.audit_logs.map((row) => <tr key={row.id}><td>{row.at}</td><td>{row.user_name || "—"}</td><td><span className="audit-action">{row.action}</span></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
       </tbody></table>{!data.audit_logs.length && <div className="empty-state">{t("noRows")}</div>}</div></section>
   </>;
 }
 function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferences, onSavePreferences }) {
-  return <><PageTitle eyebrow="SYSTEM PREFERENCES" title={t("settings")} sub="デモ環境の表示とデータを管理"/>
-    <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{ROLE_LABEL[locale][role]}。{locale === "ja" ? "役割ごとに表示と操作権限が異なります。" : "不同角色拥有不同的数据视图和操作权限。"}</p>
+  return <><PageTitle eyebrow={t("systemPreferences")} title={t("settings")} sub={t("settingsSub")}/>
+    <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{ROLE_LABEL[locale][role]}。{t("roleDescription")}</p>
       <div className="setting-roles">{data.roles.map((r) => <span className={`role-chip ${r.id === role ? "current" : ""}`} key={r.id}>{ROLE_LABEL[locale][r.id]} {r.id === role && <Check size={13}/>}</span>)}</div></div></section>
-      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>日本語を標準表示とし、中文へ切り替えられます。</p><span className="locale-pill">日本語 · 中文</span></div></section>
-      <section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("consent")}</h2><p>L1 原始診断データは初期状態で非表示です。共有履歴は対象世帯の詳細画面で確認できます。</p><span className="pill pill-green">L1 PROTECTED</span></div></section>
-      <section className="panel setting-card danger-setting"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>本社・経理ロールで実行できます。</small>}</div></section>
+      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>{t("languageDescription")}</p><span className="locale-pill">日本語 · 中文</span></div></section>
+      <section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("consent")}</h2><p>{t("consentDescription")}</p><span className="pill pill-green">{t("l1Protected")}</span></div></section>
+      <section className="panel setting-card danger-setting"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>{t("resetDescription")}</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>{t("financeRoleOnly")}</small>}</div></section>
     </div>
     <PreferencePanel preferences={preferences} t={t} onSave={onSavePreferences}/>
-    <section className="panel config-panel"><div className="panel-head"><div><div className="eyebrow">VERSIONED OPERATIONS</div><h2>{t("systemConfig")}</h2></div><ShieldCheck size={17} className="green-text"/></div>
+    <section className="panel config-panel"><div className="panel-head"><div><div className="eyebrow">{t("versionedOperations")}</div><h2>{t("systemConfig")}</h2></div><ShieldCheck size={17} className="green-text"/></div>
       {role === "hq_finance" ? <SystemConfigPanel role={role} locale={locale} t={t} onSaved={onConfigSaved}/> :
         <p className="config-permission">{t("configPermission")}</p>}
       <p className="config-note">{t("slaPending")} {t("accountingNote")}</p>
@@ -733,7 +775,7 @@ function PreferencePanel({ preferences, t, onSave }) {
     setWidgets((current) => current.includes(widget) ? current.filter((item) => item !== widget)
       : current.length < 4 ? [...current, widget] : current);
   }
-  return <section className="panel preference-panel"><div className="panel-head"><div><div className="eyebrow">PERSONAL WORKSPACE</div><h2>{t("dashboardPrefs")}</h2></div></div>
+  return <section className="panel preference-panel"><div className="panel-head"><div><div className="eyebrow">{t("personalWorkspace")}</div><h2>{t("dashboardPrefs")}</h2></div></div>
     <div className="preference-options">{[["tasks", t("taskQueues")], ["overview", t("pipeline")], ["trend", t("trendEntry")], ["report", t("dailyReport")]].map(([key, label]) =>
       <label key={key}><input type="checkbox" checked={widgets.includes(key)} onChange={() => toggleWidget(key)}/>{label}</label>)}</div>
     <h3>{t("notificationPrefs")}</h3><div className="preference-options">
@@ -802,7 +844,7 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
   const [stage, setStage] = useState(h.stage_events.at(-1)?.to_stage || "新規予約");
   const [disputeIntro, setDisputeIntro] = useState(null);
   const locale = document.documentElement.lang;
-  return <Modal onClose={onClose} wide><div className="modal-heading"><div><div className="eyebrow">HOUSEHOLD 360° · #{String(h.id).padStart(4, "0")}</div><h2>{h.representative_name}</h2><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  return <Modal onClose={onClose} wide><div className="modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><h2>{h.representative_name}</h2><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
     <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={h.stage_events.at(-1)?.to_stage}/></div>
     <div className="household-modal-grid"><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("people")}</h3><span className="count-badge">{h.persons.length}</span></div>
       {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{p.relation} · {p.phone}</span></div></div>)}</section>
@@ -840,7 +882,7 @@ function ActivityModal({ households, initialHouseholdId, t, onClose, onSubmit })
   const [nextAction, setNextAction] = useState("");
   const [due, setDue] = useState("");
   async function submit(e) { e.preventDefault(); await onSubmit({ household_id: Number(householdId), type, body, next_action: nextAction || null, next_action_due: due || null }); onClose(); }
-  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">ACTIVITY LOG</div><h2>{t("addActivity")}</h2></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">{t("activityLog")}</div><h2>{t("addActivity")}</h2></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
     <label className="field-label">{t("household")}<select value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{households.map((h) => <option key={h.id} value={h.id}>{h.representative_name}</option>)}</select></label>
     <label className="field-label">{t("activityType")}<select value={type} onChange={(e) => setType(e.target.value)}>{[["面談","meeting"],["電話","phone"],["LINE","line"],["訪問同行","visit"],["メモ","memo"]].map(([value,key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
     <label className="field-label">{t("body")}<textarea required value={body} onChange={(e) => setBody(e.target.value)} rows="3"/></label>
@@ -855,7 +897,7 @@ function IntroductionModal({ household, data, t, onClose, onSubmit }) {
   const [staffId, setStaffId] = useState("");
   useEffect(() => setStaffId(String(staff[0]?.id || "")), [partnerId]);
   async function submit(e) { e.preventDefault(); await onSubmit({ household_id: household.id, partner_id: Number(partnerId), partner_staff_id: Number(staffId) }); onClose(); }
-  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">PARTNER INTRODUCTION</div><h2>{t("partnerCreate")}</h2><p>{household.representative_name}</p></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">{t("partnerIntroduction")}</div><h2>{t("partnerCreate")}</h2><p>{household.representative_name}</p></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
     <label className="field-label">{t("partnerSelect")}<select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>{data.partners.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.area}</option>)}</select></label>
     <label className="field-label">{t("staffSelect")}<select value={staffId} onChange={(e) => setStaffId(e.target.value)}>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <div className="privacy-lock"><ShieldCheck size={15}/>顧客への情報共有は同意された範囲に限定されます。</div>
