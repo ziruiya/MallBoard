@@ -903,6 +903,7 @@ function App() {
               onKeyDown={handleSearchKeyDown}
               onChange={(event) => {
                 const value = event.target.value;
+                searchRequestId.current += 1;
                 setQuery(value);
                 setSearchOpen(Boolean(value.trim()));
                 setSearchActiveIndex(-1);
