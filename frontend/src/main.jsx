@@ -1701,16 +1701,12 @@ function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Invoiced") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "paid" })}>{t("paid")} <ChevronRight size={13}/></button>;
   return <span className="muted">—</span>;
 }
-function Management({ locale, data, management, t, role, onReminder, onException }) {
-  const [metric, setMetric] = useState("introductions");
-  const [period, setPeriod] = useState("90d");
+function ManagementTrend({ metric, period, t }) {
   const [trendData, setTrendData] = useState(null);
   const [trendError, setTrendError] = useState(false);
-  const [focusedReminder, setFocusedReminder] = useState(null);
-  const [reportBusy, setReportBusy] = useState(false);
-  const [reportError, setReportError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
+    setTrendData(null);
     setTrendError(false);
     fetch(API_BASE + "/api/dashboard/trends?metric=" + metric + "&period=" + period, {
       credentials: "include", signal: controller.signal,
@@ -1722,7 +1718,25 @@ function Management({ locale, data, management, t, role, onReminder, onException
       if (!controller.signal.aborted) setTrendError(true);
     });
     return () => controller.abort();
-  }, [metric, period, role]);
+  }, [metric, period]);
+
+  if (trendError) return <p className="config-error" role="alert">{t("trendLoadFailed")}</p>;
+  if (trendData === null) return <div className="loading" role="status" style={{ height: 78 }}>
+    <div className="spinner" aria-hidden="true"/>Loading MallBoard…
+  </div>;
+  if (!trendData.current?.length || trendData.current_total === 0) return <div className="empty-state">{t("trendNoData")}</div>;
+  return <>
+    <div className="trend-bars">{(trendData?.current || []).map((point, index) => <div key={`${point.date || point.start}-${index}`}
+      title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
+    <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · {t("previousPeriod")} {trendData?.previous_total ?? 0}</span></div>
+  </>;
+}
+function Management({ locale, data, management, t, role, onReminder, onException }) {
+  const [metric, setMetric] = useState("introductions");
+  const [period, setPeriod] = useState("90d");
+  const [focusedReminder, setFocusedReminder] = useState(null);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState("");
   const stores = management?.stores || [];
   const funnel = management?.funnel || [];
   const max = Math.max(...stores.map((item) => item.households || 0), 1);
@@ -1768,9 +1782,7 @@ function Management({ locale, data, management, t, role, onReminder, onException
         </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
           {["7d", "30d", "90d", "180d", "365d"].map((value) => <option key={value}>{value}</option>)}
         </select></div>
-        {trendError ? <p className="config-error" role="alert">{t("trendLoadFailed")}</p> : trendData && !trendData.current?.length ? <div className="empty-state">{t("trendNoData")}</div> : trendData && <><div className="trend-bars">{(trendData?.current || []).map((point, index) => <div key={`${point.date || point.start}-${index}`}
-          title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
-        <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · {t("previousPeriod")} {trendData?.previous_total ?? 0}</span></div></>}
+        <ManagementTrend key={`${metric}:${period}:${role}`} metric={metric} period={period} t={t}/>
       </section></div>
     {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
       <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
