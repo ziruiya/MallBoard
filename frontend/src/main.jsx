@@ -68,7 +68,7 @@ const COPY = {
     unitItems: "件", reminder_introduction_validity: "紹介有効期間",
     reminder_construction_evidence: "着工証拠提出期限", reminder_dispute_resolution: "争議処理期限",
     reminder_agreement_renewal: "提携契約更新期限", reminder_fee_rule_validity: "FeeRule適用期限",
-    trendEntry: "業務トレンドを見る", selectMetric: "指標", period: "期間",
+    managerTitle: "今日の店舗運営", executiveTitle: "全社経営ダッシュボード", managerSub: "本店の業務状況を確認しましょう。", executiveSub: "全社の業務状況を確認しましょう。", trendNoData: "この期間のデータはありません", trendEntry: "業務トレンドを見る", selectMetric: "指標", period: "期間",
     followupRate: "フォロー実行率", completeness: "データ完全性",
     nextActionRate: "次回アクション設定率", reportRate: "日報提出率",
     responseQuality: "顧客対応品質", sampleSize: "対象数", noScore: "総合点・ランキングは表示しません",
@@ -294,7 +294,7 @@ const COPY = {
     unitItems: "项", reminder_introduction_validity: "介绍有效期",
     reminder_construction_evidence: "开工证据提交期限", reminder_dispute_resolution: "争议处理期限",
     reminder_agreement_renewal: "合作协议续约期限", reminder_fee_rule_validity: "FeeRule 适用期限",
-    trendEntry: "查看业务趋势", selectMetric: "指标", period: "期间",
+    managerTitle: "今日门店运营", executiveTitle: "全社经营看板", managerSub: "查看本店今天的业务进展。", executiveSub: "查看全公司今天的业务进展。", trendNoData: "该期间暂无数据", trendEntry: "查看业务趋势", selectMetric: "指标", period: "期间",
     followupRate: "跟进执行率", completeness: "数据完整性",
     nextActionRate: "下次行动设置率", reportRate: "日报提交率",
     responseQuality: "客户响应质量", sampleSize: "样本数", noScore: "不显示总分或排名",
@@ -1211,6 +1211,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       onOpenTasks={(filter) => { onCounter({ filter, target_page: "households" }); }}/>;
   }
   const visibleTasks = tasks.slice(0, 5);
+  if ((role === "manager" || role === "executive") && data.account_role !== "administrator") return <DashboardCockpit data={data} summary={summary} tasks={tasks} visibleTasks={visibleTasks} trendData={trendData} metric={metric} setMetric={setMetric} period={period} setPeriod={setPeriod} preferences={preferences} role={role} t={t} onActivity={onActivity} onNavigate={onNavigate} onReport={onReport} onCounter={onCounter} onTask={onTask}/>;
   return <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
     title={<>{t("todayTitle")}<span>{data.user.name}さん</span></>} sub={t("todaySub")}
     actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
@@ -1263,6 +1264,31 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       <StageFunnel items={data.households} t={t}/></section>}
   </>;
 }
+function DashboardCockpit({ data, summary, tasks, visibleTasks, trendData, metric, setMetric, period, setPeriod, preferences, role, t, onActivity, onNavigate, onReport, onCounter, onTask }) {
+  const [note, setNote] = useState(data.daily_report?.manual_note || "");
+  const points = Array.isArray(trendData?.current) ? trendData.current : [];
+  const max = Math.max(0, ...points.map((point) => Number(point.value) || 0));
+  const intros = data.households.reduce((count, item) => count + item.introductions.length, 0);
+  const cockpitHeader = <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })} title={<>{t(role === "executive" ? "executiveTitle" : "managerTitle")}<span>{data.user.name}さん</span></>} sub={t(role === "executive" ? "executiveSub" : "managerSub")} actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
+    <div className="cockpit-counters">{summary && <div className="cockpit-generated muted">{summary.generated_at}</div>}<div className="cockpit-counter-grid">{(summary?.counters || []).slice(0, 3).map((counter) => { const danger = counter.key === "overdue" || counter.key === "critical_risk"; return <button key={counter.key} className={`cockpit-counter${danger ? " cockpit-danger" : ""}`} onClick={() => onCounter(counter)}><span>{t(`counter_${counter.key}`) || counter.label}</span><strong>{counter.count}</strong><small>{counter.unit_type === "items" ? t("unitItems") : counter.unit_type}</small><ChevronRight size={17}/></button>; })}</div></div></>;
+  const tasksBlock = (
+    <section className="panel cockpit-tasks"><div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div><span className="pill pill-red">{tasks.length}</span></div>{visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}><div className={`task-check${task.days_overdue > 0 ? " text-danger" : ""}`}>{task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</div><div className="task-copy"><b>{task.title}</b><span>{task.due_at} · {task.days_overdue > 0 ? <span className="pill pill-red">{task.days_overdue} {t("daysOverdue")}</span> : t("today")}</span></div><button className="icon-btn compact" aria-label={t("open")} onClick={() => onTask(task)}><ChevronRight size={16}/></button></div>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}<div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span><button className="text-button" onClick={() => onNavigate("households")}>{t("viewAll")} <ChevronRight size={14}/></button></div></section>
+  );
+  const trendBlock = (
+    <section className="panel cockpit-trend"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>{["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option key={key} value={key}>{localeLabel(document.documentElement.lang, key)}</option>)}</select><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option></select></div><div className="cockpit-trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{period} · {localeLabel(document.documentElement.lang, metric)}</span></div>{points.length ? <div className="cockpit-trend-bars">{points.map((point, i) => <div key={`${point.date || point.start}-${i}`} title={`${point.date || point.start}: ${point.value}`}><i style={{height:`${max ? Math.max(8,(Number(point.value)||0)/max*100):8}%`}}/></div>)}</div> : <div className="cockpit-empty">{t("trendNoData")}</div>}</section>
+  );
+  const reportBlock = (
+    <>{preferences.dashboard_widgets.includes("report") && <section className="panel cockpit-report"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div><div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div><label className="field-label">{t("note")}<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="..." rows="3"/></label><button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button></section>}</>
+  );
+  const overviewBlock = (
+    <section className="panel cockpit-overview"><div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="cockpit-summary-grid"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div><div><strong>{intros}</strong><span>{t("introductions")}</span></div><div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div><small className="muted">現在の段階分布</small><StageFunnel items={data.households} t={t}/></section>
+  );
+  const roleBlocks = role === "executive"
+    ? <>{overviewBlock}{tasksBlock}{trendBlock}{reportBlock}</>
+    : <>{tasksBlock}{trendBlock}{reportBlock}{overviewBlock}</>;
+  return <div className="cockpit-page">{cockpitHeader}{roleBlocks}</div>;
+}
+
 function localeLabel(locale, key) {
   const labels = {
     ja: {
