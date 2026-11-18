@@ -17,6 +17,11 @@ const COPY = {
     searchRetry: "再試行", searchNoResults: "該当する顧客が見つかりませんでした。",
     searchNoResultsHint: "検索キーワードをご確認ください。",
     searchViewAll: (count) => `すべての顧客を表示 (${count}件)`,
+    introFilterDisputedName: "帰属争議", introFilterDisputedDescription: "帰属に関する確認が必要な世帯を表示しています。",
+    introFilterUnassignedName: "担当未割当", introFilterUnassignedDescription: "担当者が未割当の世帯を表示しています。",
+    introFilterValidityName: "紹介有効期間", introFilterValidityDescription: "紹介有効期間の確認が必要な世帯を表示しています。",
+    introFilterGenericName: "業務条件", introFilterGenericDescription: "業務条件で絞り込み中です。",
+    introSelectHousehold: "世帯を選択してください", introNoIntroductions: "紹介はまだありません",
     searchTruncated: "検索結果が多いため、一部のみ表示しています。条件を絞り込んでください。",
     searchCount: (count, truncated) => truncated ? `${count}件を表示中` : `${count}件の顧客が見つかりました`,
     product: "MallBoard", subtitle: "住宅相談ビジネス・業務基盤", today: "今日の業務",
@@ -256,6 +261,11 @@ const COPY = {
     searchLoading: "正在搜索客户…", searchRetry: "重试",
     searchNoResults: "没有找到匹配的顾客", searchNoResultsHint: "请确认顾客姓名、假名、顾客代码或电话号码。",
     searchViewAll: (count) => `查看全部 ${count} 位客户`,
+    introFilterDisputedName: "归属争议", introFilterDisputedDescription: "当前显示归属关系需要确认的家庭。",
+    introFilterUnassignedName: "未分配负责人", introFilterUnassignedDescription: "当前显示尚未分配负责人的家庭。",
+    introFilterValidityName: "介绍有效期", introFilterValidityDescription: "当前显示需要确认介绍有效期的家庭。",
+    introFilterGenericName: "业务条件", introFilterGenericDescription: "当前按业务条件筛选显示中。",
+    introSelectHousehold: "请选择家庭", introNoIntroductions: "暂无介绍",
     searchTruncated: "搜索结果较多，仅显示部分结果。请缩小搜索条件。",
     searchCount: (count, truncated) => truncated ? `显示前 ${count} 位` : `找到 ${count} 位客户`,
     systemManagement: "\u7cfb\u7edf\u7ba1\u7406", descHouseholds: "\u987e\u5ba2\u3001\u5bb6\u5ead\u5217\u8868\u3001\u8be6\u60c5\u4e0e\u5386\u53f2", descIntroductions: "\u4ecb\u7ecd\u4e0e\u5546\u8c08\u8fdb\u5ea6\u7ba1\u7406", descRevenue: "\u5f00\u5de5\u786e\u8ba4\u4e0e\u62a5\u916c\u5904\u7406\u60c5\u51b5", descTeam: "\u5168\u5458\u65e5\u7a0b\u3001\u516c\u544a\u677f\u3001\u5546\u8c08\u961f\u5217", descManagement: "\u7ecf\u8425\u6307\u6807\u4e0e\u95e8\u5e97\u8fd0\u8425\u60c5\u51b5", descSettings: "\u663e\u793a\u3001\u901a\u77e5\u4e0e\u4e1a\u52a1\u8bbe\u7f6e", descAccounts: "\u8d26\u53f7\u4e0e\u6743\u9650\u7ba1\u7406",
@@ -960,7 +970,7 @@ function App() {
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
       {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
       {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
@@ -1397,20 +1407,26 @@ function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, te
       {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span>{taskFilter && terminalExcludedTaskCount > 0 && <span className="business-filter-note">{t("businessTerminalExcludedNote").replace("{count}", terminalExcludedTaskCount)}</span>}</div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
       <HouseholdTable items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
 }
-function Introductions({ items, t, onOpen, onAdd }) {
+function Introductions({ items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
   useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
   const household = items.find((h) => h.id === activeHousehold);
+  const filterCopy = businessFilter === "disputed" ? ["introFilterDisputedName", "introFilterDisputedDescription"]
+    : businessFilter === "unassigned" ? ["introFilterUnassignedName", "introFilterUnassignedDescription"]
+      : businessFilter === "validity:due" ? ["introFilterValidityName", "introFilterValidityDescription"]
+        : ["introFilterGenericName", "introFilterGenericDescription"];
+  const emptyHouseholds = items.length === 0;
   return <><PageTitle eyebrow={t("partnerJourney")} title={t("introductions")} sub={t("introductionsSub")}/>
+    {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(filterCopy[0])}</b><span>{t(filterCopy[1])}</span></div><div className="business-filter-counts"><span><b>{items.length}</b>{t("targetHouseholds")}</span></div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
     <div className="intro-layout"><section className="panel intro-list"><div className="panel-head"><h2>{t("households")}</h2><span className="count-badge">{items.length}</span></div>
-      {items.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
+      {emptyHouseholds ? <div className="empty-mini">{t(businessFilter ? "noMatchingHouseholds" : "noHouseholds")}</div> : items.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
         <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div><span className="intro-count">{h.introductions.length}</span>
       </button>)}</section>
       {household ? <section className="intro-detail"><div className="panel intro-context"><div><div className="eyebrow">{household.store_name} · {household.advisor_name}</div><h2>{household.representative_name}</h2><span>{household.budget_band} · {household.area_pref}</span></div>
-        <button className="secondary-btn" onClick={() => onAdd(household)}><Plus size={15}/>{t("partnerCreate")}</button></div>
-        <div className="partner-grid">{household.introductions.map((intro) => <PartnerCard key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
+        <button className="primary-btn" onClick={() => onAdd(household)}><Plus size={15}/>{t("partnerCreate")}</button></div>
+        <div className="partner-grid">{!household.introductions.length && <div className="empty-state intro-empty-partners">{t("introNoIntroductions")}</div>}{household.introductions.map((intro) => <PartnerCard key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
           {!household.introductions.length && <button className="add-partner-card" onClick={() => onAdd(household)}><Plus size={20}/>{t("partnerCreate")}</button>}</div>
-      </section> : <section className="panel empty-state">{t("noRows")}</section>}
+      </section> : <section className="panel empty-state">{t("introSelectHousehold")}</section>}
     </div></>;
 }
 function PartnerCard({ intro, t, onOpen }) {
@@ -1418,7 +1434,7 @@ function PartnerCard({ intro, t, onOpen }) {
   const state = intro.entitlement_state;
   return <article className={`partner-card ${state === "Disputed" ? "disputed-card" : ""}`}>
     <div className="partner-card-head"><div className="partner-icon"><Building2 size={18}/></div><div><b>{intro.partner_name}</b><span>{intro.staff_name || "—"} · {intro.introduced_at}</span></div>
-      {intro.existing_customer_flag ? <span className="pill pill-red">{t("disputed")}</span> : <span className="pill pill-blue">{t(intro.status === "受付確認済" ? "received" : "introduced")}</span>}</div>
+      {intro.existing_customer_flag ? <span className="pill pill-orange">{t("disputed")}</span> : <span className={`pill ${intro.status === "受付確認済" ? "pill-blue" : "pill-violet"}`}>{t(intro.status === "受付確認済" ? "received" : "introduced")}</span>}</div>
     <div className="negotiation-status"><div><small>{t("status")}</small><b>{intro.negotiation_status || "紹介済"}</b></div><div><small>{t("elapsed")}</small><b>{elapsed} {t("days")}</b></div><div><small>{t("last")}</small><b>{intro.last_activity_at || "—"}</b></div></div>
     {intro.contract_id && <div className="contract-highlight"><div className="contract-icon"><Check size={15}/></div><div><b>{t("contract")} · ¥{Number(intro.contract_amount).toLocaleString()}</b><span>{intro.contract_date}</span></div></div>}
     {state === "Disputed" && <div className="frozen-banner"><CircleAlert size={15}/>{t("frozen")}</div>}
