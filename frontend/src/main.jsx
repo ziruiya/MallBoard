@@ -113,6 +113,25 @@ const COPY = {
     businessValidityName: "紹介有効期間が接近", businessValidityDescription: "紹介の有効期間が30日以内に迫っている世帯を表示しています。",
     businessDisputedName: "帰属争議あり", businessDisputedDescription: "帰属争議中の紹介がある世帯を表示しています。",
     businessGenericName: "業務条件", businessGenericDescription: "業務条件で絞り込み中です。",
+    revFilterUnit: "件",
+    revFilterConstructionPendingName: "着工確認滞留",
+    revFilterConstructionPendingDesc: "着工確認が未完了のプロジェクトを表示しています。",
+    revFilterConstructionName: "着工確認",
+    revFilterConstructionDesc: "着工確認キューを状態で絞り込んでいます。",
+    revFilterEntPendingName: "報酬承認待ち",
+    revFilterEntPendingDesc: "承認待ちの報酬レコードを表示しています。",
+    revFilterEntInvoicedName: "請求済・未入金",
+    revFilterEntInvoicedDesc: "請求済みで未入金の報酬レコードを表示しています。",
+    revFilterEntInvoiceDataPendingName: "請求データ生成待ち",
+    revFilterEntInvoiceDataPendingDesc: "請求データが未生成の確定報酬レコードを表示しています。",
+    revFilterDisputedName: "帰属争議",
+    revFilterDisputedDesc: "争議中の報酬レコードを表示しています。",
+    revFilterAreaQueue: "着工確認キュー",
+    revFilterAreaLedger: "報酬台帳",
+    revMetricsNote: "全体集計（現在の一覧フィルターとは独立）",
+    revNoMatchingProjects: "条件に一致するプロジェクトはありません",
+    revNoMatchingRecords: "条件に一致するレコードはありません",
+    revNoDisputes: "争議中のレコードはありません",
     clearBusinessFilter: "条件を解除", businessTerminalExcludedNote: "完了・見送りの世帯に紐づくタスク {count} 件は対象外です。", targetHouseholds: "対象世帯", targetTasks: "対象タスク",
     nextActionUnset: "未設定", noMatchingTasks: "対象タスクはありません", noMatchingHouseholds: "条件に一致する世帯はありません", noHouseholds: "世帯がありません", viewHousehold: "世帯詳細を見る →",
     noRows: "表示するデータがありません。",
@@ -336,6 +355,25 @@ const COPY = {
     disputeType_referral: "介绍归属争议", disputeType_amount: "报酬金额争议",
     disputeType_construction: "开工证据争议", decisionReason: "裁决理由",
     reassessment: "重新调查", writeOff: "核销报酬", resolveDispute: "处理争议",
+    revFilterUnit: "件",
+    revFilterConstructionPendingName: "开工确认滞留",
+    revFilterConstructionPendingDesc: "当前显示尚未完成开工确认的项目。",
+    revFilterConstructionName: "开工确认",
+    revFilterConstructionDesc: "当前按状态筛选开工确认队列。",
+    revFilterEntPendingName: "报酬待批准",
+    revFilterEntPendingDesc: "当前显示待批准的报酬记录。",
+    revFilterEntInvoicedName: "已开票未收款",
+    revFilterEntInvoicedDesc: "当前显示已开票尚未收款的报酬记录。",
+    revFilterEntInvoiceDataPendingName: "待生成开票数据",
+    revFilterEntInvoiceDataPendingDesc: "当前显示尚未生成开票数据的已确定报酬记录。",
+    revFilterDisputedName: "归属争议",
+    revFilterDisputedDesc: "当前显示争议中的报酬记录。",
+    revFilterAreaQueue: "开工确认队列",
+    revFilterAreaLedger: "报酬台账",
+    revMetricsNote: "整体汇总（与当前列表筛选相互独立）",
+    revNoMatchingProjects: "没有符合条件的项目",
+    revNoMatchingRecords: "没有符合条件的记录",
+    revNoDisputes: "暂无争议中的记录",
     stateConfirmed: "已确认", stateInvoiced: "请款数据已生成", statePaid: "已入金",
     stateDisputed: "争议中", statePendingConfirmation: "待确认", stateEstimated: "预计",
     statePotential: "潜在", stateWrittenOff: "已核销", statePending: "待审批",
@@ -971,7 +1009,7 @@ function App() {
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
       {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
       {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
@@ -993,7 +1031,7 @@ function PageTitle({ eyebrow, title, sub, actions }) {
   return <div className="page-title"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{sub && <p>{sub}</p>}</div>{actions && <div className="title-actions">{actions}</div>}</div>;
 }
 function Metric({ label, value, delta, icon: Icon, tone = "blue", small }) {
-  return <div className={`metric-card ${small ? "metric-small" : ""}`}><div className={`metric-icon ${tone}`}><Icon size={18}/></div>
+  return <div className={`metric-card ${small ? "metric-small" : ""}${tone === "emphasis" ? " metric-emphasis" : ""}`}><div className={`metric-icon ${tone}`}><Icon size={18}/></div>
     <div className="metric-info"><span>{label}</span><strong>{value}</strong>{delta && <small>{delta}</small>}</div>
     {delta && <div className="metric-spark"><ArrowUpRight size={16}/></div>}</div>;
 }
@@ -1442,13 +1480,14 @@ function PartnerCard({ intro, t, onOpen }) {
     <button className="card-link" onClick={onOpen}>{t("review")} <ChevronRight size={14}/></button>
   </article>;
 }
-function Revenue({ data, t, role, api, onOpen, filter }) {
+function Revenue({ data, t, role, api, onOpen, filter, onClearBusinessFilter }) {
   const projectItems = data.households.flatMap((household) => household.introductions
     .filter((intro) => intro.project_id && !intro.confirmed_start_date)
     .map((intro) => ({ household, project: intro })));
   const queue = filter.startsWith("construction:") && filter !== "construction:pending"
     ? projectItems.filter(({ project }) => project.confirmation_status === filter.slice("construction:".length))
     : projectItems;
+  const filteredEntitlements = data.entitlements.filter((e) => filter !== "disputed" || e.state === "Disputed").filter((e) => !filter.startsWith("entitlements:") || (filter === "entitlements:Pending" ? e.state === "Pending" : filter === "entitlements:Invoiced" ? e.state === "Invoiced" : filter === "entitlements:invoice_data_pending" ? e.state === "Confirmed" && !e.invoice_data_generated : true));
   const disputes = data.entitlements.filter((item) => item.state === "Disputed");
   const sumState = (states) => data.entitlements.filter((item) => states.includes(item.state))
     .reduce((sum, item) => sum + Number(item.calculated_amount || 0), 0);
@@ -1457,33 +1496,38 @@ function Revenue({ data, t, role, api, onOpen, filter }) {
   const freezeAmount = disputes.reduce((sum, item) => sum + Number(item.calculated_amount || 0), 0);
   const referenceAmount = disputes.reduce((sum, item) => sum + Number(item.reference_amount || 0), 0);
   const feeRuleParams = (value) => typeof value === "string" ? JSON.parse(value) : value;
-  return <><PageTitle eyebrow={t("constructionRevenue")} title={t("revenue")} sub={t("revenueSub")}/>
-    <div className="revenue-metrics"><Metric small label={t("plannedFee")} value={`¥${plannedAmount.toLocaleString()}`} icon={CalendarDays}/>
-      <Metric small label={t("feeReview")} value={`¥${sumState(["Pending"]).toLocaleString()}`} icon={Clock3} tone="orange"/>
-      <Metric small label={t("approvedFee")} value={`¥${sumState(["Confirmed"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="green"/>
-      <Metric small label={t("invoiceAmount")} value={`¥${sumState(["Invoiced"]).toLocaleString()}`} icon={FileText}/>
+  let nameKey, descKey, areaKey, N;
+  if (filter === "construction:pending") { nameKey = "revFilterConstructionPendingName"; descKey = "revFilterConstructionPendingDesc"; areaKey = "revFilterAreaQueue"; N = queue.length; }
+  else if (filter.startsWith("construction:")) { nameKey = "revFilterConstructionName"; descKey = "revFilterConstructionDesc"; areaKey = "revFilterAreaQueue"; N = queue.length; }
+  else if (filter === "entitlements:Pending") { nameKey = "revFilterEntPendingName"; descKey = "revFilterEntPendingDesc"; areaKey = "revFilterAreaLedger"; N = filteredEntitlements.length; }
+  else if (filter === "entitlements:Invoiced") { nameKey = "revFilterEntInvoicedName"; descKey = "revFilterEntInvoicedDesc"; areaKey = "revFilterAreaLedger"; N = filteredEntitlements.length; }
+  else if (filter === "entitlements:invoice_data_pending") { nameKey = "revFilterEntInvoiceDataPendingName"; descKey = "revFilterEntInvoiceDataPendingDesc"; areaKey = "revFilterAreaLedger"; N = filteredEntitlements.length; }
+  else if (filter === "disputed") { nameKey = "revFilterDisputedName"; descKey = "revFilterDisputedDesc"; areaKey = "revFilterAreaLedger"; N = filteredEntitlements.length; }
+  const banner = nameKey !== undefined;
+  return <><PageTitle eyebrow={t("constructionRevenue")} title={t("revenue")} sub={t("revenueSub")}/>{banner && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descKey)}</span></div><div className="business-filter-counts"><span>{t(areaKey)}</span><span><b>{N}</b>{t("revFilterUnit")}</span></div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
+    <p className="revenue-metrics-note">{t("revMetricsNote")}</p>
+    <div className="revenue-metrics"><Metric small label={t("plannedFee")} value={`¥${plannedAmount.toLocaleString()}`} icon={CalendarDays} tone="neutral"/>
+      <Metric small label={t("feeReview")} value={`¥${sumState(["Pending"]).toLocaleString()}`} icon={Clock3} tone="amber"/>
+      <Metric small label={t("approvedFee")} value={`¥${sumState(["Confirmed"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="blue"/>
+      <Metric small label={t("invoiceAmount")} value={`¥${sumState(["Invoiced"]).toLocaleString()}`} icon={FileText} tone="violet"/>
       <Metric small label={t("paidAmount")} value={`¥${sumState(["Paid"]).toLocaleString()}`} icon={WalletCards} tone="green"/>
-      <Metric small label={t("confirmedRevenue")} value={`¥${sumState(["Confirmed", "Invoiced", "Paid"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="blue"/></div>
+      <Metric small label={t("confirmedRevenue")} value={`¥${sumState(["Confirmed", "Invoiced", "Paid"]).toLocaleString()}`} icon={BadgeJapaneseYen} tone="emphasis"/></div>
     <section className="panel construction-queue-panel"><div className="panel-head"><div><div className="eyebrow">{t("constructionConfirmation")}</div><h2>{t("confirmStart")} · {queue.length}</h2></div>
       <span className="pill pill-orange">{t("overdueLabel")} {overdueProjects}</span></div>
       <div className="construction-queue">{queue.map(({ household, project }) => <ConstructionCard key={project.project_id}
         household={household} project={project} t={t} role={role} api={api}/>)}
-      {!queue.length && <div className="empty-state">{t("noRows")}</div>}</div>
+      {!queue.length && <div className="empty-state">{t(filter.startsWith("construction:") ? "revNoMatchingProjects" : "noRows")}</div>}</div>
     </section>
     <section className="panel entitlement-panel"><div className="panel-head"><div><div className="eyebrow">{t("revenueLedger")}</div><h2>{t("entitlement")}</h2></div>
       <span className="pill pill-green">{t("appendOnlyAudit")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("partner")}</th><th>{t("basis")}</th><th>{t("rule")}</th><th>{t("amount")}</th><th>{t("status")}</th><th/></tr></thead><tbody>
-      {data.entitlements.filter((e) => filter !== "disputed" || e.state === "Disputed").filter((e) => !filter.startsWith("entitlements:") || (
-        filter === "entitlements:Pending" ? e.state === "Pending" :
-          filter === "entitlements:Invoiced" ? e.state === "Invoiced" :
-            filter === "entitlements:invoice_data_pending" ? e.state === "Confirmed" && !e.invoice_data_generated : true
-      )).map((e) => <tr key={e.id}><td><b>{e.representative_name}</b></td><td>{e.partner_name}</td>
-        <td>¥{Number(e.base_amount).toLocaleString()} × {feeRuleParams(e.params).rate ? `${feeRuleParams(e.params).rate * 100}%` : "—"}</td>
-        <td><span className="rule-chip">v{e.rule_version}</span> {e.base}</td><td className="amount-cell">¥{Number(e.calculated_amount).toLocaleString()}</td>
-        <td><StateBadge state={e.state} t={t}/></td><td><EntitlementActions entitlement={e} t={t} role={role} api={api}/></td></tr>)}</tbody></table>
-        {!data.entitlements.length && <div className="empty-state">{t("noEntitlement")}</div>}</div></section>
-    <section className="panel dispute-note"><CircleAlert size={18}/><div><b>{t("disputed")} {disputes.length} · {t("frozen")}</b>
-      <span>{t("referenceAmount")}: ¥{referenceAmount.toLocaleString()} · {t("frozenAmount")}: ¥{freezeAmount.toLocaleString()} · {t("accountingNote")}</span></div></section>
+      {filteredEntitlements.map((e) => <tr key={e.id}><td data-label={t("household")}><b>{e.representative_name}</b></td><td data-label={t("partner")}>{e.partner_name}</td>
+        <td data-label={t("basis")}>¥{Number(e.base_amount).toLocaleString()} × {feeRuleParams(e.params).rate ? `${feeRuleParams(e.params).rate * 100}%` : "—"}</td>
+        <td data-label={t("rule")}><span className="rule-chip">v{e.rule_version}</span> {e.base}</td><td data-label={t("amount")} className="amount-cell">¥{Number(e.calculated_amount).toLocaleString()}</td>
+        <td data-label={t("status")}><StateBadge state={e.state} t={t}/></td><td data-label=""><EntitlementActions entitlement={e} t={t} role={role} api={api}/></td></tr>)}</tbody></table>
+        {!data.entitlements.length && <div className="empty-state">{t("noEntitlement")}</div>}{data.entitlements.length > 0 && !filteredEntitlements.length && (filter.startsWith("entitlements:") || filter === "disputed") && <div className="empty-state">{t("revNoMatchingRecords")}</div>}</div></section>
+    {disputes.length > 0 ? <section className="panel dispute-note"><CircleAlert size={18}/><div><b>{t("disputed")} {disputes.length} · {t("frozen")}</b>
+      <span>{t("referenceAmount")}: ¥{referenceAmount.toLocaleString()} · {t("frozenAmount")}: ¥{freezeAmount.toLocaleString()} · {t("accountingNote")}</span></div></section> : <section className="panel dispute-note dispute-note-neutral"><CircleAlert size={18}/><div><b>{t("revNoDisputes")}</b></div></section>}
     {disputes.map((item) => <DisputeResolution key={item.id} item={item} t={t} role={role} api={api}/>)}
   </>;
 }
