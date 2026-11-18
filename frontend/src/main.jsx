@@ -761,6 +761,8 @@ function App() {
 
   async function login(path, body) {
     resetSearchState();
+    setSearchExpanded(false);
+    setAccountMenuOpen(false);
     setBusy(true);
     setLoginError("");
     try {
@@ -779,6 +781,8 @@ function App() {
 
   async function logout() {
     resetSearchState();
+    setSearchExpanded(false);
+    setAccountMenuOpen(false);
     await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
     setAuthenticated(false);
     setData(null);
