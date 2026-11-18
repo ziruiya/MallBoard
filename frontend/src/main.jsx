@@ -838,6 +838,7 @@ function App() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || t("error"));
       const identity = await load();
+      setBusinessFilter("");
       if (!identity.user.must_change_password && identity.account_role !== "hr") setPage("dashboard");
     } catch (error) {
       setLoginError(error.message || t("error"));
