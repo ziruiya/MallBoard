@@ -767,6 +767,7 @@ function App() {
   const [management, setManagement] = useState(null);
   const [preferences, setPreferences] = useState({ dashboard_widgets: ["tasks", "overview"], notification_preferences: { in_app: true, email: false } });
   const [businessFilter, setBusinessFilter] = useState("");
+  const [introFocusHouseholdId, setIntroFocusHouseholdId] = useState(null);
   const [selected, setSelected] = useState(null);
   const [modal, setModal] = useState("");
   const [query, setQuery] = useState("");
@@ -1055,9 +1056,20 @@ function App() {
     }
     if (businessFilter === "unassigned") rows = rows.filter((h) => !h.advisor_id || h.introductions.some((item) => !item.advisor_id));
     if (businessFilter === "validity:due") {
-      const limit = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-      rows = rows.filter((h) => h.introductions.some((item) => item.valid_until
-        && item.valid_until.toString().slice(0, 10) <= limit));
+      const localDate = (date) => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+      const now = new Date();
+      const lastDay = new Date(now);
+      lastDay.setDate(lastDay.getDate() + 30); // Matches the current sla.introduction_validity_days.
+      const today = localDate(now);
+      const limit = localDate(lastDay);
+      rows = rows.filter((h) => h.introductions.some((item) => {
+        const validUntil = item.valid_until?.toString().slice(0, 10);
+        return validUntil && validUntil >= today && validUntil <= limit;
+      }));
     }
     if (businessFilter === "disputed") rows = rows.filter((h) => h.introductions.some((item) => item.status === "帰属争議中" || item.entitlement_state === "Disputed"));
     if (isTaskBusinessFilter(businessFilter)) {
@@ -1096,6 +1108,13 @@ function App() {
     }
   }
   const openHousehold = (household) => { setSelected(household); setModal("household"); };
+  function handleReminder(reminder, item) {
+    setBusinessFilter(reminder.filter);
+    setPage(reminder.target_page);
+    if (reminder.target_page !== "introductions" || item?.id == null) return;
+    const household = data.households.find((h) => h.introductions.some((intro) => intro.id === item.id));
+    if (household) setIntroFocusHouseholdId(household.id);
+  }
   if (!authenticated || !data) return <LoginPage locale={locale} setLocale={setLocale} t={t} accounts={demoAccounts}
     demoAvailable={demoAvailable} error={loginError} busy={busy} onLogin={login}/>;
   const navItems = data.account_role === "hr" ? [["accounts", Users, "accounts"]]
@@ -1113,9 +1132,15 @@ function App() {
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} locale={locale} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households locale={locale} items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions locale={locale} items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
+      {page === "households" && <Households locale={locale} items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}
+      {page === "introductions" && <Introductions locale={locale} items={filtered} t={t} onOpen={openHousehold}
+        onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter}
+        onClearBusinessFilter={() => setBusinessFilter("")} focusHouseholdId={introFocusHouseholdId}
+        onFocusHandled={() => setIntroFocusHouseholdId(null)}/>}
+      {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
       {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace displayDate={displayDate} roleLabel={roleLabel} stageLabel={localeLabel} view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
-      {page === "management" && <Management locale={locale} data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
+      {page === "management" && <Management locale={locale} data={data} management={management} trend={trend} t={t} role={role}
+        onReminder={handleReminder} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onLocaleChange={setLocale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
     </>}<footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} ? {t("demoWarning")}<span>{t("copyright")}</span></footer></div></main>
     {modal === "household" && selected && <HouseholdModal locale={locale} household={selected} t={t} role={role}
@@ -1569,9 +1594,14 @@ function Households({ locale, items, stores, t, onOpen, businessFilter, matchedT
       {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span>{taskFilter && terminalExcludedTaskCount > 0 && <span className="business-filter-note">{t("businessTerminalExcludedNote").replace("{count}", terminalExcludedTaskCount)}</span>}</div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
       <HouseholdTable locale={locale} items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
 }
-function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter }) {
+function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter, focusHouseholdId, onFocusHandled }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
   useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
+  useEffect(() => {
+    if (focusHouseholdId == null) return;
+    if (items.some((h) => h.id === focusHouseholdId)) setActiveHousehold(focusHouseholdId);
+    onFocusHandled();
+  }, [items, focusHouseholdId, onFocusHandled]);
   const household = items.find((h) => h.id === activeHousehold);
   const filterCopy = businessFilter === "disputed" ? ["introFilterDisputedName", "introFilterDisputedDescription"]
     : businessFilter === "unassigned" ? ["introFilterUnassignedName", "introFilterUnassignedDescription"]
