@@ -268,6 +268,9 @@ const COPY = {
     postDaily: "日報", postMeeting: "会議記録", postNotice: "お知らせ", postShared: "共有",
     publishPost: "投稿する", editPost: "編集", archivePost: "アーカイブ", comment: "コメント",
     addComment: "コメントを追加", noPosts: "投稿はありません。", searchPosts: "投稿を検索",
+    bulletinAllMonths: "すべての月", bulletinClearMonth: "月をクリア", bulletinNoPosts: "掲示板の投稿はありません", bulletinNoMatchingPosts: "条件に一致する投稿はありません",
+    calendarWeekEmpty: "この週の予定はありません", calendarNoEmployees: "表示できる従業員がいません",
+    auditCatSystem: "システム記録", auditCatBusiness: "業務記録", auditCatAudit: "監査記録", auditDemoRoleSwitch: "デモアカウント切替",
     postMonth: "対象月", dailyReportPublish: "日報ドラフトを共有",
     queueAction: "次の行動", queueOwner: "担当者", queueStage: "商談段階",
     queueRisk: "リスク", riskNone: "通常", riskWatch: "要確認", riskHigh: "優先",
@@ -528,6 +531,9 @@ const COPY = {
     postDaily: "日报", postMeeting: "会议记录", postNotice: "通知", postShared: "共享",
     publishPost: "发布", editPost: "编辑", archivePost: "归档", comment: "评论",
     addComment: "添加评论", noPosts: "暂无帖子。", searchPosts: "搜索帖子",
+    bulletinAllMonths: "全部月份", bulletinClearMonth: "清除月份", bulletinNoPosts: "公告栏还没有帖子", bulletinNoMatchingPosts: "没有符合条件的帖子",
+    calendarWeekEmpty: "本周暂无日程", calendarNoEmployees: "没有可显示的员工",
+    auditCatSystem: "系统记录", auditCatBusiness: "业务记录", auditCatAudit: "审计记录", auditDemoRoleSwitch: "演示账号切换",
     postMonth: "月份", dailyReportPublish: "分享日报草稿",
     queueAction: "下一步行动", queueOwner: "负责人", queueStage: "洽谈阶段",
     queueRisk: "风险", riskNone: "正常", riskWatch: "需关注", riskHigh: "优先",
@@ -1010,7 +1016,7 @@ function App() {
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
       {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
-      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
+      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
       {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
     </>}<footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} ? {t("demoWarning")}<span>{t("copyright")}</span></footer></div></main>
@@ -1177,6 +1183,18 @@ function PasswordChangePage({ forced = false, api, t, onChanged }) {
   </section>;
 }
 
+const AUDIT_BUSINESS_ACTIONS = new Set([
+  "activity.created", "calendar_event.created", "calendar_event.updated",
+  "negotiation.next_action.updated", "introduction.created", "construction.confirmed",
+  "referral_dispute.raised", "referral_dispute.decided", "stage.changed", "daily_report.saved",
+]);
+const AUDIT_BUSINESS_PREFIXES = ["bulletin.", "entitlement.", "expense."];
+function auditCategory(action) {
+  if (action === "DEMO_ROLE_SWITCH") return "system";
+  if (AUDIT_BUSINESS_ACTIONS.has(action) || AUDIT_BUSINESS_PREFIXES.some((prefix) => String(action || "").startsWith(prefix))) return "business";
+  return "audit";
+}
+
 function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
   const today = todayJst();
   const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) <= today).length;
@@ -1233,11 +1251,11 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
     </section>
     <section className="panel employee-recent-panel">
       <div className="panel-head"><div><div className="eyebrow">{t("recentActivity")}</div><h2>{t("recentActivity")}</h2></div></div>
-      {recentLogs.length ? <div className="employee-recent-list">{recentLogs.map((log) => <article className="employee-recent-row" key={log.id}>
-        <b>{log.action}</b>
+      {recentLogs.length ? <div className="employee-recent-list">{recentLogs.map((log) => { const cat = auditCategory(log.action); return <article className="employee-recent-row" key={log.id}>
+        <span className="recent-action"><b>{log.action === "DEMO_ROLE_SWITCH" ? t("auditDemoRoleSwitch") : log.action}</b><span className={`audit-chip audit-chip-${cat}`}>{t(cat === "system" ? "auditCatSystem" : cat === "business" ? "auditCatBusiness" : "auditCatAudit")}</span></span>
         {(log.target_type || log.target_id_text) && <span>{[log.target_type, log.target_id_text].filter(Boolean).join(" · ")}</span>}
         <time>{log.at}</time>
-      </article>)}</div> : <div className="empty-mini">{t("noRecentActivity")}</div>}
+      </article>;})}</div> : <div className="empty-mini">{t("noRecentActivity")}</div>}
     </section>
     <section className="panel collaboration-shortcuts">
       <div className="panel-head"><div><div className="eyebrow">{t("collaboration")}</div><h2>{t("collaboration")}</h2></div></div>

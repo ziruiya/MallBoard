@@ -81,6 +81,7 @@ function CalendarView({ data, role, t, locale, api, onTask }) {
     };
     return t(map[event.event_type] || "eventPersonal");
   };
+  const visibilityLabel = (event) => ({ private: t("privateEvent"), store: t("storeEvent"), company: t("companyEvent") })[event.visibility] || "";
   function startCreate() {
     const day = new Date(days[0]);
     day.setHours(0, 0, 0, 0);
@@ -177,7 +178,7 @@ function CalendarView({ data, role, t, locale, api, onTask }) {
               return <div className="calendar-cell" key={`${staff.id}-${localDate(day)}`}>
                 {items.map((item) => <button key={item.id} className={`calendar-event event-${item.event_type}`}
                   onClick={() => editEvent(item)} title={item.title}>
-                  <small>{eventLabel(item)}</small><b>{item.title}</b>
+                  <b>{item.title}</b><small>{[eventLabel(item), visibilityLabel(item)].filter(Boolean).join(" · ")}</small>
                 </button>)}
               </div>;
             })}
@@ -190,12 +191,12 @@ function CalendarView({ data, role, t, locale, api, onTask }) {
           return <section key={localDate(day)} className="calendar-mobile-day">
             <h3>{day.toLocaleDateString(locale === "ja" ? "ja-JP" : "zh-CN", { weekday: "long", month: "numeric", day: "numeric" })}</h3>
             {items.map((item) => <button key={item.id} className={`calendar-event event-${item.event_type}`}
-              onClick={() => editEvent(item)}><small>{item.owner_name} · {eventLabel(item)}</small><b>{item.title}</b></button>)}
+              onClick={() => editEvent(item)}><b>{item.title}</b><small>{[item.owner_name, eventLabel(item), visibilityLabel(item)].filter(Boolean).join(" · ")}</small></button>)}
             {!items.length && <p className="muted">{t("calendarEmpty")}</p>}
           </section>;
         })}
       </div>
-      {!visibleEvents.length && !form && <div className="calendar-empty">{t("calendarEmpty")}</div>}
+      {!visibleEmployees.length ? <div className="calendar-empty">{t("calendarNoEmployees")}</div> : (!visibleEvents.length && !form && <div className="calendar-empty">{t("calendarWeekEmpty")}</div>)}
     </section>
   </div>;
 }
@@ -277,6 +278,7 @@ function BulletinView({ data, role, t, locale, api }) {
   function categoryLabel(key) {
     return t(({ daily_report: "postDaily", meeting: "postMeeting", notice: "postNotice", shared: "postShared" })[key]);
   }
+  const filtersActive = Boolean(category || query.trim() || month);
   return <div className="bulletin-workspace">
     <section className="panel bulletin-panel">
       <div className="bulletin-toolbar">
@@ -285,7 +287,7 @@ function BulletinView({ data, role, t, locale, api }) {
         <select value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="">{t("all")}</option>{categories.map((item) => <option key={item} value={item}>{categoryLabel(item)}</option>)}
         </select>
-        <label>{t("postMonth")}<input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label>
+        <div className="bulletin-month-control"><label>{t("postMonth")}<input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label>{month ? <button type="button" className="text-button" onClick={() => setMonth("")}>{t("bulletinClearMonth")}</button> : <span className="bulletin-month-all">{t("bulletinAllMonths")}</span>}</div>
         <button className="primary-btn" onClick={() => startNew()}><Plus size={15}/>{t("publishPost")}</button>
         <button className="secondary-btn" onClick={() => startNew("daily_report")}>{t("dailyReportPublish")}</button>
       </div>
@@ -333,7 +335,7 @@ function BulletinView({ data, role, t, locale, api }) {
             <button className="secondary-btn" onClick={() => addComment(post)}>{t("addComment")}</button>
           </div>}</div>
         </article>)}
-        {!items.length && <div className="empty-state">{t("noPosts")}</div>}
+        {!items.length && <div className="empty-state">{t(filtersActive ? "bulletinNoMatchingPosts" : "bulletinNoPosts")}</div>}
       </div>
     </section>
   </div>;
