@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity, ArrowDownRight, ArrowUpRight, BadgeJapaneseYen, Bell, Building2, CalendarDays,
-  Check, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Clock3, FileText, Filter,
+  Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, ClipboardList, Clock3, FileText, Filter,
   Home, Languages, LayoutDashboard, LogOut, Menu, Plus, Search, Settings, ShieldCheck,
   Users, WalletCards, X,
 } from "lucide-react";
@@ -34,6 +34,13 @@ const COPY = {
     touchHistory: "接点履歴",
     greetingSuffix: "さん",
     trendLoadFailed: "業務トレンドを取得できませんでした。",
+    trendLoading: "業務トレンドを読み込み中…",
+    trendInvalid: "業務トレンドのデータを表示できません。",
+    trendEmpty: "期間内に記録がありません",
+    trendZero: "対象期間の合計は 0 です",
+    trendRecentDays: (days) => `直近${days}日`,
+    managementLoadFailed: "経営・管理データを取得できませんでした。",
+    loadingRecords: "記録を読み込み中…",
     currentStageDistribution: "現在の段階分布",
     stage_terminal: "完了・見送り",
     clearSearch: "検索をクリア",
@@ -97,7 +104,7 @@ const COPY = {
     unitItems: "件", reminder_introduction_validity: "紹介有効期間",
     reminder_construction_evidence: "着工証拠提出期限", reminder_dispute_resolution: "争議処理期限",
     reminder_agreement_renewal: "提携契約更新期限", reminder_fee_rule_validity: "FeeRule適用期限",
-    managerTitle: "今日の店舗運営", executiveTitle: "全社経営ダッシュボード", managerSub: "本店の業務状況を確認しましょう。", executiveSub: "全社の業務状況を確認しましょう。", trendNoData: "この期間のデータはありません", trendEntry: "業務トレンドを見る", selectMetric: "指標", period: "期間",
+    managerTitle: "今日の店舗運営", executiveTitle: "全社経営ダッシュボード", managerSub: "本店の業務状況を確認しましょう。", executiveSub: "全社の業務状況を確認しましょう。", trendEntry: "業務トレンドを見る", selectMetric: "指標", period: "期間",
     followupRate: "フォロー実行率", completeness: "データ完全性",
     nextActionRate: "次回アクション設定率", reportRate: "日報提出率",
     responseQuality: "顧客対応品質", sampleSize: "対象数", noScore: "総合点・ランキングは表示しません",
@@ -325,6 +332,13 @@ const COPY = {
     touchHistory: "接触记录",
     greetingSuffix: "",
     trendLoadFailed: "无法加载业务趋势。",
+    trendLoading: "正在加载业务趋势…",
+    trendInvalid: "无法显示业务趋势数据。",
+    trendEmpty: "所选期间内暂无记录",
+    trendZero: "所选期间合计为 0",
+    trendRecentDays: (days) => `近${days}天`,
+    managementLoadFailed: "无法加载经营管理数据。",
+    loadingRecords: "正在加载记录…",
     currentStageDistribution: "当前阶段分布",
     stage_terminal: "完结・搁置",
     clearSearch: "清除搜索",
@@ -386,7 +400,7 @@ const COPY = {
     unitItems: "项", reminder_introduction_validity: "介绍有效期",
     reminder_construction_evidence: "开工证据提交期限", reminder_dispute_resolution: "争议处理期限",
     reminder_agreement_renewal: "合作协议续约期限", reminder_fee_rule_validity: "FeeRule 适用期限",
-    managerTitle: "今日门店运营", executiveTitle: "全社经营看板", managerSub: "查看本店今天的业务进展。", executiveSub: "查看全公司今天的业务进展。", trendNoData: "该期间暂无数据", trendEntry: "查看业务趋势", selectMetric: "指标", period: "期间",
+    managerTitle: "今日门店运营", executiveTitle: "全社经营看板", managerSub: "查看本店今天的业务进展。", executiveSub: "查看全公司今天的业务进展。", trendEntry: "查看业务趋势", selectMetric: "指标", period: "期间",
     followupRate: "跟进执行率", completeness: "数据完整性",
     nextActionRate: "下次行动设置率", reportRate: "日报提交率",
     responseQuality: "客户响应质量", sampleSize: "样本数", noScore: "不显示总分或排名",
@@ -697,8 +711,19 @@ function displayDate(value) {
   return [year, month, day].filter(Boolean).join("/") + (time ? ` ${time}` : "");
 }
 
+function OriginalText({ value, sourceLocale, locale, t }) {
+  const showMarker = locale === "zh" && sourceLocale === "ja" && Boolean(value?.trim());
+  return <>
+    {showMarker && <span className="summary-original">{t("summaryOriginal")}</span>}
+    <span className="original-text" lang={sourceLocale}>{value}</span>
+  </>;
+}
+
 function SummaryText({ summary, t, locale, className }) {
-  return <p className={className}>{summary && locale === "zh" && <span className="summary-original">{t("summaryOriginal")}</span>}{summary || "—"}</p>;
+  // The daily report API exposes the Japanese-generated summary separately from the manual note.
+  return <p className={className}>{summary?.trim()
+    ? <OriginalText value={summary} sourceLocale="ja" t={t} locale={locale}/>
+    : "—"}</p>;
 }
 
 function AccountStatus({ status, locale }) {
@@ -763,8 +788,6 @@ function App() {
   const notificationRequestId = useRef(0);
   const [summary, setSummary] = useState(null);
   const [tasks, setTasks] = useState([]);
-  const [trend, setTrend] = useState(null);
-  const [management, setManagement] = useState(null);
   const [preferences, setPreferences] = useState({ dashboard_widgets: ["tasks", "overview"], notification_preferences: { in_app: true, email: false } });
   const [businessFilter, setBusinessFilter] = useState("");
   const [introFocusHouseholdId, setIntroFocusHouseholdId] = useState(null);
@@ -781,6 +804,7 @@ function App() {
   const searchRequestId = useRef(0);
   const searchControlRef = useRef(null);
   const searchInputRef = useRef(null);
+  const searchLaunchRef = useRef(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef(null);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -856,6 +880,9 @@ function App() {
     localStorage.setItem("mallboard-locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
+  useLayoutEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) window.scrollTo(0, 0);
+  }, [page, workspaceView]);
   useEffect(() => {
     load().catch(() => {});
     fetch(`${API_BASE}/api/auth/demo-accounts`, { credentials: "include" })
@@ -866,21 +893,6 @@ function App() {
         setDemoAvailable(Array.isArray(result.accounts) && result.accounts.length > 0);
       }).catch(() => {});
   }, []);
-  useEffect(() => {
-    if (page !== "management" || !["manager", "hq_finance", "executive"].includes(role)) return;
-    fetch(`${API_BASE}/api/management/overview`, { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("management load failed");
-        setManagement(await response.json());
-      }).catch(() => setToast("API connection failed"));
-  }, [page, role]);
-  useEffect(() => {
-    if (!authenticated || page !== "dashboard") return;
-    fetch(`${API_BASE}/api/dashboard/trends?metric=introductions&period=7d`, { credentials: "include" })
-      .then(async (response) => {
-        if (response.ok) setTrend(await response.json());
-      }).catch(() => {});
-  }, [page, role, authenticated]);
   useEffect(() => {
     if (!authenticated || page === "change-password") return;
     refreshNotifications().catch(() => {});
@@ -1079,10 +1091,27 @@ function App() {
     return rows;
   }, [data, query, searchMatches, businessFilter, matchedTasks]);
   const searchHouseholds = searchResultIds.map((id) => data?.households?.find((household) => household.id === id)).filter(Boolean).slice(0, 5);
+  const showSearchResults = Boolean(query.trim() && searchOpen);
+  const searchFeedback = query.trim() && (
+    searchStatus === "loading" ? <div className="search-result-message" role="status">
+      <span className="spinner" aria-hidden="true"/>{t("searchLoading")}
+    </div> : searchStatus === "error" && <div className="search-result-message search-result-error" role="alert">
+      <span>{t("searchError")}</span>
+      <button type="button" onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button>
+    </div>
+  );
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchExpanded(false);
+    setSearchActiveIndex(-1);
+    requestAnimationFrame(() => searchLaunchRef.current?.focus());
+  }
   function handleSearchKeyDown(event) {
     if (event.key === "Escape") {
-      setSearchOpen(false);
-      setSearchActiveIndex(-1);
+      if (searchOpen) {
+        setSearchOpen(false);
+        setSearchActiveIndex(-1);
+      } else closeSearch();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -1122,24 +1151,93 @@ function App() {
 
   return <div className="app-shell">
     <header className="app-bar"><button className="app-brand" onClick={() => { setWorkspaceView("home"); setPage(data.account_role === "hr" ? "accounts" : "dashboard"); }}><span className="brand-mark"><Home size={20}/></span><span><b>MallBoard</b><small>{t("subtitle")}</small></span></button>
-      <div className="top-actions">{data.account_role !== "hr" && <>{!searchExpanded ? <button className="search-launch" onClick={() => setSearchExpanded(true)}><Search size={16}/>{t("search")}</button> : <div className="search-control" ref={searchControlRef} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget) && !query.trim() && !searchOpen) setSearchExpanded(false); }}>
-        <div className="searchbox"><Search size={16}/><input ref={searchInputRef} value={query} aria-label={t("search")} aria-expanded={Boolean(query.trim() && searchOpen)} aria-controls="global-search-results" onFocus={() => { if (query.trim() && searchStatus === "success") setSearchOpen(true); }} onKeyDown={handleSearchKeyDown} onChange={(event) => { const value = event.target.value; searchRequestId.current += 1; setQuery(value); setSearchOpen(Boolean(value.trim())); setSearchActiveIndex(-1); setSearchMatches(null); setSearchResultIds([]); setSearchTruncated(false); setSearchStatus(value.trim() ? "loading" : "idle"); }} placeholder={t("search")}/>
-          {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")} onMouseDown={(e) => e.preventDefault()} onClick={() => { resetSearchState(); searchInputRef.current?.focus(); }}><X size={14}/></button>}<kbd>&#8984; K</kbd></div>
-        {query.trim() && searchOpen && <div className="global-search-results" id="global-search-results" role="listbox">{searchStatus === "loading" && <div className="search-result-message" role="status"><span className="spinner"/>{t("searchLoading")}</div>}{searchStatus === "error" && <div className="search-result-message search-result-error" role="alert"><span>{t("searchError")}</span><button onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button></div>}{searchStatus === "success" && <><div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>{searchResultIds.length === 0 && <div className="search-empty"><strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span></div>}{searchHouseholds.map((household,index) => <button type="button" role="option" aria-selected={index===searchActiveIndex} className={`search-result-option ${index===searchActiveIndex?"active":""}`} key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => { openHousehold(household); setSearchOpen(false); setSearchActiveIndex(-1); }}><span className="search-result-code">{household.household_code || `#${household.id}`}</span><span className="search-result-details"><strong>{household.representative_name || "\u2014"}</strong><small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "\u2014"}</small></span><span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "\u2014"}</span></button>)}{searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}{searchResultIds.length>0 && <button className="search-view-all" onClick={() => { setPage("households"); setSearchOpen(false); }}>{t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/></button>}</>}</div>}</div>}</>}
-      <div className="notification-anchor"><button className="icon-btn" title={t("notifications")} aria-label={t("notifications")} onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}><Bell size={18}/></button>{notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount} locale={locale} t={t} onOpen={openNotification} onRead={(item) => updateNotification(item,"read")} onArchive={(item) => updateNotification(item,"archive")}/>}</div>
-      <div className="account-menu-wrap" ref={accountMenuRef}><button className="account-menu-button" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{roleLabel(locale, data.account_role || role)}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{roleLabel(locale, data.account_role || role)}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} · {roleLabel(locale, option.role)}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
+      <div className="top-actions">
+        {data.account_role !== "hr" && (!searchExpanded
+          ? <button type="button" className="search-launch" ref={searchLaunchRef} aria-expanded={false}
+              onClick={() => setSearchExpanded(true)}><Search size={16}/>{t("search")}</button>
+          : <div className="search-control" ref={searchControlRef}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget) && !query.trim() && !searchOpen) setSearchExpanded(false);
+              }}>
+              <div className="searchbox">
+                <Search size={16} aria-hidden="true"/>
+                <input ref={searchInputRef} value={query} aria-label={t("search")} role="combobox" aria-autocomplete="list"
+                  aria-expanded={showSearchResults} aria-controls={showSearchResults ? "global-search-options" : undefined}
+                  aria-activedescendant={showSearchResults && searchActiveIndex >= 0 ? `search-option-${searchActiveIndex}` : undefined}
+                  onFocus={() => { if (query.trim()) setSearchOpen(true); }} onKeyDown={handleSearchKeyDown}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    searchRequestId.current += 1;
+                    setQuery(value);
+                    setSearchOpen(Boolean(value.trim()));
+                    setSearchActiveIndex(-1);
+                    setSearchMatches(null);
+                    setSearchResultIds([]);
+                    setSearchTruncated(false);
+                    setSearchStatus(value.trim() ? "loading" : "idle");
+                  }} placeholder={t("search")}/>
+                {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")}
+                  onMouseDown={(event) => event.preventDefault()} onClick={() => {
+                    resetSearchState();
+                    searchInputRef.current?.focus();
+                  }}><X size={14}/></button>}
+                <button type="button" className="search-close" aria-label={t("close")} title={t("close")} onClick={closeSearch}><ChevronUp size={16}/></button>
+              </div>
+              {showSearchResults && <div className="global-search-results">
+                {searchFeedback}
+                {searchStatus === "success" && <>
+                  <div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>
+                  {searchResultIds.length === 0 && <div className="search-empty">
+                    <strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span>
+                  </div>}
+                </>}
+                <div id="global-search-options" role="listbox" aria-label={t("search")}>
+                  {searchStatus === "success" && searchHouseholds.map((household, index) => <button type="button" role="option"
+                    id={`search-option-${index}`} aria-selected={index === searchActiveIndex}
+                    className={`search-result-option${index === searchActiveIndex ? " active" : ""}`}
+                    key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => {
+                      openHousehold(household);
+                      setSearchOpen(false);
+                      setSearchActiveIndex(-1);
+                    }}>
+                    <span className="search-result-code">{household.household_code || `#${household.id}`}</span>
+                    <span className="search-result-details">
+                      <strong>{household.representative_name || "—"}</strong>
+                      <small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "—"}</small>
+                    </span>
+                    <span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "—"}</span>
+                  </button>)}
+                </div>
+                {searchStatus === "success" && <>
+                  {searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}
+                  {searchResultIds.length > 0 && <button type="button" className="search-view-all" onClick={() => {
+                    setPage("households");
+                    setSearchOpen(false);
+                    setSearchActiveIndex(-1);
+                  }}>{t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/></button>}
+                </>}
+              </div>}
+            </div>)}
+        <div className="notification-anchor"><button type="button" className="icon-btn" title={t("notifications")}
+          aria-label={t("notifications")} aria-expanded={notificationCenterOpen} onClick={() => {
+            setNotificationCenterOpen(!notificationCenterOpen);
+            refreshNotifications().catch(() => {});
+          }}><Bell size={18}/></button>{notificationCenterOpen && <NotificationCenter items={notifications}
+          unreadCount={notificationUnreadCount} locale={locale} t={t} onOpen={openNotification}
+          onRead={(item) => updateNotification(item, "read")} onArchive={(item) => updateNotification(item, "archive")}/>}</div>
+      <div className="account-menu-wrap" ref={accountMenuRef}><button type="button" className="account-menu-button" aria-label={t("account")} aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{roleLabel(locale, data.account_role || role)}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{roleLabel(locale, data.account_role || role)}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} · {roleLabel(locale, option.role)}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
     </header><main className="page-main"><div className="page-content">{!data ? <div className="loading"><div className="spinner"/>Loading MallBoard\u2026</div> : <>
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} locale={locale} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
-      {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households locale={locale} items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}
+      {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
+      {page === "households" && <Households locale={locale} items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")} searchFeedback={searchFeedback}/>}
       {page === "introductions" && <Introductions locale={locale} items={filtered} t={t} onOpen={openHousehold}
         onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter}
         onClearBusinessFilter={() => setBusinessFilter("")} focusHouseholdId={introFocusHouseholdId}
-        onFocusHandled={() => setIntroFocusHouseholdId(null)}/>}
+        onFocusHandled={() => setIntroFocusHouseholdId(null)} searchFeedback={searchFeedback}/>}
       {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
-      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace displayDate={displayDate} roleLabel={roleLabel} stageLabel={localeLabel} view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
-      {page === "management" && <Management locale={locale} data={data} management={management} trend={trend} t={t} role={role}
+      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace displayDate={displayDate} roleLabel={roleLabel} stageLabel={localeLabel} view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={() => { setWorkspaceView("home"); setPage("dashboard"); }} onTask={()=>{}} onHousehold={openHousehold}/></section>}
+      {page === "management" && <Management key={`${data.user.id}:${role}`} locale={locale} data={data} t={t} role={role}
         onReminder={handleReminder} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onLocaleChange={setLocale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
     </>}<footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} ? {t("demoWarning")}<span>{t("copyright")}</span></footer></div></main>
@@ -1417,19 +1515,12 @@ function EmployeeWorkHistory({ locale, data, t, api }) {
   </section>;
 }
 
-function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, workspaceView,
+function Dashboard({ data, summary, tasks, preferences, t, role, locale, workspaceView,
   onWorkspaceView, api, onHousehold, onActivity, onNavigate, onReport, onCounter, onTask }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
   const [period, setPeriod] = useState("7d");
   const [metric, setMetric] = useState("introductions");
-  const [trendData, setTrendData] = useState(trend);
   const showManagement = role !== "advisor";
-  useEffect(() => { setTrendData(trend); }, [trend]);
-  useEffect(() => {
-    if (!showManagement) return;
-    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
-      .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
-  }, [metric, period, role, showManagement]);
   if (workspaceView !== "home") {
     if (workspaceView === "expenses") {
       return <><PageTitle eyebrow={t("businessRegistration")} title={t("expenses")}
@@ -1451,7 +1542,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       onOpenTasks={(filter) => { onCounter({ filter, target_page: "households" }); }}/>;
   }
   const visibleTasks = tasks.slice(0, 5);
-  if ((role === "manager" || role === "executive") && data.account_role !== "administrator") return <DashboardCockpit locale={locale} data={data} summary={summary} tasks={tasks} visibleTasks={visibleTasks} trendData={trendData} metric={metric} setMetric={setMetric} period={period} setPeriod={setPeriod} preferences={preferences} role={role} t={t} onActivity={onActivity} onNavigate={onNavigate} onReport={onReport} onCounter={onCounter} onTask={onTask}/>;
+  if ((role === "manager" || role === "executive") && data.account_role !== "administrator") return <DashboardCockpit locale={locale} data={data} summary={summary} tasks={tasks} visibleTasks={visibleTasks} metric={metric} setMetric={setMetric} period={period} setPeriod={setPeriod} preferences={preferences} role={role} t={t} onActivity={onActivity} onNavigate={onNavigate} onReport={onReport} onCounter={onCounter} onTask={onTask}/>;
   return <><PageTitle eyebrow={displayDate(todayJst())}
     title={<>{t("todayTitle")}<span>{data.user.name}{locale === "ja" && t("greetingSuffix")}</span></>} sub={t("todaySub")}
     actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
@@ -1478,16 +1569,16 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       </section>}
       {showManagement && preferences.dashboard_widgets.includes("trend") ? <section className="panel pipeline-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
-        <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
+        <div className="trend-controls"><select aria-label={t("selectMetric")} value={metric} onChange={(event) => setMetric(event.target.value)}>
           <option value="inquiries">{localeLabel(locale, "inquiries")}</option>
           <option value="visits">{localeLabel(locale, "visits")}</option>
           <option value="introductions">{localeLabel(locale, "introductions")}</option>
           <option value="contracts">{localeLabel(locale, "contracts")}</option>
           <option value="construction">{localeLabel(locale, "construction")}</option>
-        </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
+        </select><select aria-label={t("period")} value={period} onChange={(event) => setPeriod(event.target.value)}>
           <option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option>
         </select></div>
-        <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")}: {period} · {t("introductions")}</span></div>
+        <TrendResult key={`${data.user.id}:${role}:${metric}:${period}`} metric={metric} period={period} locale={locale} t={t}/>
       </section> : preferences.dashboard_widgets.includes("report") && <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
         <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div>
         <label className="field-label">{t("note")}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows="3"/></label>
@@ -1504,10 +1595,8 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       <StageFunnel items={data.households} locale={locale}/></section>}
   </>;
 }
-function DashboardCockpit({ locale, data, summary, tasks, visibleTasks, trendData, metric, setMetric, period, setPeriod, preferences, role, t, onActivity, onNavigate, onReport, onCounter, onTask }) {
+function DashboardCockpit({ locale, data, summary, tasks, visibleTasks, metric, setMetric, period, setPeriod, preferences, role, t, onActivity, onNavigate, onReport, onCounter, onTask }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
-  const points = Array.isArray(trendData?.current) ? trendData.current : [];
-  const max = Math.max(0, ...points.map((point) => Number(point.value) || 0));
   const intros = data.households.reduce((count, item) => count + item.introductions.length, 0);
   const cockpitHeader = <><PageTitle eyebrow={displayDate(todayJst())} title={<>{t(role === "executive" ? "executiveTitle" : "managerTitle")}<span>{data.user.name}{locale === "ja" && t("greetingSuffix")}</span></>} sub={t(role === "executive" ? "executiveSub" : "managerSub")} actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
     <div className="cockpit-counters">{summary && <div className="cockpit-generated muted">{displayDate(summary.generated_at)}</div>}<div className="cockpit-counter-grid">{(summary?.counters || []).slice(0, 3).map((counter) => { const danger = counter.key === "overdue" || counter.key === "critical_risk"; return <button key={counter.key} className={`cockpit-counter${danger ? " cockpit-danger" : ""}`} onClick={() => onCounter(counter)}><span>{t(`counter_${counter.key}`) || counter.label}</span><strong>{counter.count}</strong><small>{counter.unit_type === "items" ? t("unitItems") : counter.unit_type}</small><ChevronRight size={17}/></button>; })}</div></div></>;
@@ -1515,7 +1604,9 @@ function DashboardCockpit({ locale, data, summary, tasks, visibleTasks, trendDat
     <section className="panel cockpit-tasks"><div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div><span className="pill pill-red">{tasks.length}</span></div>{visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}><div className={`task-check${task.days_overdue > 0 ? " text-danger" : ""}`}>{task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</div><div className="task-copy"><b>{task.title}</b><span>{displayDate(task.due_at)} · {task.days_overdue > 0 ? <span className="pill pill-red">{task.days_overdue} {t("daysOverdue")}</span> : t("today")}</span></div><button className="icon-btn compact" aria-label={t("open")} onClick={() => onTask(task)}><ChevronRight size={16}/></button></div>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}<div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span><button className="text-button" onClick={() => onNavigate("households")}>{t("viewAll")} <ChevronRight size={14}/></button></div></section>
   );
   const trendBlock = (
-    <section className="panel cockpit-trend"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>{["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option key={key} value={key}>{localeLabel(locale, key)}</option>)}</select><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option></select></div><div className="cockpit-trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{period} · {localeLabel(locale, metric)}</span></div>{points.length ? <div className="cockpit-trend-bars">{points.map((point, i) => <div key={`${point.date || point.start}-${i}`} title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{height:`${max ? Math.max(8,(Number(point.value)||0)/max*100):8}%`}}/></div>)}</div> : <div className="cockpit-empty">{t("trendNoData")}</div>}</section>
+    <section className="panel cockpit-trend"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="trend-controls"><select aria-label={t("selectMetric")} value={metric} onChange={(event) => setMetric(event.target.value)}>{["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option key={key} value={key}>{localeLabel(locale, key)}</option>)}</select><select aria-label={t("period")} value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option></select></div>
+      <TrendResult key={`${data.user.id}:${role}:${metric}:${period}`} metric={metric} period={period} locale={locale} t={t} chart="cockpit"/>
+    </section>
   );
   const reportBlock = (
     <>{preferences.dashboard_widgets.includes("report") && <section className="panel cockpit-report"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div><div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div><label className="field-label">{t("note")}<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="..." rows="3"/></label><button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button></section>}</>
@@ -1574,7 +1665,7 @@ function HouseholdTable({ locale, items, t, onOpen, emptyMessage }) {
       <span className="record-card-action">{task?.next_action || t("nextActionUnset")}</span><span className={`record-card-due ${dueClass(task?.next_action_due)}`}>{displayDate(task?.next_action_due)}</span>
       <span className="record-card-link">{t("viewHousehold")}</span></button>;})}{!items.length && <div className="empty-state">{emptyMessage}</div>}</div></>;
 }
-function Households({ locale, items, stores, t, onOpen, businessFilter, matchedTasks, terminalExcludedTaskCount, onClearBusinessFilter }) {
+function Households({ locale, items, stores, t, onOpen, businessFilter, matchedTasks, terminalExcludedTaskCount, onClearBusinessFilter, searchFeedback }) {
   const [storeId, setStoreId] = useState("all");
   const [stage, setStage] = useState("all");
   const rows = items.filter((household) => (storeId === "all" || household.store_id === Number(storeId))
@@ -1590,11 +1681,11 @@ function Households({ locale, items, stores, t, onOpen, businessFilter, matchedT
       <div className="table-tools"><label className="filter-select">{t("filterStore")}<select value={storeId} onChange={(event) => setStoreId(event.target.value)}>
         <option value="all">{t("allStores")}</option>{stores.map((store) => <option value={store.id} key={store.id}>{store.name}</option>)}</select></label>
         <label className="filter-select">{t("filterStage")}<select value={stage} onChange={(event) => setStage(event.target.value)}>
-          <option value="all">{t("all")}</option>{STAGES.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
+        <option value="all">{t("all")}</option>{STAGES.map((value) => <option key={value} value={value}>{locale === "zh" ? localeLabel(locale, value) : value}</option>)}</select></label></div></div>
       {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span>{taskFilter && terminalExcludedTaskCount > 0 && <span className="business-filter-note">{t("businessTerminalExcludedNote").replace("{count}", terminalExcludedTaskCount)}</span>}</div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
-      <HouseholdTable locale={locale} items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
+      {searchFeedback || <HouseholdTable locale={locale} items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/>}</section></>;
 }
-function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter, focusHouseholdId, onFocusHandled }) {
+function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter, focusHouseholdId, onFocusHandled, searchFeedback }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
   useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
   useEffect(() => {
@@ -1609,16 +1700,21 @@ function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClea
         : ["introFilterGenericName", "introFilterGenericDescription"];
   const emptyHouseholds = items.length === 0;
   return <><PageTitle eyebrow={t("partnerJourney")} title={t("introductions")} sub={t("introductionsSub")}/>
-    {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(filterCopy[0])}</b><span>{t(filterCopy[1])}</span></div><div className="business-filter-counts"><span><b>{items.length}</b>{t("targetHouseholds")}</span></div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
+    {businessFilter && <div className="business-filter-banner intro-filter-banner"><div className="business-filter-copy"><b>{t(filterCopy[0])}</b><span>{t(filterCopy[1])}</span></div><div className="business-filter-counts"><span><b>{items.length}</b>{t("targetHouseholds")}</span></div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
     <div className="intro-layout"><section className="panel intro-list"><div className="panel-head"><h2>{t("households")}</h2><span className="count-badge">{items.length}</span></div>
-      {emptyHouseholds ? <div className="empty-mini">{t(businessFilter ? "noMatchingHouseholds" : "noHouseholds")}</div> : items.map((h) => <button className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`} key={h.id} onClick={() => setActiveHousehold(h.id)}>
-        <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div><span className="intro-count">{h.introductions.length}</span>
-      </button>)}</section>
+      {searchFeedback || (emptyHouseholds ? <div className="empty-mini">{t(businessFilter ? "noMatchingHouseholds" : "noHouseholds")}</div>
+        : <div className="intro-household-list" role="group" aria-label={t("households")}>{items.map((h) =>
+          <button type="button" className={`intro-household ${activeHousehold === h.id ? "selected" : ""}`}
+            aria-pressed={activeHousehold === h.id} key={h.id} onClick={() => setActiveHousehold(h.id)}>
+            <div className="customer-avatar">{h.representative_name.slice(0, 1)}</div>
+            <div><b>{h.representative_name}</b><span>{h.area_pref}</span></div>
+            <span className="intro-count">{h.introductions.length}</span>
+          </button>)}</div>)}</section>
       {household ? <section className="intro-detail"><div className="panel intro-context"><div><div className="eyebrow">{household.store_name} · {household.advisor_name}</div><h2>{household.representative_name}</h2><span>{household.budget_band} · {household.area_pref}</span></div>
         <button className="primary-btn" onClick={() => onAdd(household)}><Plus size={15}/>{t("partnerCreate")}</button></div>
         <div className="partner-grid">{!household.introductions.length && <div className="empty-state intro-empty-partners">{t("introNoIntroductions")}</div>}{household.introductions.map((intro) => <PartnerCard locale={locale} key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
           {!household.introductions.length && <button className="add-partner-card" onClick={() => onAdd(household)}><Plus size={20}/>{t("partnerCreate")}</button>}</div>
-      </section> : <section className="panel empty-state">{t("introSelectHousehold")}</section>}
+      </section> : !searchFeedback && <section className="panel empty-state">{t("introSelectHousehold")}</section>}
     </div></>;
 }
 function PartnerCard({ locale, intro, t, onOpen }) {
@@ -1717,11 +1813,18 @@ function DisputeResolution({ item, t, role, api }) {
     </div> : <StateBadge state="Disputed" t={t}/>}
   </section>;
 }
+const ENTITLEMENT_STATE_KEYS = {
+  Confirmed: "stateConfirmed", Invoiced: "stateInvoiced", Paid: "statePaid", Disputed: "stateDisputed",
+  PendingConfirmation: "statePendingConfirmation", Estimated: "stateEstimated", Potential: "statePotential",
+  WrittenOff: "stateWrittenOff", Pending: "statePending",
+};
+
+function entitlementStateLabel(state, t) {
+  return t && Object.hasOwn(ENTITLEMENT_STATE_KEYS, state) ? t(ENTITLEMENT_STATE_KEYS[state]) : state;
+}
+
 function StateBadge({ state, t }) {
-  const keys = { Confirmed: "stateConfirmed", Invoiced: "stateInvoiced", Paid: "statePaid", Disputed: "stateDisputed",
-    PendingConfirmation: "statePendingConfirmation", Estimated: "stateEstimated", Potential: "statePotential",
-    WrittenOff: "stateWrittenOff", Pending: "statePending" };
-  return <span className={`state-badge state-${state?.toLowerCase()}`}>{state === "Disputed" && <CircleAlert size={13}/>} {t ? t(keys[state] || state) : state}</span>;
+  return <span className={`state-badge state-${state?.toLowerCase()}`}>{state === "Disputed" && <CircleAlert size={13}/>} {entitlementStateLabel(state, t)}</span>;
 }
 function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Disputed") return <span className="frozen-label"><CircleAlert size={13}/>{t("frozen")}</span>;
@@ -1731,42 +1834,179 @@ function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Invoiced") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "paid" })}>{t("paid")} <ChevronRight size={13}/></button>;
   return <span className="muted">—</span>;
 }
-function ManagementTrend({ metric, period, t }) {
-  const [trendData, setTrendData] = useState(null);
-  const [trendError, setTrendError] = useState(false);
+function getTrendState(result) {
+  const isCount = (value) => Number.isSafeInteger(value) && value >= 0;
+  if (!Array.isArray(result?.current) || !isCount(result.current_total)
+      || !isCount(result.previous_total) || result.current.some((point) => !isCount(point?.value))) {
+    return "invalid";
+  }
+  if (result.current.some((point) => point.value > 0)) return "positive";
+  if (result.current_total !== 0) return "invalid";
+  return result.current.length === 0 ? "empty" : "zero";
+}
+
+function TrendResult({ metric, period, locale, t, chart }) {
+  const [result, setResult] = useState({ state: "loading" });
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setTrendData(null);
-    setTrendError(false);
-    fetch(API_BASE + "/api/dashboard/trends?metric=" + metric + "&period=" + period, {
+    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, {
       credentials: "include", signal: controller.signal,
     }).then(async (response) => {
       if (!response.ok) throw new Error("Trend request failed");
-      const result = await response.json();
-      if (!controller.signal.aborted) setTrendData(result);
+      const data = await response.json();
+      if (!controller.signal.aborted) setResult({ state: getTrendState(data), data });
     }).catch(() => {
-      if (!controller.signal.aborted) setTrendError(true);
+      if (!controller.signal.aborted) setResult({ state: "error" });
     });
     return () => controller.abort();
-  }, [metric, period]);
+  }, [metric, period, attempt]);
 
-  if (trendError) return <p className="config-error" role="alert">{t("trendLoadFailed")}</p>;
-  if (trendData === null) return <div className="loading" role="status" style={{ height: 78 }}>
-    <div className="spinner" aria-hidden="true"/>Loading MallBoard…
+  const periodLabel = t("trendRecentDays")(period.slice(0, -1));
+  const { state, data } = result;
+  if (state === "loading") return <>
+    <p className="trend-period">{periodLabel}</p>
+    <div className="trend-feedback" role="status"><span className="spinner" aria-hidden="true"/>{t("trendLoading")}</div>
+  </>;
+  if (state === "error" || state === "invalid") return <>
+    <p className="trend-period">{periodLabel}</p>
+    <div className="trend-feedback config-error" role="alert">
+      <span>{t(state === "error" ? "trendLoadFailed" : "trendInvalid")}</span>
+      <button type="button" className="secondary-btn" onClick={() => {
+        setResult({ state: "loading" });
+        setAttempt((value) => value + 1);
+      }}>{t("searchRetry")}</button>
+    </div>
+  </>;
+
+  const cockpit = chart === "cockpit";
+  const management = chart === "management";
+  const summary = <div className={cockpit ? "cockpit-trend-summary" : "trend-summary"}>
+    <strong>{data.current_total}</strong>
+    <span>{periodLabel} · {management ? `${t("previousPeriod")} ${data.previous_total}` : localeLabel(locale, metric)}</span>
   </div>;
-  if (!trendData.current?.length || trendData.current_total === 0) return <div className="empty-state">{t("trendNoData")}</div>;
+  const showBars = chart && state === "positive";
+  const max = showBars ? Math.max(...data.current.map((point) => point.value)) : 0;
   return <>
-    <div className="trend-bars">{(trendData?.current || []).map((point, index) => <div key={`${point.date || point.start}-${index}`}
-      title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
-    <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · {t("previousPeriod")} {trendData?.previous_total ?? 0}</span></div>
+    {!management && summary}
+    {showBars && <div className={cockpit ? "cockpit-trend-bars" : "trend-bars"}>
+      {data.current.map((point, index) => {
+        const date = point.date || point.start;
+        return <div key={`${date}-${index}`} title={`${displayDate(date)}: ${point.value}`}>
+          {point.value > 0 && <i style={{ height: `${Math.max(cockpit ? 8 : 3, point.value / max * 100)}%` }}/>}
+        </div>;
+      })}
+    </div>}
+    {management && summary}
+    {state === "empty" && <div className="empty-state">{t("trendEmpty")}</div>}
+    {state === "zero" && <div className="empty-state">{t("trendZero")}</div>}
   </>;
 }
-function Management({ locale, data, management, t, role, onReminder, onException }) {
+
+function exceptionTitle(cardKey, title, locale, t) {
+  if (cardKey === "construction_confirmation") return COPY[locale][`construction_${title}`] || title;
+  if (cardKey === "open_disputes") return COPY[locale][`disputeType_${title}`] || title;
+  if (cardKey === "invoice_unpaid") return entitlementStateLabel(title, t);
+  return title;
+}
+
+const AUDIT_ACTION_LABELS = {
+  "management.report_generated": ["経営レポートを生成", "生成经营报告"],
+  "demo.login.disabled": ["無効なデモログイン", "演示登录已禁用"],
+  "auth.login": ["ログイン", "登录"],
+  "auth.logout": ["ログアウト", "退出登录"],
+  "auth.password_changed": ["パスワードを変更", "修改密码"],
+  PASSWORD_RESET_REQUESTED: ["パスワード再設定を申請", "申请重置密码"],
+  PASSWORD_RESET: ["パスワードを再設定", "重置密码"],
+  DEMO_DATA_RESET: ["デモデータを初期化", "重置演示数据"],
+  "account.handoff": ["アカウント業務を引継ぎ", "交接账号业务"],
+  "account.status_changed": ["アカウント状態を変更", "更改账号状态"],
+  "account.role_transferred": ["アカウント権限を移管", "移交账号权限"],
+  "activity.created": ["活動を登録", "记录活动"],
+  "calendar_event.created": ["予定を登録", "新增日程"],
+  "calendar_event.updated": ["予定を更新", "更新日程"],
+  "negotiation.next_action.updated": ["商談の次の対応を更新", "更新洽谈下一步"],
+  "bulletin.daily_report.updated": ["掲示板の日報を更新", "更新公告栏日报"],
+  "bulletin.daily_report.published": ["掲示板に日報を公開", "发布日报到公告栏"],
+  "bulletin.post.created": ["掲示板に投稿", "发布公告"],
+  "bulletin.post.updated": ["掲示板の投稿を更新", "更新公告"],
+  "bulletin.post.archived": ["掲示板の投稿を保管", "归档公告"],
+  "bulletin.comment.created": ["コメントを投稿", "发布评论"],
+  "introduction.created": ["紹介を登録", "登记介绍"],
+  "referral_consent.granted": ["紹介同意を登録", "记录介绍授权"],
+  "referral_consent.revoked": ["紹介同意を撤回", "撤回介绍授权"],
+  "referral_document.generated": ["紹介文書を生成", "生成介绍文档"],
+  "referral_document.generation_failed": ["紹介文書の生成に失敗", "介绍文档生成失败"],
+  "referral_document.previewed": ["紹介文書をプレビュー", "预览介绍文档"],
+  "referral_document.downloaded": ["紹介文書をダウンロード", "下载介绍文档"],
+  "referral_document.access_denied": ["紹介文書へのアクセスを拒否", "拒绝访问介绍文档"],
+  "referral_document.integrity_failed": ["紹介文書の整合性確認に失敗", "介绍文档完整性检查失败"],
+  "referral_document.file_expired": ["紹介文書の保存期限が満了", "介绍文档保留期届满"],
+  "construction.confirmed": ["着工を確認", "确认开工"],
+  "entitlement.approve": ["報酬を承認", "批准报酬"],
+  "entitlement.invoice": ["請求データを生成", "生成请款数据"],
+  "entitlement.paid": ["入金を記録", "记录入金"],
+  "referral_dispute.raised": ["紹介争議を申請", "提出介绍争议"],
+  "referral_dispute.decided": ["紹介争議を裁定", "裁决介绍争议"],
+  "data_disclosure.created": ["情報開示を登録", "登记信息披露"],
+  "data_correction.requested": ["データ訂正を申請", "申请数据修正"],
+  "data_correction.approved": ["データ訂正を承認", "批准数据修正"],
+  "data_correction.rejected": ["データ訂正を却下", "驳回数据修正"],
+  "stage.changed": ["進捗段階を変更", "更改进度阶段"],
+  "system_config.updated": ["システム設定を更新", "更新系统设置"],
+  "daily_report.saved": ["日報を保存", "保存日报"],
+  "expense.created": ["経費を登録", "登记费用"],
+  "expense.updated": ["経費を更新", "更新费用"],
+  "expense.receipt_uploaded": ["領収書を添付", "附加收据"],
+  "expense.submitted": ["経費を申請", "提交费用申请"],
+  "expense.approved": ["経費を承認", "批准费用"],
+  "expense.rejected": ["経費を差し戻し", "退回费用"],
+  "expense.recorded": ["経費を帳簿に記録", "费用入账"],
+  "export.created": ["エクスポートを作成", "创建导出文件"],
+  "export.integrity_failed": ["エクスポートの整合性確認に失敗", "导出文件完整性检查失败"],
+  "export.downloaded.csv": ["CSVをダウンロード", "下载 CSV"],
+  "export.downloaded.pdf": ["PDFをダウンロード", "下载 PDF"],
+  "month_close.prepared": ["月次締めを準備", "准备月度结账"],
+  "month_close.closed": ["月次締めを確定", "确认月度结账"],
+  "month_close.reopen_requested": ["月次締めの再開を申請", "申请重开月度结账"],
+  "month_close.reopened": ["月次締めを再開", "重开月度结账"],
+  "kintone.import_previewed": ["kintone取込をプレビュー", "预览 kintone 导入"],
+  "kintone.import_completed": ["kintone取込を完了", "完成 kintone 导入"],
+};
+
+function AuditOperation({ action, locale, t }) {
+  const label = action === "DEMO_ROLE_SWITCH" ? t("auditDemoRoleSwitch")
+    : Object.hasOwn(AUDIT_ACTION_LABELS, action) ? AUDIT_ACTION_LABELS[action][locale === "zh" ? 1 : 0] : null;
+  if (!label) return <span className="audit-action">{action}</span>;
+  return <details className="audit-operation">
+    <summary title={action}>{label}</summary>
+    <code>{action}</code>
+  </details>;
+}
+
+function Management({ locale, data, t, role, onReminder, onException }) {
   const [metric, setMetric] = useState("introductions");
   const [period, setPeriod] = useState("90d");
   const [focusedReminder, setFocusedReminder] = useState(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState("");
+  const [overview, setOverview] = useState({ state: "loading" });
+  const [overviewAttempt, setOverviewAttempt] = useState(0);
+  const canLoadOverview = ["manager", "hq_finance", "executive"].includes(role);
+  useEffect(() => {
+    if (!canLoadOverview) return;
+    const controller = new AbortController();
+    fetch(`${API_BASE}/api/management/overview`, { credentials: "include", signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Management request failed");
+        const data = await response.json();
+        if (!controller.signal.aborted) setOverview({ state: "success", data });
+      }).catch(() => {
+        if (!controller.signal.aborted) setOverview({ state: "error" });
+      });
+    return () => controller.abort();
+  }, [canLoadOverview, overviewAttempt]);
+  const management = overview.data;
   const stores = management?.stores || [];
   const funnel = management?.funnel || [];
   const max = Math.max(...stores.map((item) => item.households || 0), 1);
@@ -1801,18 +2041,28 @@ function Management({ locale, data, management, t, role, onReminder, onException
     } finally { setReportBusy(false); }
   }
   return <div className="admin-page management-page"><PageTitle eyebrow={t("businessIntelligence")} title={t("management")} sub={t("managementSub")}/>
+    {canLoadOverview && overview.state === "loading" && <div className="workspace-load" role="status">
+      <span className="spinner" aria-hidden="true"/>{t("loadingRecords")}
+    </div>}
+    {canLoadOverview && overview.state === "error" && <div className="workspace-load config-error" role="alert">
+      <span>{t("managementLoadFailed")}</span>
+      <button type="button" className="secondary-btn" onClick={() => {
+        setOverview({ state: "loading" });
+        setOverviewAttempt((value) => value + 1);
+      }}>{t("searchRetry")}</button>
+    </div>}
     <div className="management-grid management-primary"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeComparison")}</div><h2>{t("storeCompare")}</h2></div></div>
       <div className="store-bars">{stores.map((store) => <div className="store-bar-row store-comparison-row" key={store.id}>
         <span>{store.name}</span><div className="bar-track"><i style={{ width: `${store.households / max * 100}%` }}/></div>
         <b>{store.households}</b><small>{store.tenure_months}{t("months")} · {store.case_volume_band} {t("caseVolume")}</small>
       </div>)}</div><div className="chart-footnote">{t("sampleSize")} · {t("households")} · {t("demoWarning")}</div></section>
       <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div></div>
-        <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
+        <div className="trend-controls"><select aria-label={t("selectMetric")} value={metric} onChange={(event) => setMetric(event.target.value)}>
           {["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option value={key} key={key}>{localeLabel(locale, key)}</option>)}
-        </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
+        </select><select aria-label={t("period")} value={period} onChange={(event) => setPeriod(event.target.value)}>
           {["7d", "30d", "90d", "180d", "365d"].map((value) => <option key={value}>{value}</option>)}
         </select></div>
-        <ManagementTrend key={`${metric}:${period}:${role}`} metric={metric} period={period} t={t}/>
+        <TrendResult key={`${data.user.id}:${role}:${metric}:${period}`} metric={metric} period={period} locale={locale} t={t} chart="management"/>
       </section></div>
     {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
       <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
@@ -1829,7 +2079,8 @@ function Management({ locale, data, management, t, role, onReminder, onException
         <h3>{t(`exception_${card.key}`)}<strong>{card.count}</strong></h3>
         {card.items.map((item) => <button key={`${card.key}-${item.record_id}`}
           onClick={() => onException(card, item)}>
-          <span>{item.representative_name}</span><small>{item.title || (item.due_at ? displayDate(item.due_at) : t("exceptionOpenRecord"))}</small>
+          <span>{item.representative_name}</span>
+          <small>{exceptionTitle(card.key, item.title, locale, t) || (item.due_at ? displayDate(item.due_at) : t("exceptionOpenRecord"))}</small>
           <ChevronRight size={13}/>
         </button>)}
         {!card.items.length && <p className="muted">{t("noRows")}</p>}
@@ -1886,7 +2137,7 @@ function Management({ locale, data, management, t, role, onReminder, onException
     </section></>}
     <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>{t("audit")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th><th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead><tbody>
-        {data.audit_logs.map((row) => <tr key={row.id}><td>{displayDate(row.at)}</td><td>{row.user_name || "—"}</td><td><span className="audit-action">{row.action}</span></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
+        {data.audit_logs.map((row) => <tr key={row.id}><td>{displayDate(row.at)}</td><td>{row.user_name || "—"}</td><td><AuditOperation action={row.action} locale={locale} t={t}/></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
       </tbody></table>{!data.audit_logs.length && <div className="empty-state">{t("noRows")}</div>}</div></section>
   </div>;
 }
@@ -1927,7 +2178,7 @@ function AuditTrailPanel({ t, userId, locale }) {
     <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th>
       <th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead>
       <tbody>{items.map((item) => <tr key={item.id}><td>{displayDate(item.event_at)}</td>
-        <td>{roleLabel(locale, item.actor_role)} #{item.actor_id ?? "—"}</td><td>{item.action}</td>
+        <td>{roleLabel(locale, item.actor_role)} #{item.actor_id ?? "—"}</td><td><AuditOperation action={item.action} locale={locale} t={t}/></td>
         <td>{item.object_type} #{item.object_id_text || item.object_id || "—"}</td>
         <td><button className="text-button" onClick={() => showDetails(item.id)}>{t("detailLabel")}</button></td>
       </tr>)}</tbody></table>
@@ -1936,6 +2187,12 @@ function AuditTrailPanel({ t, userId, locale }) {
       <p>{selected.reason}</p><small>{selected.previous_hash} → {selected.event_hash}</small></details>}
   </section>;
 }
+// These Japanese reasons are supplied by the backend fixtures. Reviewed expenses have no language field.
+const JAPANESE_EXPENSE_REASONS = new Set([
+  "申請内容の補足資料を確認してください。",
+  "利用日と申請内容の確認が必要です。",
+]);
+
 function ExpensePanel({ data, t, role, accountRole, locale }) {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -2046,7 +2303,9 @@ function ExpensePanel({ data, t, role, accountRole, locale }) {
       <tbody>{items.map((item) => <tr key={item.id}><td>{item.applicant_name}</td><td>{categoryLabel(item.category)}</td>
         <td>¥{Number(item.amount).toLocaleString()}</td><td>¥{Number(item.tax_amount || 0).toLocaleString()} · {item.tax_category}</td>
         <td>{displayDate(item.expense_date)}<br/>{t("appliedAt")}: {displayDate(item.applied_at)}</td>
-        <td>{t(`expenseStatus${item.status}`)}{item.rejection_reason && <small className="text-danger"><br/>{item.rejection_reason}</small>}</td>
+        <td>{t(`expenseStatus${item.status}`)}{item.rejection_reason?.trim() && <small className="text-danger expense-rejection">
+          <OriginalText value={item.rejection_reason} sourceLocale={JAPANESE_EXPENSE_REASONS.has(item.rejection_reason) ? "ja" : undefined} locale={locale} t={t}/>
+        </small>}</td>
         <td>{item.accounting_integration_id || item.recorded_reference || "—"}{item.recorded_confirmed_at && <small><br/>{displayDate(item.recorded_confirmed_at)}</small>}</td>
         <td className="expense-actions">
           {item.receipt_filename && <a href={`${API_BASE}/api/expenses/${item.id}/receipt`} target="_blank" rel="noreferrer">{t("receipt")}</a>}
@@ -2552,7 +2811,11 @@ function HouseholdModal({ locale, household: h, t, role, onClose, onActivity, ap
   const currentStage = h.stage_events.at(-1)?.to_stage;
   const hasStageTimestamps = h.stage_events.some((event) => event.changed_at);
   const stageHistory = hasStageTimestamps ? [...h.stage_events].sort((a, b) => String(a.changed_at || "").localeCompare(String(b.changed_at || ""))) : h.stage_events;
-  return <Modal onClose={onClose} wide><div className="modal-heading household-modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><div className="household-name-stage"><h2>{h.representative_name}</h2><span className={stageTagClass(currentStage)}>{localeLabel(locale, currentStage)}</span></div><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  return <Modal onClose={onClose} wide label={t("household360")} closeLabel={t("close")} heading={<div>
+    <div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div>
+    <div className="household-name-stage"><h2>{h.representative_name}</h2><span className={stageTagClass(currentStage)}>{localeLabel(locale, currentStage)}</span></div>
+    <p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p>
+  </div>}>
     <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={localeLabel(locale, currentStage)}/></div>
     <div className="household-modal-grid"><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("people")}</h3><span className="count-badge">{h.persons.length}</span></div>
       {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{p.relation} · {p.phone}</span></div></div>)}</section>
@@ -2784,13 +3047,24 @@ function ActivityModal({ households, initialHouseholdId, t, onClose, onSubmit })
   const [body, setBody] = useState("");
   const [nextAction, setNextAction] = useState("");
   const [due, setDue] = useState("");
-  async function submit(e) { e.preventDefault(); await onSubmit({ household_id: Number(householdId), type, body, next_action: nextAction || null, next_action_due: due || null }); onClose(); }
-  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">{t("activityLog")}</div><h2>{t("addActivity")}</h2></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  const [error, setError] = useState("");
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await onSubmit({ household_id: Number(householdId), type, body, next_action: nextAction || null, next_action_due: due || null });
+      onClose();
+    } catch (submitError) { setError(submitError.message || t("error")); }
+  }
+  return <Modal onClose={onClose} label={t("addActivity")} closeLabel={t("close")}
+    heading={<div><div className="eyebrow">{t("activityLog")}</div><h2>{t("addActivity")}</h2></div>}>
+    <form onSubmit={submit}>
     <label className="field-label">{t("household")}<select value={householdId} onChange={(e) => setHouseholdId(e.target.value)}>{households.map((h) => <option key={h.id} value={h.id}>{h.representative_name}</option>)}</select></label>
     <label className="field-label">{t("activityType")}<select value={type} onChange={(e) => setType(e.target.value)}>{[["面談","meeting"],["電話","phone"],["LINE","line"],["訪問同行","visit"],["メモ","memo"]].map(([value,key]) => <option key={value} value={value}>{t(key)}</option>)}</select></label>
     <label className="field-label">{t("body")}<textarea required value={body} onChange={(e) => setBody(e.target.value)} rows="3"/></label>
     <label className="field-label">{t("nextAction")}<input value={nextAction} onChange={(e) => setNextAction(e.target.value)}/></label>
     <label className="field-label">{t("nextDue")}<input type="date" value={due} onChange={(e) => setDue(e.target.value)}/></label>
+    {error && <p className="config-error" role="alert">{error}</p>}
     <div className="form-actions"><button type="button" className="secondary-btn" onClick={onClose}>{t("cancel")}</button><button className="primary-btn"><Check size={15}/>{t("send")}</button></div>
   </form></Modal>;
 }
@@ -2798,17 +3072,64 @@ function IntroductionModal({ household, data, t, onClose, onSubmit }) {
   const [partnerId, setPartnerId] = useState(data.partners[0]?.id || "");
   const staff = data.partner_staff.filter((s) => s.partner_id === Number(partnerId));
   const [staffId, setStaffId] = useState("");
+  const [error, setError] = useState("");
   useEffect(() => setStaffId(String(staff[0]?.id || "")), [partnerId]);
-  async function submit(e) { e.preventDefault(); await onSubmit({ household_id: household.id, partner_id: Number(partnerId), partner_staff_id: Number(staffId) }); onClose(); }
-  return <Modal onClose={onClose}><form onSubmit={submit}><div className="modal-heading"><div><div className="eyebrow">{t("partnerIntroduction")}</div><h2>{t("partnerCreate")}</h2><p>{household.representative_name}</p></div><button type="button" className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    try {
+      await onSubmit({ household_id: household.id, partner_id: Number(partnerId), partner_staff_id: Number(staffId) });
+      onClose();
+    } catch (submitError) { setError(submitError.message || t("error")); }
+  }
+  return <Modal onClose={onClose} label={t("partnerCreate")} closeLabel={t("close")}
+    heading={<div><div className="eyebrow">{t("partnerIntroduction")}</div><h2>{t("partnerCreate")}</h2><p>{household.representative_name}</p></div>}>
+    <form onSubmit={submit}>
     <label className="field-label">{t("partnerSelect")}<select value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>{data.partners.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.area}</option>)}</select></label>
     <label className="field-label">{t("staffSelect")}<select value={staffId} onChange={(e) => setStaffId(e.target.value)}>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
     <div className="privacy-lock"><ShieldCheck size={15}/>顧客への情報共有は同意された範囲に限定されます。</div>
+    {error && <p className="config-error" role="alert">{error}</p>}
     <div className="form-actions"><button type="button" className="secondary-btn" onClick={onClose}>{t("cancel")}</button><button className="primary-btn"><Plus size={15}/>{t("add")}</button></div>
   </form></Modal>;
 }
-function Modal({ children, onClose, wide }) {
-  return <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}><div className={`modal ${wide ? "modal-wide" : ""}`}>{children}</div></div>;
+function Modal({ children, heading, label, closeLabel, onClose, wide }) {
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const trigger = document.activeElement;
+    closeRef.current?.focus({ preventScroll: true });
+    return () => trigger?.focus({ preventScroll: true });
+  }, []);
+
+  function handleKeys(event) {
+    if (event.key === "Escape") {
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...event.currentTarget.querySelectorAll(
+      "a[href], button:not(:disabled), input:not(:disabled):not([type=hidden]), select:not(:disabled), textarea:not(:disabled), summary"
+    )].filter((element) => element.getClientRects().length);
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (event.shiftKey && event.target === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && event.target === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+  return <div className="modal-backdrop" onMouseDown={(event) => {
+    if (event.target === event.currentTarget) onClose();
+  }}>
+    <div className={`modal${wide ? " modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={label} onKeyDown={handleKeys}>
+      <div className={`modal-heading${wide ? " household-modal-heading" : ""}`}>
+        {heading}
+        <button ref={closeRef} type="button" className="icon-btn" aria-label={closeLabel} onClick={onClose}><X size={18}/></button>
+      </div>
+      <div className="modal-body">{children}</div>
+    </div>
+  </div>;
 }
 
 createRoot(document.getElementById("root")).render(<App/>);

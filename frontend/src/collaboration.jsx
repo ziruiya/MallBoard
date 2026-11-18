@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { todayJst } from "./jst-date.js";
 import {
   ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, MessageSquare, Plus, Search,
@@ -33,6 +33,17 @@ async function request(path, method = "GET", body, locale = "ja") {
   return payload;
 }
 
+function RequestFeedback({ status, t, onRetry }) {
+  if (status.state === "loading") return <div className="workspace-load" role="status">
+    <span className="spinner" aria-hidden="true"/>{t("loadingRecords")}
+  </div>;
+  if (status.state === "error") return <div className="workspace-load config-error" role="alert">
+    <span>{status.message}</span>
+    <button type="button" className="secondary-btn" onClick={onRetry}>{t("searchRetry")}</button>
+  </div>;
+  return null;
+}
+
 export default function CollaborationWorkspace({ displayDate, roleLabel, stageLabel, view, data, locale, role, t, api, onBack, onTask, onHousehold }) {
   const title = view === "calendar" ? t("schedule")
     : view === "bulletin" ? t("bulletin") : t("negotiationQueue");
@@ -53,6 +64,8 @@ function CalendarView({ roleLabel, data, role, t, locale, api, onTask }) {
   const [employee, setEmployee] = useState("all");
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
+  const [loadStatus, setLoadStatus] = useState({ state: "loading" });
+  const loadRequestId = useRef(0);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(null);
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => {
@@ -64,11 +77,16 @@ function CalendarView({ roleLabel, data, role, t, locale, api, onTask }) {
   const rangeEnd = localDate(days[6]);
 
   async function load() {
+    const requestId = ++loadRequestId.current;
+    setLoadStatus({ state: "loading" });
     try {
       const result = await request(`/api/calendar?start=${rangeStart}&end=${rangeEnd}`, "GET", undefined, locale);
+      if (requestId !== loadRequestId.current) return;
       setCalendar(result);
-      setError("");
-    } catch (loadError) { setError(loadError.message); }
+      setLoadStatus({ state: "success" });
+    } catch (loadError) {
+      if (requestId === loadRequestId.current) setLoadStatus({ state: "error", message: loadError.message });
+    }
   }
   useEffect(() => { load(); }, [rangeStart, rangeEnd]);
 
@@ -164,7 +182,8 @@ function CalendarView({ roleLabel, data, role, t, locale, api, onTask }) {
           <button type="button" className="secondary-btn" onClick={() => { setForm(null); setEditing(null); }}>{t("cancelEdit")}</button>
         </div>
       </form>}
-      <div className="calendar-desktop">
+      <RequestFeedback status={loadStatus} t={t} onRetry={load}/>
+      {loadStatus.state === "success" && <><div className="calendar-desktop" role="region" tabIndex={0} aria-label={t("schedule")}>
         <div className="calendar-week-grid">
           <div className="calendar-person-head">{t("queueOwner")}</div>
           {days.map((day) => <div className="calendar-day-head" key={localDate(day)}>
@@ -196,7 +215,7 @@ function CalendarView({ roleLabel, data, role, t, locale, api, onTask }) {
           </section>;
         })}
       </div>
-      {!visibleEmployees.length ? <div className="calendar-empty">{t("calendarNoEmployees")}</div> : (!visibleEvents.length && !form && <div className="calendar-empty">{t("calendarWeekEmpty")}</div>)}
+      {!visibleEmployees.length ? <div className="calendar-empty">{t("calendarNoEmployees")}</div> : (!visibleEvents.length && !form && <div className="calendar-empty">{t("calendarWeekEmpty")}</div>)}</>}
     </section>
   </div>;
 }
@@ -209,6 +228,8 @@ function BulletinView({ displayDate, data, role, t, locale, api }) {
   const [composer, setComposer] = useState(false);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState("");
+  const [loadStatus, setLoadStatus] = useState({ state: "loading" });
+  const loadRequestId = useRef(0);
   const [saving, setSaving] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [form, setForm] = useState({
@@ -219,21 +240,25 @@ function BulletinView({ displayDate, data, role, t, locale, api }) {
     ? ["daily_report", "meeting", "notice", "shared"] : ["daily_report", "shared"];
 
   async function load() {
+    const requestId = ++loadRequestId.current;
+    setLoadStatus({ state: "loading" });
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     if (query.trim()) params.set("q", query.trim());
     if (month) params.set("month", month);
     try {
       const result = await request(`/api/bulletin?${params.toString()}`, "GET", undefined, locale);
+      if (requestId !== loadRequestId.current) return;
       setItems(result.items || []);
-      setError("");
-    } catch (loadError) { setError(loadError.message); }
+      setLoadStatus({ state: "success" });
+    } catch (loadError) {
+      if (requestId === loadRequestId.current) setLoadStatus({ state: "error", message: loadError.message });
+    }
   }
-  useEffect(() => { load(); }, [category, month]);
   useEffect(() => {
-    const timer = setTimeout(load, 250);
+    const timer = setTimeout(load, query.trim() ? 250 : 0);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [category, month, query]);
   function startNew(postType = "shared") {
     setEditing(null);
     setForm({
@@ -282,9 +307,12 @@ function BulletinView({ displayDate, data, role, t, locale, api }) {
   return <div className="bulletin-workspace">
     <section className="panel bulletin-panel">
       <div className="bulletin-toolbar">
-        <label className="searchbox"><Search size={16}/><input value={query} onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("searchPosts")}/></label>
-        <select value={category} onChange={(event) => setCategory(event.target.value)}>
+        <label className="searchbox"><Search size={16}/><input value={query} onChange={(event) => {
+          loadRequestId.current += 1;
+          setLoadStatus({ state: "loading" });
+          setQuery(event.target.value);
+        }} aria-label={t("searchPosts")} placeholder={t("searchPosts")}/></label>
+        <select aria-label={t("postCategory")} value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="">{t("all")}</option>{categories.map((item) => <option key={item} value={item}>{categoryLabel(item)}</option>)}
         </select>
         <div className="bulletin-month-control"><label>{t("postMonth")}<input type="month" value={month} onChange={(event) => setMonth(event.target.value)}/></label>{month ? <button type="button" className="text-button" onClick={() => setMonth("")}>{t("bulletinClearMonth")}</button> : <span className="bulletin-month-all">{t("bulletinAllMonths")}</span>}</div>
@@ -316,7 +344,8 @@ function BulletinView({ displayDate, data, role, t, locale, api }) {
           <button type="button" className="secondary-btn" onClick={() => { setComposer(false); setEditing(null); }}>{t("cancelEdit")}</button>
         </div>
       </form>}
-      <div className="bulletin-list">
+      <RequestFeedback status={loadStatus} t={t} onRetry={load}/>
+      {loadStatus.state === "success" && <div className="bulletin-list">
         {items.map((post) => <article className="bulletin-post" key={post.id}>
           <div className="bulletin-post-head"><div><span className="pill pill-blue">{categoryLabel(post.post_type)}</span>
             {post.pinned ? <span className="pill pill-amber">{t("pinPost") || "★"}</span> : null}
@@ -336,7 +365,7 @@ function BulletinView({ displayDate, data, role, t, locale, api }) {
           </div>}</div>
         </article>)}
         {!items.length && <div className="empty-state">{t(filtersActive ? "bulletinNoMatchingPosts" : "bulletinNoPosts")}</div>}
-      </div>
+      </div>}
     </section>
   </div>;
 }
@@ -345,8 +374,10 @@ function NegotiationQueue({ displayDate, stageLabel, data, locale, t, onHousehol
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState("");
+  const [loadStatus, setLoadStatus] = useState({ state: "loading" });
   const [saving, setSaving] = useState(null);
   async function load() {
+    setLoadStatus({ state: "loading" });
     try {
       const result = await request("/api/negotiation-queue", "GET", undefined, locale);
       setItems(result.items || []);
@@ -355,8 +386,8 @@ function NegotiationQueue({ displayDate, stageLabel, data, locale, t, onHousehol
         owner_id: item.owner_id || data.advisors?.[0]?.id || data.user.id,
         risk_level: item.risk_level || "none", version: item.version,
       }])));
-      setError("");
-    } catch (loadError) { setError(loadError.message); }
+      setLoadStatus({ state: "success" });
+    } catch (loadError) { setLoadStatus({ state: "error", message: loadError.message }); }
   }
   useEffect(() => { load(); }, []);
   async function save(item) {
@@ -381,6 +412,7 @@ function NegotiationQueue({ displayDate, stageLabel, data, locale, t, onHousehol
     <div className="panel-head"><div><div className="eyebrow">{t("collaboration")}</div><h2>{t("negotiationQueue")}</h2></div>
       <span className="pill pill-blue">{items.length}</span></div>
     {error && <div className="config-error" role="alert">{error}</div>}
+    {(loadStatus.state === "error" || !items.length) && <RequestFeedback status={loadStatus} t={t} onRetry={load}/>}
     {items.map((item) => {
       const draft = drafts[item.negotiation_id];
       if (!draft) return null;
@@ -411,6 +443,6 @@ function NegotiationQueue({ displayDate, stageLabel, data, locale, t, onHousehol
         </div>
       </article>;
     })}
-    {!items.length && !error && <div className="empty-state">{t("noNegotiations")}</div>}
+    {!items.length && loadStatus.state === "success" && <div className="empty-state">{t("noNegotiations")}</div>}
   </section>;
 }
