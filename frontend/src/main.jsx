@@ -234,6 +234,7 @@ const COPY = {
     queueAction: "次の行動", queueOwner: "担当者", queueStage: "商談段階",
     queueRisk: "リスク", riskNone: "通常", riskWatch: "要確認", riskHigh: "優先",
     saveQueueAction: "行動を保存", noNegotiations: "対応対象の商談はありません。",
+    systemManagement: "\u30b7\u30b9\u30c6\u30e0\u7ba1\u7406", descHouseholds: "\u9867\u5ba2\u30fb\u4e16\u5e2f\u306e\u4e00\u89a7\u3001\u8a73\u7d30\u3001\u5c65\u6b74", descIntroductions: "\u7d39\u4ecb\u3068\u5546\u8ac7\u306e\u9032\u6357\u7ba1\u7406", descRevenue: "\u7740\u5de5\u78ba\u8a8d\u3068\u5831\u916c\u306e\u51e6\u7406\u72b6\u6cc1", descTeam: "\u5168\u54e1\u306e\u65e5\u7a0b\u3001\u63b2\u793a\u677f\u3001\u5546\u8ac7\u30ad\u30e5\u30fc", descManagement: "\u7d4c\u55b6\u6307\u6a19\u3068\u5e97\u8217\u904b\u55b6\u306e\u72b6\u6cc1", descSettings: "\u8868\u793a\u3001\u901a\u77e5\u3001\u696d\u52d9\u306e\u8a2d\u5b9a", descAccounts: "\u30a2\u30ab\u30a6\u30f3\u30c8\u3068\u6a29\u9650\u306e\u7ba1\u7406",
     copyright: "Copyright SUZIRUI · V3.0.1",
   },
   zh: {
@@ -243,6 +244,7 @@ const COPY = {
     searchViewAll: (count) => `查看全部 ${count} 位客户`,
     searchTruncated: "搜索结果较多，仅显示部分结果。请缩小搜索条件。",
     searchCount: (count, truncated) => truncated ? `显示前 ${count} 位` : `找到 ${count} 位客户`,
+    systemManagement: "\u7cfb\u7edf\u7ba1\u7406", descHouseholds: "\u987e\u5ba2\u3001\u5bb6\u5ead\u5217\u8868\u3001\u8be6\u60c5\u4e0e\u5386\u53f2", descIntroductions: "\u4ecb\u7ecd\u4e0e\u5546\u8c08\u8fdb\u5ea6\u7ba1\u7406", descRevenue: "\u5f00\u5de5\u786e\u8ba4\u4e0e\u62a5\u916c\u5904\u7406\u60c5\u51b5", descTeam: "\u5168\u5458\u65e5\u7a0b\u3001\u516c\u544a\u677f\u3001\u5546\u8c08\u961f\u5217", descManagement: "\u7ecf\u8425\u6307\u6807\u4e0e\u95e8\u5e97\u8fd0\u8425\u60c5\u51b5", descSettings: "\u663e\u793a\u3001\u901a\u77e5\u4e0e\u4e1a\u52a1\u8bbe\u7f6e", descAccounts: "\u8d26\u53f7\u4e0e\u6743\u9650\u7ba1\u7406",
     product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
     households: "客户家庭", introductions: "介绍与洽谈", revenue: "开工与报酬",
     management: "经营管理", settings: "设置", search: "搜索客户或公司…",
@@ -571,6 +573,9 @@ function App() {
   const searchRequestId = useRef(0);
   const searchControlRef = useRef(null);
   const searchInputRef = useRef(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const t = (key) => COPY[locale][key] || key;
@@ -719,6 +724,14 @@ function App() {
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, []);
+  useEffect(() => { if (searchExpanded) searchInputRef.current?.focus(); }, [searchExpanded]);
+  useEffect(() => {
+    const closeAccountMenu = (event) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target)) setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeAccountMenu);
+    return () => document.removeEventListener("mousedown", closeAccountMenu);
   }, []);
   useEffect(() => {
     if (!toast) return undefined;
@@ -880,133 +893,22 @@ function App() {
     : data.account_role === "administrator" ? [...NAV, ["accounts", Users, "accounts"]] : NAV;
 
   return <div className="app-shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark"><Home size={21}/></div><div><b>MallBoard</b><span>{t("subtitle")}</span></div></div>
-      <div className="workspace-label">{t("workspace")}</div>
-      <nav>{navItems.map(([id, Icon, key]) => <button key={id} onClick={() => { setWorkspaceView("home"); setPage(id); }}
-        className={`nav-item ${page === id ? "active" : ""}`}><Icon size={18}/><span>{t(key)}</span>
-      </button>)}</nav>
-      <div className="sidebar-spacer"/>
-      <div className="role-card"><div className="avatar">{role === "hq_finance" ? "経" : role === "manager" ? "店" : "佐"}</div>
-        <div className="role-meta"><b>{data.user?.name || "—"}</b><span>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</span></div>
-        <ChevronDown size={16} className="muted"/></div>
-      <div className="sidebar-foot">{t("copyright")}</div>
-    </aside>
-    <main className="main">
-      <header className="topbar">
-        <div className="breadcrumb"><span>{t("product")}</span><ChevronRight size={14}/><b>{t(NAV.find(([id]) => id === page)?.[2] || page)}</b></div>
-        <div className="top-actions">
-          {data.account_role !== "hr" && <div className="search-control" ref={searchControlRef}>
-            <div className="searchbox"><Search size={16}/><input ref={searchInputRef} value={query} aria-label={t("search")}
-              aria-expanded={Boolean(query.trim() && searchOpen)} aria-controls="global-search-results"
-              onFocus={() => { if (query.trim() && searchStatus === "success") setSearchOpen(true); }}
-              onKeyDown={handleSearchKeyDown}
-              onChange={(event) => {
-                const value = event.target.value;
-                searchRequestId.current += 1;
-                setQuery(value);
-                setSearchOpen(Boolean(value.trim()));
-                setSearchActiveIndex(-1);
-                setSearchMatches(null);
-                setSearchResultIds([]);
-                setSearchTruncated(false);
-                setSearchStatus(value.trim() ? "loading" : "idle");
-              }} placeholder={t("search")}/>
-              {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => { resetSearchState(); searchInputRef.current?.focus(); }}><X size={14}/></button>}
-              <kbd>⌘ K</kbd>
-            </div>
-            {query.trim() && searchOpen && <div className="global-search-results" id="global-search-results" role="listbox">
-              {searchStatus === "loading" && <div className="search-result-message" role="status"><span className="spinner"/>{t("searchLoading")}</div>}
-              {searchStatus === "error" && <div className="search-result-message search-result-error" role="alert">
-                <span>{t("searchError")}</span><button type="button" onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button>
-              </div>}
-              {searchStatus === "success" && <>
-                <div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>
-                {searchResultIds.length === 0 && <div className="search-empty">
-                  <strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span>
-                </div>}
-                {searchHouseholds.map((household, index) => <button type="button" role="option"
-                  aria-selected={index === searchActiveIndex} className={`search-result-option ${index === searchActiveIndex ? "active" : ""}`}
-                  key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => {
-                    openHousehold(household); setSearchOpen(false); setSearchActiveIndex(-1);
-                  }}>
-                  <span className="search-result-code">{household.household_code || `#${household.id}`}</span>
-                  <span className="search-result-details"><strong>{household.representative_name || "—"}</strong>
-                    <small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "—"}</small></span>
-                  <span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "—"}</span>
-                </button>)}
-                {searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}
-                {searchResultIds.length > 0 && <button type="button" className="search-view-all"
-                  onClick={() => { setPage("households"); setSearchOpen(false); }}>
-                  {t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/>
-                </button>}
-              </>}
-            </div>}
-          </div>}
-          <div className="notification-anchor">
-            <button className="icon-btn" title={t("notifications")} aria-label={t("notifications")}
-              onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}>
-              <Bell size={18}/>
-            </button>
-            {notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount}
-              locale={locale} t={t} onOpen={openNotification}
-              onRead={(item) => updateNotification(item, "read")}
-              onArchive={(item) => updateNotification(item, "archive")}/>}
-          </div>
-          {demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id}
-            onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>
-            {demoAccounts.map((option) => <option value={option.id} key={option.id}>
-              {option.display_name} · {ROLE_LABEL[locale][option.role] || option.role}{option.store_id ? ` · ${option.store_id}` : ""}
-            </option>)}
-          </select><ChevronDown size={13}/></div>}
-          <button className="icon-btn" title={t("signOut")} onClick={logout}><LogOut size={17}/></button>
-          <button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "中文" : "日本語"}</button>
-        </div>
-      </header>
-      <div className="page-content">
-        {!data ? <div className="loading"><div className="spinner"/>Loading MallBoard…</div> : <>
-          {page === "accounts" && ["hr", "administrator"].includes(data.account_role) &&
-            <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
-          {page === "change-password" && <PasswordChangePage forced api={api} t={t}
-            onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
-          {page === "dashboard" && <Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale}
-            workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold}
-            onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }}
-            onReport={(body) => api("/api/report", "PUT", { manual_note: body })}
-            onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }}
-            onTask={(task) => {
-              const h = data.households.find((item) => item.id === task.household_id);
-              if (h) openHousehold(h);
-              else { setBusinessFilter(task.task_type === "dispute" ? "disputed" : "construction:pending"); setPage(task.related_type === "introduction" ? "introductions" : "revenue"); }
-            }}/>}
-          {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold}/>}
-          {page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold}
-            onAdd={(household) => { setSelected(household); setModal("introduction"); }}/>}
-          {page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
-          {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/>
-            <div className="trend-controls">{[["calendar", "schedule"], ["bulletin", "bulletin"], ["queue", "negotiationQueue"]].map(([view, label]) =>
-              <button className="secondary-btn" key={view} onClick={() => setWorkspaceView(view)}>{t(label)}</button>)}</div>
-            <CollaborationWorkspace view={workspaceView === "home" ? "calendar" : workspaceView} data={data} locale={locale}
-              role={role} t={t} api={api} onBack={() => setWorkspaceView("home")} onTask={() => {}}
-              onHousehold={openHousehold}/></section>}
-          {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role}
-            onReminder={(item) => { setBusinessFilter(item.filter); setPage(item.target_page); }}
-            onException={(card, record) => {
-              setBusinessFilter(card.filter);
-              setPage(card.target_page);
-              const target = data.households?.find((household) => household.id === record.household_id);
-              if (target) openHousehold(target);
-            }}/>}
-          {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async () => {
-            if (window.confirm(t("resetConfirm"))) { await api("/api/reset"); setToast(t("resetDone")); }
-          }} onConfigSaved={() => { load().catch(() => setToast("API connection failed")); setToast(t("configSaved")); }}
-            preferences={preferences} onSavePreferences={(next) => api("/api/preferences", "PUT", next)}/>}
-        </>}
-      </div>
-      <footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} · {t("demoWarning")}<span>© MallBoard Demo</span></footer>
-    </main>
+    <header className="app-bar"><button className="app-brand" onClick={() => { setWorkspaceView("home"); setPage(data.account_role === "hr" ? "accounts" : "dashboard"); }}><span className="brand-mark"><Home size={20}/></span><span><b>MallBoard</b><small>{t("subtitle")}</small></span></button>
+      <div className="top-actions">{data.account_role !== "hr" && <>{!searchExpanded ? <button className="search-launch" onClick={() => setSearchExpanded(true)}><Search size={16}/>{t("search")}</button> : <div className="search-control" ref={searchControlRef} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget) && !query.trim() && !searchOpen) setSearchExpanded(false); }}>
+        <div className="searchbox"><Search size={16}/><input ref={searchInputRef} value={query} aria-label={t("search")} aria-expanded={Boolean(query.trim() && searchOpen)} aria-controls="global-search-results" onFocus={() => { if (query.trim() && searchStatus === "success") setSearchOpen(true); }} onKeyDown={handleSearchKeyDown} onChange={(event) => { const value = event.target.value; searchRequestId.current += 1; setQuery(value); setSearchOpen(Boolean(value.trim())); setSearchActiveIndex(-1); setSearchMatches(null); setSearchResultIds([]); setSearchTruncated(false); setSearchStatus(value.trim() ? "loading" : "idle"); }} placeholder={t("search")}/>
+          {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")} onMouseDown={(e) => e.preventDefault()} onClick={() => { resetSearchState(); searchInputRef.current?.focus(); }}><X size={14}/></button>}<kbd>&#8984; K</kbd></div>
+        {query.trim() && searchOpen && <div className="global-search-results" id="global-search-results" role="listbox">{searchStatus === "loading" && <div className="search-result-message" role="status"><span className="spinner"/>{t("searchLoading")}</div>}{searchStatus === "error" && <div className="search-result-message search-result-error" role="alert"><span>{t("searchError")}</span><button onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button></div>}{searchStatus === "success" && <><div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>{searchResultIds.length === 0 && <div className="search-empty"><strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span></div>}{searchHouseholds.map((household,index) => <button type="button" role="option" aria-selected={index===searchActiveIndex} className={`search-result-option ${index===searchActiveIndex?"active":""}`} key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => { openHousehold(household); setSearchOpen(false); setSearchActiveIndex(-1); }}><span className="search-result-code">{household.household_code || `#${household.id}`}</span><span className="search-result-details"><strong>{household.representative_name || "\u2014"}</strong><small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "\u2014"}</small></span><span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "\u2014"}</span></button>)}{searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}{searchResultIds.length>0 && <button className="search-view-all" onClick={() => { setPage("households"); setSearchOpen(false); }}>{t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/></button>}</>}</div>}</div>}</>}
+      <div className="notification-anchor"><button className="icon-btn" title={t("notifications")} aria-label={t("notifications")} onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}><Bell size={18}/></button>{notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount} locale={locale} t={t} onOpen={openNotification} onRead={(item) => updateNotification(item,"read")} onArchive={(item) => updateNotification(item,"archive")}/>}</div>
+      <div className="account-menu-wrap" ref={accountMenuRef}><button className="account-menu-button" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} \u00b7 {ROLE_LABEL[locale][option.role] || option.role}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
+    </header><main className="page-main"><div className="page-content">{!data ? <div className="loading"><div className="spinner"/>Loading MallBoard\u2026</div> : <>
+      {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
+      {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
+      {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
+      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
+      {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
+      {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
+    </>}<footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} ? {t("demoWarning")}<span>{t("copyright")}</span></footer></div></main>
     {modal === "household" && selected && <HouseholdModal household={selected} t={t} role={role}
       onClose={() => setModal("")} onActivity={() => setModal("activity")} api={api}/>}
     {modal === "activity" && <ActivityModal households={data?.households || []} initialHouseholdId={selected?.id} t={t} onClose={() => setModal("")}
@@ -1017,6 +919,8 @@ function App() {
     {busy && <div className="busy-indicator"><div className="spinner"/></div>}
   </div>;
 }
+
+function ModuleEntries({navItems,accountRole,t,onNavigate}) { const desc={households:"descHouseholds",introductions:"descIntroductions",revenue:"descRevenue",team:"descTeam",management:"descManagement",settings:"descSettings",accounts:"descAccounts"}; const tone={households:"blue",introductions:"violet",revenue:"green",team:"amber",management:"blue",settings:"neutral",accounts:"violet"}; const items=navItems.filter(([id])=>id!=="dashboard"), ordinary=items.filter(([id])=>id!=="accounts"), accounts=items.filter(([id])=>id==="accounts"); const cards=(list)=>list.map(([id,Icon,key])=><button type="button" className="module-entry" key={id} onClick={()=>onNavigate(id)}><span className={`module-entry-icon tone-${tone[id]}`}><Icon size={19}/></span><b>{t(key)}</b><small>{t(desc[id])}</small></button>); return <div className="module-entries"><h2>{t("workspace")}</h2><div className="module-entry-grid">{cards(ordinary)}</div>{accountRole==="administrator"&&accounts.length>0&&<section className="system-management"><h2>{t("systemManagement")}</h2><div className="module-entry-grid">{cards(accounts)}</div></section>}</div>; }
 
 function PageTitle({ eyebrow, title, sub, actions }) {
   return <div className="page-title"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{sub && <p>{sub}</p>}</div>{actions && <div className="title-actions">{actions}</div>}</div>;
