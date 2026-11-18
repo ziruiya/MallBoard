@@ -1578,7 +1578,7 @@ function Dashboard({ data, summary, tasks, preferences, t, role, locale, workspa
         </select><select aria-label={t("period")} value={period} onChange={(event) => setPeriod(event.target.value)}>
           <option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option>
         </select></div>
-        <TrendResult key={`${data.user.id}:${role}:${metric}:${period}`} metric={metric} period={period} locale={locale} t={t}/>
+        <TrendResult key={`${data.user.id}:${role}:${metric}:${period}`} metric={metric} period={period} locale={locale} t={t} chart="workstation"/>
       </section> : preferences.dashboard_widgets.includes("report") && <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
         <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div>
         <label className="field-label">{t("note")}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows="3"/></label>
