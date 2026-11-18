@@ -215,6 +215,9 @@ const COPY = {
     reopenRequested: "再オープン承認待ち", reopened: "再オープン済み", locked: "ロック中", unlocked: "ロックなし",
     workToday: "今日の仕事", deadlineReminder: "期限の確認", businessRegistration: "業務登録",
     workHistory: "業務記録", todayWorkCount: "本日対応する業務", overdueCount: "期限超過",
+    recentActivity: "最近の処理記録", noRecentActivity: "最近の処理記録はありません。",
+    pendingTask: "未対応", inProgressTask: "対応中", deadlineBreakdown: "期限超過: {overdue} · 3 日: {dueSoon} · 不可相加",
+    relatedHousehold: "関連世帯",
     openTodayWork: "今日の一覧を開く", openOverdue: "期限超過を確認", createActivity: "活動を記録",
     createExpense: "経費を申請", openWorkHistory: "日報・記録を確認", collaboration: "チーム業務",
     schedule: "全員の日程", bulletin: "掲示板", negotiationQueue: "商談キュー",
@@ -438,6 +441,9 @@ const COPY = {
     reopenRequested: "等待重新开放审批", reopened: "已重新开放", locked: "已锁定", unlocked: "未锁定",
     workToday: "今日工作", deadlineReminder: "查看期限", businessRegistration: "业务登记",
     workHistory: "工作记录", todayWorkCount: "今日需处理", overdueCount: "已超期",
+    recentActivity: "最近处理记录", noRecentActivity: "暂无最近处理记录。",
+    pendingTask: "待处理", inProgressTask: "进行中", deadlineBreakdown: "期限超過: {overdue} · 3 日: {dueSoon} · 不可相加",
+    relatedHousehold: "关联家庭",
     openTodayWork: "查看今日清单", openOverdue: "查看超期事项", createActivity: "记录活动",
     createExpense: "申请费用", openWorkHistory: "查看日报与记录", collaboration: "团队协作",
     schedule: "全员日程", bulletin: "公告板", negotiationQueue: "洽谈队列",
@@ -1085,6 +1091,8 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
     const days = Math.ceil((due - new Date(`${today}T00:00:00`)) / 86400000);
     return days >= 0 && days <= 3;
   }).length;
+  const householdById = new Map((data.households || []).map((household) => [String(household.id), household]));
+  const recentLogs = (data.audit_logs || []).slice(0, 5);
   return <div className="employee-workstation">
     <PageTitle title={<>{t("workToday")}<span>{data.user.name}さん</span></>}
       sub={t("todaySub")} eyebrow={new Date().toLocaleDateString("ja-JP", {
@@ -1096,7 +1104,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
         <b>{t("openTodayWork")} <ChevronRight size={14}/></b>
       </button>
       <button className="employee-action-card tone-amber" onClick={() => onOpenTasks("tasks:overdue")}>
-        <span>{t("deadlineReminder")}</span><strong>{overdue + dueSoon}</strong><small>{t("overdueCount")}: {overdue} · 3 {t("days")}: {dueSoon} · 不可相加</small>
+        <span>{t("deadlineReminder")}</span><strong>{overdue + dueSoon}</strong><small>{t("deadlineBreakdown").replace("{overdue}", overdue).replace("{dueSoon}", dueSoon)}</small>
         <b>{t("openOverdue")} <ChevronRight size={14}/></b>
       </button>
       <section className="employee-action-card tone-green">
@@ -1109,7 +1117,9 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
       </section>
       <button className="employee-action-card tone-violet" onClick={() => onView("records")}>
         <span>{t("workHistory")}</span><strong className="card-icon"><FileText size={22}/></strong>
-        <small>{t("dailyReport")}</small><b>{t("openWorkHistory")} <ChevronRight size={14}/></b>
+        <small>{data.daily_report?.report_date || t("dailyReport")}</small>
+        {data.daily_report?.auto_summary && <p className="work-history-summary">{data.daily_report.auto_summary}</p>}
+        <b>{t("openWorkHistory")} <ChevronRight size={14}/></b>
       </button>
     </div>
     <section className="panel employee-task-panel">
@@ -1119,11 +1129,20 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
         onClick={() => onTask(task)}>
         <span className={`task-check ${task.days_overdue > 0 ? "text-danger" : ""}`}>
           {task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</span>
-        <span className="employee-task-copy"><b>{task.title}</b><small>{task.due_at}
-          {task.days_overdue > 0 ? ` · ${task.days_overdue} ${t("daysOverdue")}` : ""}</small></span>
-        <span className={`pill ${task.days_overdue > 0 ? "pill-red" : "pill-blue"}`}>
-          {task.days_overdue > 0 ? t("overdueLabel") : t("status")}</span><ChevronRight size={15}/>
+        <span className="employee-task-copy"><b>{task.title}</b>
+          {householdById.has(String(task.household_id)) && <small>{householdById.get(String(task.household_id)).representative_name}{householdById.get(String(task.household_id)).household_code ? ` · ${householdById.get(String(task.household_id)).household_code}` : ""}</small>}
+          <small>{task.due_at}{task.days_overdue > 0 ? ` · ${task.days_overdue} ${t("daysOverdue")}` : ""}</small></span>
+        <span className={`pill ${task.days_overdue > 0 ? "pill-red" : task.status === "in_progress" ? "pill-blue" : "pill-amber"}`}>
+          {task.days_overdue > 0 ? t("overdueLabel") : task.status === "in_progress" ? t("inProgressTask") : t("pendingTask")}</span><ChevronRight size={15}/>
       </button>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}
+    </section>
+    <section className="panel employee-recent-panel">
+      <div className="panel-head"><div><div className="eyebrow">{t("recentActivity")}</div><h2>{t("recentActivity")}</h2></div></div>
+      {recentLogs.length ? <div className="employee-recent-list">{recentLogs.map((log) => <article className="employee-recent-row" key={log.id}>
+        <b>{log.action}</b>
+        {(log.target_type || log.target_id_text) && <span>{[log.target_type, log.target_id_text].filter(Boolean).join(" · ")}</span>}
+        <time>{log.at}</time>
+      </article>)}</div> : <div className="empty-mini">{t("noRecentActivity")}</div>}
     </section>
     <section className="panel collaboration-shortcuts">
       <div className="panel-head"><div><div className="eyebrow">{t("collaboration")}</div><h2>{t("collaboration")}</h2></div></div>
