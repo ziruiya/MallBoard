@@ -33,7 +33,7 @@ async function request(path, method = "GET", body, locale = "ja") {
   return payload;
 }
 
-export default function CollaborationWorkspace({ view, data, locale, role, t, api, onBack, onTask, onHousehold }) {
+export default function CollaborationWorkspace({ displayDate, roleLabel, stageLabel, view, data, locale, role, t, api, onBack, onTask, onHousehold }) {
   const title = view === "calendar" ? t("schedule")
     : view === "bulletin" ? t("bulletin") : t("negotiationQueue");
   return <section className="collaboration-workspace">
@@ -41,13 +41,13 @@ export default function CollaborationWorkspace({ view, data, locale, role, t, ap
       <button className="secondary-btn" onClick={onBack}><ArrowLeft size={15}/>{t("backToWorkspace")}</button>
       <div><div className="eyebrow">{t("collaboration")}</div><h1>{title}</h1></div>
     </div>
-    {view === "calendar" && <CalendarView data={data} role={role} t={t} locale={locale} api={api} onTask={onTask}/>}
-    {view === "bulletin" && <BulletinView data={data} role={role} t={t} locale={locale} api={api}/>}
-    {view === "queue" && <NegotiationQueue data={data} locale={locale} t={t} onHousehold={onHousehold}/>}
+    {view === "calendar" && <CalendarView roleLabel={roleLabel} data={data} role={role} t={t} locale={locale} api={api} onTask={onTask}/>}
+    {view === "bulletin" && <BulletinView displayDate={displayDate} data={data} role={role} t={t} locale={locale} api={api}/>}
+    {view === "queue" && <NegotiationQueue displayDate={displayDate} stageLabel={stageLabel} data={data} locale={locale} t={t} onHousehold={onHousehold}/>}
   </section>;
 }
 
-function CalendarView({ data, role, t, locale, api, onTask }) {
+function CalendarView({ roleLabel, data, role, t, locale, api, onTask }) {
   const [week, setWeek] = useState(() => weekStart(new Date()));
   const [calendar, setCalendar] = useState({ events: [], employees: [] });
   const [employee, setEmployee] = useState("all");
@@ -172,7 +172,7 @@ function CalendarView({ data, role, t, locale, api, onTask }) {
             <span>{day.getMonth() + 1}/{day.getDate()}</span>
           </div>)}
           {visibleEmployees.map((staff) => <React.Fragment key={staff.id}>
-            <div className="calendar-person"><b>{staff.name}</b><small>{staff.store_name || staff.role}</small></div>
+            <div className="calendar-person"><b>{staff.name}</b><small>{staff.store_name || roleLabel(locale, staff.role)}</small></div>
             {days.map((day) => {
               const items = eventRows(staff.id, localDate(day));
               return <div className="calendar-cell" key={`${staff.id}-${localDate(day)}`}>
@@ -201,7 +201,7 @@ function CalendarView({ data, role, t, locale, api, onTask }) {
   </div>;
 }
 
-function BulletinView({ data, role, t, locale, api }) {
+function BulletinView({ displayDate, data, role, t, locale, api }) {
   const [items, setItems] = useState([]);
   const [category, setCategory] = useState("");
   const [query, setQuery] = useState("");
@@ -320,7 +320,7 @@ function BulletinView({ data, role, t, locale, api }) {
         {items.map((post) => <article className="bulletin-post" key={post.id}>
           <div className="bulletin-post-head"><div><span className="pill pill-blue">{categoryLabel(post.post_type)}</span>
             {post.pinned ? <span className="pill pill-amber">{t("pinPost") || "★"}</span> : null}
-            <h2>{post.title}</h2><small>{post.author_name} · {post.store_name || t("companyEvent")} · {String(post.published_at || post.created_at).slice(0, 16)}</small></div>
+            <h2>{post.title}</h2><small>{post.author_name} · {post.store_name || t("companyEvent")} · {displayDate(post.published_at || post.created_at)}</small></div>
             {(post.author_id === data.user.id || canBroadcast) && <div className="bulletin-post-actions">
               {post.author_id === data.user.id && post.post_type !== "daily_report" && <button className="text-button" onClick={() => startEdit(post)}>{t("editPost")}</button>}
               <button className="text-button" onClick={() => archive(post)}>{t("archivePost")}</button>
@@ -341,7 +341,7 @@ function BulletinView({ data, role, t, locale, api }) {
   </div>;
 }
 
-function NegotiationQueue({ data, locale, t, onHousehold }) {
+function NegotiationQueue({ displayDate, stageLabel, data, locale, t, onHousehold }) {
   const [items, setItems] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [error, setError] = useState("");
@@ -390,8 +390,8 @@ function NegotiationQueue({ data, locale, t, onHousehold }) {
             const household = data.households.find((record) => record.id === item.household_id);
             if (household) onHousehold(household);
           }}><b>{item.representative_name}</b></button>
-          <span>{item.store_name} · {item.partner_name} · {item.stage}</span>
-          <small>{t("last")}: {String(item.last_activity_at).slice(0, 16)} · {item.household_code}</small>
+          <span>{item.store_name} · {item.partner_name} · {stageLabel(locale, item.stage)}</span>
+          <small>{t("last")}: {displayDate(item.last_activity_at)} · {item.household_code}</small>
         </div>
         <div className="negotiation-queue-fields">
           <label>{t("queueAction")}<input maxLength="255" value={draft.next_action}

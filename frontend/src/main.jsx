@@ -12,6 +12,30 @@ import { todayJst } from "./jst-date.js";
 
 const COPY = {
   ja: {
+    summaryOriginal: "原文",
+    resetPanelTitle: "パスワード再設定",
+    stage_inquiry: "反響",
+    negotiationVisit: "訪問予定",
+    negotiationDiscussion: "商談中",
+    negotiationEstimate: "見積提示",
+    resetRequestFailed: "リセットを申請できませんでした。",
+    noAccounts: "アカウントがありません。",
+    previousPeriod: "前期間",
+    funnelReference: "参考値・世帯数",
+    cohortReference: "正式 Cohort 転換率・同一世帯追跡",
+    inquiryToReservation: "反響→予約",
+    reservationToIntroduction: "予約→紹介",
+    introductionToContract: "紹介→契約",
+    customerDispute: "既存顧客の争議中",
+    customerDisputeAction: "既存顧客・争議",
+    entitlementFrozen: "報酬帰属の争議中",
+    consentRevokedAt: "取消",
+    disclosedAt: "共有",
+    touchHistory: "接点履歴",
+    greetingSuffix: "さん",
+    trendLoadFailed: "業務トレンドを取得できませんでした。",
+    currentStageDistribution: "現在の段階分布",
+    stage_terminal: "完了・見送り",
     clearSearch: "検索をクリア",
     searchLoading: "顧客を検索しています…",
     searchRetry: "再試行", searchNoResults: "該当する顧客が見つかりませんでした。",
@@ -279,6 +303,30 @@ const COPY = {
     copyright: "Copyright SUZIRUI · V3.0.1",
   },
   zh: {
+    summaryOriginal: "原文",
+    resetPanelTitle: "密码重置",
+    stage_inquiry: "咨询",
+    negotiationVisit: "计划拜访",
+    negotiationDiscussion: "洽谈中",
+    negotiationEstimate: "已提供报价",
+    resetRequestFailed: "无法提交密码重置请求。",
+    noAccounts: "暂无账号。",
+    previousPeriod: "上一期间",
+    funnelReference: "参考值・家庭数",
+    cohortReference: "正式 Cohort 转化率・同一家庭追踪",
+    inquiryToReservation: "咨询→预约",
+    reservationToIntroduction: "预约→介绍",
+    introductionToContract: "介绍→签约",
+    customerDispute: "既有客户争议中",
+    customerDisputeAction: "既有客户争议",
+    entitlementFrozen: "报酬归属争议中",
+    consentRevokedAt: "撤回",
+    disclosedAt: "共享",
+    touchHistory: "接触记录",
+    greetingSuffix: "",
+    trendLoadFailed: "无法加载业务趋势。",
+    currentStageDistribution: "当前阶段分布",
+    stage_terminal: "完结・搁置",
     clearSearch: "清除搜索",
     searchLoading: "正在搜索客户…", searchRetry: "重试",
     searchNoResults: "没有找到匹配的顾客", searchNoResultsHint: "请确认顾客姓名、假名、顾客代码或电话号码。",
@@ -612,6 +660,56 @@ const ROLE_LABEL = {
   zh: { advisor: "顾问", manager: "店长", hq_finance: "总部·财务", executive: "社长",
     store_manager: "店长", finance: "财务", administrator: "管理员", hq_staff: "总部担当", hr: "人事" },
 };
+const ACCOUNT_STATUS = {
+  PENDING_PROVISIONING: ["発行待ち", "待开通", "pending"],
+  INVITED: ["招待済み", "已邀请", "pending"],
+  ACTIVE: ["有効", "启用", "success"],
+  TRANSFER_PENDING: ["異動待ち", "待调动", "pending"],
+  LEAVE_RESTRICTED: ["休職・利用制限", "休假限制", "neutral"],
+  SUSPENDED: ["停止中", "已暂停", "danger"],
+  LOCKED_SECURITY: ["セキュリティロック", "安全锁定", "danger"],
+  DEACTIVATED: ["無効", "已停用", "neutral"],
+  ARCHIVED: ["保管済み", "已归档", "neutral"],
+};
+
+function roleLabel(locale, role) {
+  const labels = ROLE_LABEL[locale];
+  return labels && Object.hasOwn(labels, role) ? labels[role] : role;
+}
+
+const jstDateTime = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+
+function displayDate(value) {
+  if (value == null || value === "") return "—";
+  if (typeof value !== "string") return value;
+  const match = /^(\d{4})-(\d{2})(?:-(\d{2})(?:[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?)?$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day, time, zone] = match;
+  if (zone) {
+    const instant = new Date(value.replace(" ", "T"));
+    if (Number.isNaN(instant.getTime())) return "—";
+    const parts = Object.fromEntries(jstDateTime.formatToParts(instant).map(({ type, value }) => [type, value]));
+    return `${parts.year}/${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
+  }
+  return [year, month, day].filter(Boolean).join("/") + (time ? ` ${time}` : "");
+}
+
+function SummaryText({ summary, t, locale, className }) {
+  return <p className={className}>{summary && locale === "zh" && <span className="summary-original">{t("summaryOriginal")}</span>}{summary || "—"}</p>;
+}
+
+function AccountStatus({ status, locale }) {
+  const label = Object.hasOwn(ACCOUNT_STATUS, status) ? ACCOUNT_STATUS[status] : null;
+  return <span className={"account-status " + (label?.[2] || "neutral")}>{label?.[locale === "zh" ? 1 : 0] || status || "—"}</span>;
+}
+
+function CustomerDisputeBadge({ t }) {
+  return <span className="pill customer-dispute-badge">{t("customerDispute")}</span>;
+}
+
 const NAV = [
   ["dashboard", LayoutDashboard, "today"], ["households", Users, "households"],
   ["introductions", ArrowDownRight, "introductions"], ["revenue", BadgeJapaneseYen, "revenue"],
@@ -1010,17 +1108,17 @@ function App() {
           {query && <button type="button" className="search-clear" aria-label={t("clearSearch")} title={t("clearSearch")} onMouseDown={(e) => e.preventDefault()} onClick={() => { resetSearchState(); searchInputRef.current?.focus(); }}><X size={14}/></button>}<kbd>&#8984; K</kbd></div>
         {query.trim() && searchOpen && <div className="global-search-results" id="global-search-results" role="listbox">{searchStatus === "loading" && <div className="search-result-message" role="status"><span className="spinner"/>{t("searchLoading")}</div>}{searchStatus === "error" && <div className="search-result-message search-result-error" role="alert"><span>{t("searchError")}</span><button onClick={() => { setSearchStatus("loading"); setSearchRetry((n) => n + 1); }}>{t("searchRetry")}</button></div>}{searchStatus === "success" && <><div className="search-result-summary">{t("searchCount")(searchResultIds.length, searchTruncated)}</div>{searchResultIds.length === 0 && <div className="search-empty"><strong>{t("searchNoResults")}</strong><span>{t("searchNoResultsHint")}</span></div>}{searchHouseholds.map((household,index) => <button type="button" role="option" aria-selected={index===searchActiveIndex} className={`search-result-option ${index===searchActiveIndex?"active":""}`} key={household.id} onMouseEnter={() => setSearchActiveIndex(index)} onClick={() => { openHousehold(household); setSearchOpen(false); setSearchActiveIndex(-1); }}><span className="search-result-code">{household.household_code || `#${household.id}`}</span><span className="search-result-details"><strong>{household.representative_name || "\u2014"}</strong><small>{household.representative_kana || household.kana || household.persons?.[0]?.kana || "\u2014"}</small></span><span className="search-result-phone">{household.phone || household.phone_number || household.persons?.[0]?.phone || "\u2014"}</span></button>)}{searchTruncated && <div className="search-truncated">{t("searchTruncated")}</div>}{searchResultIds.length>0 && <button className="search-view-all" onClick={() => { setPage("households"); setSearchOpen(false); }}>{t("searchViewAll")(searchResultIds.length)}<ChevronRight size={14}/></button>}</>}</div>}</div>}</>}
       <div className="notification-anchor"><button className="icon-btn" title={t("notifications")} aria-label={t("notifications")} onClick={() => { setNotificationCenterOpen(!notificationCenterOpen); refreshNotifications().catch(() => {}); }}><Bell size={18}/></button>{notificationCenterOpen && <NotificationCenter items={notifications} unreadCount={notificationUnreadCount} locale={locale} t={t} onOpen={openNotification} onRead={(item) => updateNotification(item,"read")} onArchive={(item) => updateNotification(item,"archive")}/>}</div>
-      <div className="account-menu-wrap" ref={accountMenuRef}><button className="account-menu-button" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{ROLE_LABEL[locale][data.account_role] || ROLE_LABEL[locale][role]}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} · {ROLE_LABEL[locale][option.role] || option.role}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
+      <div className="account-menu-wrap" ref={accountMenuRef}><button className="account-menu-button" aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{roleLabel(locale, data.account_role || role)}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{roleLabel(locale, data.account_role || role)}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} · {roleLabel(locale, option.role)}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
     </header><main className="page-main"><div className="page-content">{!data ? <div className="loading"><div className="spinner"/>Loading MallBoard\u2026</div> : <>
-      {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
+      {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} locale={locale} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
-      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
-      {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
-      {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
+      {page === "households" && <Households locale={locale} items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions locale={locale} items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}} businessFilter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter} onClearBusinessFilter={() => setBusinessFilter("")}/>}
+      {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls team-view-tabs">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=>{const active=workspaceView===view||(workspaceView==="home"&&view==="calendar");return <button className={`secondary-btn view-tab${active?" is-active":""}`} aria-pressed={active} key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>;})}</div><CollaborationWorkspace displayDate={displayDate} roleLabel={roleLabel} stageLabel={localeLabel} view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
+      {page === "management" && <Management locale={locale} data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
+      {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onLocaleChange={setLocale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
     </>}<footer className="app-footer"><ShieldCheck size={14}/>{t("prototype")} ? {t("demoWarning")}<span>{t("copyright")}</span></footer></div></main>
-    {modal === "household" && selected && <HouseholdModal household={selected} t={t} role={role}
+    {modal === "household" && selected && <HouseholdModal locale={locale} household={selected} t={t} role={role}
       onClose={() => setModal("")} onActivity={() => setModal("activity")} api={api}/>}
     {modal === "activity" && <ActivityModal households={data?.households || []} initialHouseholdId={selected?.id} t={t} onClose={() => setModal("")}
       onSubmit={(body) => api("/api/activities", "POST", body)}/>}
@@ -1059,7 +1157,7 @@ function NotificationCenter({ items, unreadCount, locale, t, onOpen, onRead, onA
           <small className="notification-type">{t(`notification${item.notification_type}`) || item.notification_type}</small>
           <strong>{locale === "zh" && item.title_zh ? item.title_zh : item.title}</strong>
           <span>{locale === "zh" && item.message_zh ? item.message_zh : item.message}</span>
-          <small>{new Date(item.created_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</small>
+          <small>{displayDate(item.created_at)}</small>
         </button>
         <div className="notification-actions">
           {item.status === "UNREAD" && <button onClick={(event) => act(event, onRead, item)}>{t("markRead")}</button>}
@@ -1088,7 +1186,7 @@ function LoginPage({ locale, setLocale, t, accounts, demoAvailable, error, busy,
       }}>
         <label>{t("account")}<select value={accountId} onChange={(event) => setAccountId(event.target.value)}>
           {accounts.map((account) => <option key={account.id} value={account.id}>
-            {account.display_name} · {ROLE_LABEL[locale][account.role] || account.role}
+            {account.display_name} · {roleLabel(locale, account.role)}
           </option>)}
         </select></label>
         <button className="primary-btn login-submit" disabled={busy || !accountId}>{t("demoLogin")}</button>
@@ -1112,22 +1210,26 @@ function LoginPage({ locale, setLocale, t, accounts, demoAvailable, error, busy,
   </main>;
 }
 
-function AccountsPage({ accounts, t, api }) {
+function AccountsPage({ accounts, locale, t, api }) {
   const [selectedId, setSelectedId] = useState("");
   const [method, setMethod] = useState("in_person");
   const [resetToken, setResetToken] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resetError, setResetError] = useState(false);
   async function issueReset() {
     if (!selectedId) return;
+    setResetError(false);
     setBusy(true);
     try {
       const result = await api("/api/auth/password-reset-requests", "POST",
         { user_id: Number(selectedId), verification_method: method });
       setResetToken(result.reset_token);
+    } catch {
+      setResetError(true);
     } finally { setBusy(false); }
   }
-  return <><PageTitle eyebrow={t("accounts")} title={t("accounts")} sub={t("resetRequest")}/>
-    <section className="panel setting-card"><div className="account-reset-form">
+  return <div className="admin-page accounts-page"><PageTitle eyebrow={t("accounts")} title={t("accounts")} sub={t("resetRequest")}/>
+    <section className="panel account-reset-panel"><div className="panel-head"><h2>{t("resetPanelTitle")}</h2></div><div className="account-reset-form">
       <label>{t("account")}<select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
         <option value="">—</option>{accounts.map((account) => <option value={account.id} key={account.id}>
           {account.display_name} · {account.employee_code}</option>)}
@@ -1137,17 +1239,17 @@ function AccountsPage({ accounts, t, api }) {
         <option value="identity_checked">{t("identityChecked")}</option>
       </select></label>
       <button className="primary-btn" disabled={busy || !selectedId} onClick={issueReset}>{t("requestReset")}</button>
-      {resetToken && <label>{t("resetLink")}<input readOnly value={resetToken}/></label>}
-    </div></section>
+      {resetToken && <label className="reset-token-field">{t("resetLink")}<input readOnly value={resetToken}/></label>}
+    </div>{resetError && <p className="config-error" role="alert">{t("resetRequestFailed")}</p>}</section>
     <section className="panel table-panel"><div className="panel-head"><h2>{t("accounts")} <span className="count-badge">{accounts.length}</span></h2></div>
       <div className="table-scroll"><table><thead><tr><th>{t("employeeCode")}</th><th>{t("account")}</th>
         <th>{t("role")}</th><th>{t("accountStatus")}</th><th>{t("lastLogin")}</th></tr></thead>
         <tbody>{accounts.map((account) => <tr key={account.id}><td>{account.employee_code}</td>
-          <td>{account.display_name}</td><td>{ROLE_LABEL[document.documentElement.lang][account.role] || account.role}</td>
-          <td>{account.account_status}</td><td>{account.last_login_at || "—"}</td></tr>)}</tbody></table>
+          <td>{account.display_name}</td><td>{roleLabel(locale, account.role)}</td>
+          <td><AccountStatus status={account.account_status} locale={locale}/></td><td>{displayDate(account.last_login_at)}</td></tr>)}</tbody></table>{!accounts.length && <div className="empty-state">{t("noAccounts")}</div>}
       </div>
     </section>
-  </>;
+  </div>;
 }
 
 function PasswordChangePage({ forced = false, api, t, onChanged }) {
@@ -1195,7 +1297,7 @@ function auditCategory(action) {
   return "audit";
 }
 
-function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
+function EmployeeWorkstation({ locale, data, tasks, t, onActivity, onView, onTask, onOpenTasks }) {
   const today = todayJst();
   const dueToday = tasks.filter((task) => String(task.due_at).slice(0, 10) <= today).length;
   const overdue = tasks.filter((task) => task.days_overdue > 0).length;
@@ -1207,10 +1309,8 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
   const householdById = new Map((data.households || []).map((household) => [String(household.id), household]));
   const recentLogs = (data.audit_logs || []).slice(0, 5);
   return <div className="employee-workstation">
-    <PageTitle title={<>{t("workToday")}<span>{data.user.name}さん</span></>}
-      sub={t("todaySub")} eyebrow={new Date().toLocaleDateString("ja-JP", {
-        timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long",
-      })}/>
+    <PageTitle title={<>{t("workToday")}<span>{data.user.name}{locale === "ja" && t("greetingSuffix")}</span></>}
+      sub={t("todaySub")} eyebrow={displayDate(today)}/>
     <div className="employee-card-grid">
       <button className="employee-action-card tone-blue" onClick={() => onOpenTasks("tasks:today_followups")}>
         <span>{t("workToday")}</span><strong>{dueToday}</strong><small>{t("todayWorkCount")}</small>
@@ -1230,8 +1330,8 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
       </section>
       <button className="employee-action-card tone-violet" onClick={() => onView("records")}>
         <span>{t("workHistory")}</span><strong className="card-icon"><FileText size={22}/></strong>
-        <small>{data.daily_report?.report_date || t("dailyReport")}</small>
-        {data.daily_report?.auto_summary && <p className="work-history-summary">{data.daily_report.auto_summary}</p>}
+        <small>{data.daily_report?.report_date ? displayDate(data.daily_report.report_date) : t("dailyReport")}</small>
+        {data.daily_report?.auto_summary && <SummaryText className="work-history-summary" summary={data.daily_report.auto_summary} t={t} locale={locale}/>}
         <b>{t("openWorkHistory")} <ChevronRight size={14}/></b>
       </button>
     </div>
@@ -1244,7 +1344,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
           {task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</span>
         <span className="employee-task-copy"><b>{task.title}</b>
           {householdById.has(String(task.household_id)) && <small>{householdById.get(String(task.household_id)).representative_name}{householdById.get(String(task.household_id)).household_code ? ` · ${householdById.get(String(task.household_id)).household_code}` : ""}</small>}
-          <small>{task.due_at}{task.days_overdue > 0 ? ` · ${task.days_overdue} ${t("daysOverdue")}` : ""}</small></span>
+          <small>{displayDate(task.due_at)}{task.days_overdue > 0 ? ` · ${task.days_overdue} ${t("daysOverdue")}` : ""}</small></span>
         <span className={`pill ${task.days_overdue > 0 ? "pill-red" : task.status === "in_progress" ? "pill-blue" : "pill-amber"}`}>
           {task.days_overdue > 0 ? t("overdueLabel") : task.status === "in_progress" ? t("inProgressTask") : t("pendingTask")}</span><ChevronRight size={15}/>
       </button>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}
@@ -1254,7 +1354,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
       {recentLogs.length ? <div className="employee-recent-list">{recentLogs.map((log) => { const cat = auditCategory(log.action); return <article className="employee-recent-row" key={log.id}>
         <span className="recent-action"><b>{log.action === "DEMO_ROLE_SWITCH" ? t("auditDemoRoleSwitch") : log.action}</b><span className={`audit-chip audit-chip-${cat}`}>{t(cat === "system" ? "auditCatSystem" : cat === "business" ? "auditCatBusiness" : "auditCatAudit")}</span></span>
         {(log.target_type || log.target_id_text) && <span>{[log.target_type, log.target_id_text].filter(Boolean).join(" · ")}</span>}
-        <time>{log.at}</time>
+        <time>{displayDate(log.at)}</time>
       </article>;})}</div> : <div className="empty-mini">{t("noRecentActivity")}</div>}
     </section>
     <section className="panel collaboration-shortcuts">
@@ -1268,7 +1368,7 @@ function EmployeeWorkstation({ data, tasks, t, onActivity, onView, onTask, onOpe
   </div>;
 }
 
-function EmployeeWorkHistory({ data, t, api }) {
+function EmployeeWorkHistory({ locale, data, t, api }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1283,7 +1383,7 @@ function EmployeeWorkHistory({ data, t, api }) {
   return <section className="panel employee-records">
     <div className="panel-head"><div><div className="eyebrow">{t("workHistory")}</div><h2>{t("dailyReport")}</h2></div></div>
     <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div>
-      <div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div>
+      <div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div>
     <form onSubmit={save}><label className="field-label">{t("note")}
       <textarea value={note} onChange={(event) => setNote(event.target.value)} rows="5"/></label>
       {error && <div className="config-error" role="alert">{error}</div>}
@@ -1315,23 +1415,23 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
     if (workspaceView === "records") {
       return <><PageTitle eyebrow={t("workHistory")} title={t("dailyReport")}
         actions={<button className="secondary-btn" onClick={() => onWorkspaceView("home")}>{t("backToWorkspace")}</button>}/>
-        <EmployeeWorkHistory data={data} t={t} api={api}/></>;
+        <EmployeeWorkHistory locale={locale} data={data} t={t} api={api}/></>;
     }
-    return <CollaborationWorkspace view={workspaceView} data={data} locale={locale} role={role} t={t}
+    return <CollaborationWorkspace displayDate={displayDate} roleLabel={roleLabel} stageLabel={localeLabel} view={workspaceView} data={data} locale={locale} role={role} t={t}
       api={api} onBack={() => onWorkspaceView("home")} onTask={onTask} onHousehold={onHousehold}/>;
   }
   if (role === "advisor") {
-    return <EmployeeWorkstation data={data} tasks={tasks} t={t} onActivity={onActivity}
+    return <EmployeeWorkstation locale={locale} data={data} tasks={tasks} t={t} onActivity={onActivity}
       onView={(view) => onWorkspaceView(view)} onTask={onTask}
       onOpenTasks={(filter) => { onCounter({ filter, target_page: "households" }); }}/>;
   }
   const visibleTasks = tasks.slice(0, 5);
-  if ((role === "manager" || role === "executive") && data.account_role !== "administrator") return <DashboardCockpit data={data} summary={summary} tasks={tasks} visibleTasks={visibleTasks} trendData={trendData} metric={metric} setMetric={setMetric} period={period} setPeriod={setPeriod} preferences={preferences} role={role} t={t} onActivity={onActivity} onNavigate={onNavigate} onReport={onReport} onCounter={onCounter} onTask={onTask}/>;
-  return <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}
-    title={<>{t("todayTitle")}<span>{data.user.name}さん</span></>} sub={t("todaySub")}
+  if ((role === "manager" || role === "executive") && data.account_role !== "administrator") return <DashboardCockpit locale={locale} data={data} summary={summary} tasks={tasks} visibleTasks={visibleTasks} trendData={trendData} metric={metric} setMetric={setMetric} period={period} setPeriod={setPeriod} preferences={preferences} role={role} t={t} onActivity={onActivity} onNavigate={onNavigate} onReport={onReport} onCounter={onCounter} onTask={onTask}/>;
+  return <><PageTitle eyebrow={displayDate(todayJst())}
+    title={<>{t("todayTitle")}<span>{data.user.name}{locale === "ja" && t("greetingSuffix")}</span></>} sub={t("todaySub")}
     actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
     <section className="panel queue-panel"><div className="panel-head"><div><div className="eyebrow">{t("actionQueue")}</div><h2>{t("taskQueues")}</h2></div>
-      {summary && <span className="muted">{summary.generated_at}</span>}</div>
+      {summary && <span className="muted">{displayDate(summary.generated_at)}</span>}</div>
       <div className="queue-counters">{(summary?.counters || []).slice(0, 3).map((counter) =>
         <button className={`queue-counter ${counter.key === "overdue" || counter.key === "critical_risk" ? "queue-danger" : ""}`}
           key={counter.key} onClick={() => onCounter(counter)}>
@@ -1345,7 +1445,7 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
         {visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}>
           <div className={`task-check ${task.days_overdue > 0 ? "text-danger" : ""}`}>
             {task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</div>
-          <div className="task-copy"><b>{task.title}</b><span>{task.due_at} · {task.days_overdue > 0 ? `${task.days_overdue} ${t("daysOverdue")}` : t("today")}</span></div>
+          <div className="task-copy"><b>{task.title}</b><span>{displayDate(task.due_at)} · {task.days_overdue > 0 ? `${task.days_overdue} ${t("daysOverdue")}` : t("today")}</span></div>
           <button className="icon-btn compact" aria-label={t("open")} onClick={() => onTask(task)}><ChevronRight size={16}/></button>
         </div>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}
         <div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span>
@@ -1354,17 +1454,17 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
       {showManagement && preferences.dashboard_widgets.includes("trend") ? <section className="panel pipeline-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
         <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
-          <option value="inquiries">{localeLabel(document.documentElement.lang, "inquiries")}</option>
-          <option value="visits">{localeLabel(document.documentElement.lang, "visits")}</option>
-          <option value="introductions">{localeLabel(document.documentElement.lang, "introductions")}</option>
-          <option value="contracts">{localeLabel(document.documentElement.lang, "contracts")}</option>
-          <option value="construction">{localeLabel(document.documentElement.lang, "construction")}</option>
+          <option value="inquiries">{localeLabel(locale, "inquiries")}</option>
+          <option value="visits">{localeLabel(locale, "visits")}</option>
+          <option value="introductions">{localeLabel(locale, "introductions")}</option>
+          <option value="contracts">{localeLabel(locale, "contracts")}</option>
+          <option value="construction">{localeLabel(locale, "construction")}</option>
         </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
           <option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option>
         </select></div>
         <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")}: {period} · {t("introductions")}</span></div>
       </section> : preferences.dashboard_widgets.includes("report") && <section className="panel report-panel"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div>
-        <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div>
+        <div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div>
         <label className="field-label">{t("note")}<textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="..." rows="3"/></label>
         <button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button>
       </section>}
@@ -1372,31 +1472,31 @@ function Dashboard({ data, summary, tasks, trend, preferences, t, role, locale, 
     {showManagement && preferences.dashboard_widgets.includes("overview") && <section className="panel household-panel">
       <div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div>
         <button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div>
-      <small className="muted">現在の段階分布</small>
+      <small className="muted">{t("currentStageDistribution")}</small>
       <div className="pipeline-summary"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div>
         <div className="pipeline-divider"/><div><strong>{data.households.reduce((count, item) => count + item.introductions.length, 0)}</strong><span>{t("introductions")}</span></div>
         <div className="pipeline-divider"/><div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div>
-      <StageFunnel items={data.households} t={t}/></section>}
+      <StageFunnel items={data.households} locale={locale}/></section>}
   </>;
 }
-function DashboardCockpit({ data, summary, tasks, visibleTasks, trendData, metric, setMetric, period, setPeriod, preferences, role, t, onActivity, onNavigate, onReport, onCounter, onTask }) {
+function DashboardCockpit({ locale, data, summary, tasks, visibleTasks, trendData, metric, setMetric, period, setPeriod, preferences, role, t, onActivity, onNavigate, onReport, onCounter, onTask }) {
   const [note, setNote] = useState(data.daily_report?.manual_note || "");
   const points = Array.isArray(trendData?.current) ? trendData.current : [];
   const max = Math.max(0, ...points.map((point) => Number(point.value) || 0));
   const intros = data.households.reduce((count, item) => count + item.introductions.length, 0);
-  const cockpitHeader = <><PageTitle eyebrow={new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric", weekday: "long" })} title={<>{t(role === "executive" ? "executiveTitle" : "managerTitle")}<span>{data.user.name}さん</span></>} sub={t(role === "executive" ? "executiveSub" : "managerSub")} actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
-    <div className="cockpit-counters">{summary && <div className="cockpit-generated muted">{summary.generated_at}</div>}<div className="cockpit-counter-grid">{(summary?.counters || []).slice(0, 3).map((counter) => { const danger = counter.key === "overdue" || counter.key === "critical_risk"; return <button key={counter.key} className={`cockpit-counter${danger ? " cockpit-danger" : ""}`} onClick={() => onCounter(counter)}><span>{t(`counter_${counter.key}`) || counter.label}</span><strong>{counter.count}</strong><small>{counter.unit_type === "items" ? t("unitItems") : counter.unit_type}</small><ChevronRight size={17}/></button>; })}</div></div></>;
+  const cockpitHeader = <><PageTitle eyebrow={displayDate(todayJst())} title={<>{t(role === "executive" ? "executiveTitle" : "managerTitle")}<span>{data.user.name}{locale === "ja" && t("greetingSuffix")}</span></>} sub={t(role === "executive" ? "executiveSub" : "managerSub")} actions={<button className="primary-btn" onClick={onActivity}><Plus size={16}/>{t("quickActivity")}</button>}/>
+    <div className="cockpit-counters">{summary && <div className="cockpit-generated muted">{displayDate(summary.generated_at)}</div>}<div className="cockpit-counter-grid">{(summary?.counters || []).slice(0, 3).map((counter) => { const danger = counter.key === "overdue" || counter.key === "critical_risk"; return <button key={counter.key} className={`cockpit-counter${danger ? " cockpit-danger" : ""}`} onClick={() => onCounter(counter)}><span>{t(`counter_${counter.key}`) || counter.label}</span><strong>{counter.count}</strong><small>{counter.unit_type === "items" ? t("unitItems") : counter.unit_type}</small><ChevronRight size={17}/></button>; })}</div></div></>;
   const tasksBlock = (
-    <section className="panel cockpit-tasks"><div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div><span className="pill pill-red">{tasks.length}</span></div>{visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}><div className={`task-check${task.days_overdue > 0 ? " text-danger" : ""}`}>{task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</div><div className="task-copy"><b>{task.title}</b><span>{task.due_at} · {task.days_overdue > 0 ? <span className="pill pill-red">{task.days_overdue} {t("daysOverdue")}</span> : t("today")}</span></div><button className="icon-btn compact" aria-label={t("open")} onClick={() => onTask(task)}><ChevronRight size={16}/></button></div>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}<div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span><button className="text-button" onClick={() => onNavigate("households")}>{t("viewAll")} <ChevronRight size={14}/></button></div></section>
+    <section className="panel cockpit-tasks"><div className="panel-head"><div><div className="eyebrow">{t("actionRequired")}</div><h2>{t("taskQueues")}</h2></div><span className="pill pill-red">{tasks.length}</span></div>{visibleTasks.length ? visibleTasks.map((task) => <div className="task-row" key={task.task_id}><div className={`task-check${task.days_overdue > 0 ? " text-danger" : ""}`}>{task.priority === "high" ? <CircleAlert size={16}/> : <Clock3 size={16}/>}</div><div className="task-copy"><b>{task.title}</b><span>{displayDate(task.due_at)} · {task.days_overdue > 0 ? <span className="pill pill-red">{task.days_overdue} {t("daysOverdue")}</span> : t("today")}</span></div><button className="icon-btn compact" aria-label={t("open")} onClick={() => onTask(task)}><ChevronRight size={16}/></button></div>) : <div className="empty-mini"><Check size={17}/>{t("noPendingTasks")}</div>}<div className="task-bottom"><span><Clock3 size={14}/>{t("overdueLabel")}</span><button className="text-button" onClick={() => onNavigate("households")}>{t("viewAll")} <ChevronRight size={14}/></button></div></section>
   );
   const trendBlock = (
-    <section className="panel cockpit-trend"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>{["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option key={key} value={key}>{localeLabel(document.documentElement.lang, key)}</option>)}</select><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option></select></div><div className="cockpit-trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{period} · {localeLabel(document.documentElement.lang, metric)}</span></div>{points.length ? <div className="cockpit-trend-bars">{points.map((point, i) => <div key={`${point.date || point.start}-${i}`} title={`${point.date || point.start}: ${point.value}`}><i style={{height:`${max ? Math.max(8,(Number(point.value)||0)/max*100):8}%`}}/></div>)}</div> : <div className="cockpit-empty">{t("trendNoData")}</div>}</section>
+    <section className="panel cockpit-trend"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>{["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option key={key} value={key}>{localeLabel(locale, key)}</option>)}</select><select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7d">7d</option><option value="30d">30d</option><option value="90d">90d</option></select></div><div className="cockpit-trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{period} · {localeLabel(locale, metric)}</span></div>{points.length ? <div className="cockpit-trend-bars">{points.map((point, i) => <div key={`${point.date || point.start}-${i}`} title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{height:`${max ? Math.max(8,(Number(point.value)||0)/max*100):8}%`}}/></div>)}</div> : <div className="cockpit-empty">{t("trendNoData")}</div>}</section>
   );
   const reportBlock = (
-    <>{preferences.dashboard_widgets.includes("report") && <section className="panel cockpit-report"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div><div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><p>{data.daily_report?.auto_summary || "—"}</p></div></div><label className="field-label">{t("note")}<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="..." rows="3"/></label><button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button></section>}</>
+    <>{preferences.dashboard_widgets.includes("report") && <section className="panel cockpit-report"><div className="panel-head"><div><div className="eyebrow">{t("dailySummary")}</div><h2>{t("dailyReport")}</h2></div><FileText size={17} className="muted"/></div><div className="auto-summary"><div className="summary-icon"><Activity size={16}/></div><div><span>{t("autoSummary")}</span><SummaryText summary={data.daily_report?.auto_summary} t={t} locale={locale}/></div></div><label className="field-label">{t("note")}<textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="..." rows="3"/></label><button className="secondary-btn full-width" onClick={() => onReport(note)}><Check size={15}/>{t("save")}</button></section>}</>
   );
   const overviewBlock = (
-    <section className="panel cockpit-overview"><div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="cockpit-summary-grid"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div><div><strong>{intros}</strong><span>{t("introductions")}</span></div><div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div><small className="muted">現在の段階分布</small><StageFunnel items={data.households} t={t}/></section>
+    <section className="panel cockpit-overview"><div className="panel-head"><div><div className="eyebrow">{t("businessOverview")}</div><h2>{t("pipeline")}</h2></div><button className="text-button" onClick={() => onNavigate("management")}>{t("viewAll")} <ChevronRight size={15}/></button></div><div className="cockpit-summary-grid"><div><strong>{data.households.length}</strong><span>{t("households")}</span></div><div><strong>{intros}</strong><span>{t("introductions")}</span></div><div><strong>{data.entitlements.length}</strong><span>{t("entitlement")}</span></div></div><small className="muted">{t("currentStageDistribution")}</small><StageFunnel items={data.households} locale={locale}/></section>
   );
   const roleBlocks = role === "executive"
     ? <>{overviewBlock}{tasksBlock}{trendBlock}{reportBlock}</>
@@ -1408,28 +1508,33 @@ function localeLabel(locale, key) {
   const labels = {
     ja: {
       inquiries: "問い合わせ数", visits: "来店相談数", introductions: "紹介数", contracts: "契約数", construction: "着工数",
-      "新規予約": COPY.ja.stage_new_reservation, "初回相談済": COPY.ja.stage_first_consult,
+      "反響": COPY.ja.stage_inquiry, "新規予約": COPY.ja.stage_new_reservation, "初回相談済": COPY.ja.stage_first_consult,
+      "訪問予定": COPY.ja.negotiationVisit, "商談中": COPY.ja.negotiationDiscussion, "見積提示": COPY.ja.negotiationEstimate,
+      "帰属争議中": COPY.ja.entitlementFrozen,
       "FP診断済": COPY.ja.stage_fp_diagnosis, "紹介済": COPY.ja.stage_introduction,
-      "訪問・商談中": COPY.ja.stage_negotiation, "契約": COPY.ja.stage_contract, "着工": COPY.ja.stage_construction,
+      "訪問・商談中": COPY.ja.stage_negotiation, "契約": COPY.ja.stage_contract, "着工": COPY.ja.stage_construction, "完了・見送り": COPY.ja.stage_terminal,
     },
     zh: {
       inquiries: "咨询数", visits: "到店咨询数", introductions: "介绍数", contracts: "签约数", construction: "开工数",
-      "新規予約": COPY.zh.stage_new_reservation, "初回相談済": COPY.zh.stage_first_consult,
+      "反響": COPY.zh.stage_inquiry, "新規予約": COPY.zh.stage_new_reservation, "初回相談済": COPY.zh.stage_first_consult,
+      "訪問予定": COPY.zh.negotiationVisit, "商談中": COPY.zh.negotiationDiscussion, "見積提示": COPY.zh.negotiationEstimate,
+      "帰属争議中": COPY.zh.entitlementFrozen,
       "FP診断済": COPY.zh.stage_fp_diagnosis, "紹介済": COPY.zh.stage_introduction,
-      "訪問・商談中": COPY.zh.stage_negotiation, "契約": COPY.zh.stage_contract, "着工": COPY.zh.stage_construction,
+      "訪問・商談中": COPY.zh.stage_negotiation, "契約": COPY.zh.stage_contract, "着工": COPY.zh.stage_construction, "完了・見送り": COPY.zh.stage_terminal,
     },
   };
-  return labels[locale]?.[key] || key;
+  const localized = labels[locale];
+  return localized && Object.hasOwn(localized, key) ? localized[key] : key;
 }
-function StageFunnel({ items, t }) {
+function StageFunnel({ items, locale }) {
   const order = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"];
   return <div className="funnel-list">{order.slice(0, 6).map((stage, i) => {
     const count = items.filter((h) => h.stage_events.at(-1)?.to_stage === stage).length;
-    return <div className="funnel-row" key={stage}><span className="funnel-index">{String(i + 1).padStart(2, "0")}</span><span className="funnel-name">{stage}</span>
+    return <div className="funnel-row" key={stage}><span className="funnel-index">{String(i + 1).padStart(2, "0")}</span><span className="funnel-name">{(locale === "ja" ? stage : localeLabel(locale, stage))}</span>
       <div className="funnel-track"><i style={{ width: `${items.length ? Math.max(4, count / items.length * 100) : 0}%` }}/></div><b>{count}</b></div>;
   })}</div>;
 }
-function HouseholdTable({ items, t, onOpen, emptyMessage }) {
+function HouseholdTable({ locale, items, t, onOpen, emptyMessage }) {
   const today = todayJst();
   const nextActionFor = (h) => h.activities.find((a) => a.next_action);
   const dueClass = (value) => { if (!value) return ""; const day = String(value).slice(0, 10); return day < today ? "text-danger" : day === today ? "due-today" : ""; };
@@ -1437,14 +1542,14 @@ function HouseholdTable({ items, t, onOpen, emptyMessage }) {
   return <><div className="table-scroll household-table-desktop"><table><thead><tr><th>{t("household")}</th><th>{t("stage")}</th><th>{t("nextAction")}</th><th>{t("due")}</th><th/></tr></thead>
     <tbody>{items.map((h) => { const task = nextActionFor(h); return <tr key={h.id} onClick={() => onOpen(h)} className="click-row">
       <td><div className="customer-cell"><div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div></div></td>
-      <td><span className={stageTagClass(stageFor(h))}>{stageFor(h)}</span></td><td>{task?.next_action || t("nextActionUnset")}</td><td className={dueClass(task?.next_action_due)}>{task?.next_action_due ? String(task.next_action_due).slice(0, 10) : "—"}</td>
+      <td><span className={stageTagClass(stageFor(h))}>{localeLabel(locale, stageFor(h))}</span></td><td>{task?.next_action || t("nextActionUnset")}</td><td className={dueClass(task?.next_action_due)}>{displayDate(task?.next_action_due)}</td>
       <td><ChevronRight size={15} className="muted"/></td></tr>;})}</tbody></table>{!items.length && <div className="empty-state">{emptyMessage}</div>}</div>
     <div className="household-cards">{items.map((h) => { const task = nextActionFor(h); return <button className="household-record-card" key={h.id} onClick={() => onOpen(h)}>
-      <span className="record-card-head"><b>{h.representative_name}</b><span className={stageTagClass(stageFor(h))}>{stageFor(h)}</span></span><span className="record-card-area">{h.area_pref}</span>
-      <span className="record-card-action">{task?.next_action || t("nextActionUnset")}</span><span className={`record-card-due ${dueClass(task?.next_action_due)}`}>{task?.next_action_due ? String(task.next_action_due).slice(0, 10) : "—"}</span>
+      <span className="record-card-head"><b>{h.representative_name}</b><span className={stageTagClass(stageFor(h))}>{localeLabel(locale, stageFor(h))}</span></span><span className="record-card-area">{h.area_pref}</span>
+      <span className="record-card-action">{task?.next_action || t("nextActionUnset")}</span><span className={`record-card-due ${dueClass(task?.next_action_due)}`}>{displayDate(task?.next_action_due)}</span>
       <span className="record-card-link">{t("viewHousehold")}</span></button>;})}{!items.length && <div className="empty-state">{emptyMessage}</div>}</div></>;
 }
-function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, terminalExcludedTaskCount, onClearBusinessFilter }) {
+function Households({ locale, items, stores, t, onOpen, businessFilter, matchedTasks, terminalExcludedTaskCount, onClearBusinessFilter }) {
   const [storeId, setStoreId] = useState("all");
   const [stage, setStage] = useState("all");
   const rows = items.filter((household) => (storeId === "all" || household.store_id === Number(storeId))
@@ -1462,9 +1567,9 @@ function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, te
         <label className="filter-select">{t("filterStage")}<select value={stage} onChange={(event) => setStage(event.target.value)}>
           <option value="all">{t("all")}</option>{STAGES.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
       {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span>{taskFilter && terminalExcludedTaskCount > 0 && <span className="business-filter-note">{t("businessTerminalExcludedNote").replace("{count}", terminalExcludedTaskCount)}</span>}</div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
-      <HouseholdTable items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
+      <HouseholdTable locale={locale} items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
 }
-function Introductions({ items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter }) {
+function Introductions({ locale, items, t, onOpen, onAdd, businessFilter, onClearBusinessFilter }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
   useEffect(() => { if (!items.some((h) => h.id === activeHousehold)) setActiveHousehold(items[0]?.id || null); }, [items, activeHousehold]);
   const household = items.find((h) => h.id === activeHousehold);
@@ -1481,20 +1586,20 @@ function Introductions({ items, t, onOpen, onAdd, businessFilter, onClearBusines
       </button>)}</section>
       {household ? <section className="intro-detail"><div className="panel intro-context"><div><div className="eyebrow">{household.store_name} · {household.advisor_name}</div><h2>{household.representative_name}</h2><span>{household.budget_band} · {household.area_pref}</span></div>
         <button className="primary-btn" onClick={() => onAdd(household)}><Plus size={15}/>{t("partnerCreate")}</button></div>
-        <div className="partner-grid">{!household.introductions.length && <div className="empty-state intro-empty-partners">{t("introNoIntroductions")}</div>}{household.introductions.map((intro) => <PartnerCard key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
+        <div className="partner-grid">{!household.introductions.length && <div className="empty-state intro-empty-partners">{t("introNoIntroductions")}</div>}{household.introductions.map((intro) => <PartnerCard locale={locale} key={intro.id} intro={intro} t={t} onOpen={() => onOpen(household)}/>)}
           {!household.introductions.length && <button className="add-partner-card" onClick={() => onAdd(household)}><Plus size={20}/>{t("partnerCreate")}</button>}</div>
       </section> : <section className="panel empty-state">{t("introSelectHousehold")}</section>}
     </div></>;
 }
-function PartnerCard({ intro, t, onOpen }) {
+function PartnerCard({ locale, intro, t, onOpen }) {
   const elapsed = Math.max(0, Math.floor((Date.now() - new Date(intro.introduced_at).getTime()) / 86400000));
   const state = intro.entitlement_state;
   return <article className={`partner-card ${state === "Disputed" ? "disputed-card" : ""}`}>
-    <div className="partner-card-head"><div className="partner-icon"><Building2 size={18}/></div><div><b>{intro.partner_name}</b><span>{intro.staff_name || "—"} · {intro.introduced_at}</span></div>
-      {intro.existing_customer_flag ? <span className="pill pill-orange">{t("disputed")}</span> : <span className={`pill ${intro.status === "受付確認済" ? "pill-blue" : "pill-violet"}`}>{t(intro.status === "受付確認済" ? "received" : "introduced")}</span>}</div>
-    <div className="negotiation-status"><div><small>{t("status")}</small><b>{intro.negotiation_status || "紹介済"}</b></div><div><small>{t("elapsed")}</small><b>{elapsed} {t("days")}</b></div><div><small>{t("last")}</small><b>{intro.last_activity_at || "—"}</b></div></div>
-    {intro.contract_id && <div className="contract-highlight"><div className="contract-icon"><Check size={15}/></div><div><b>{t("contract")} · ¥{Number(intro.contract_amount).toLocaleString()}</b><span>{intro.contract_date}</span></div></div>}
-    {state === "Disputed" && <div className="frozen-banner"><CircleAlert size={15}/>{t("frozen")}</div>}
+    <div className="partner-card-head"><div className="partner-icon"><Building2 size={18}/></div><div><b>{intro.partner_name}</b><span>{intro.staff_name || "—"} · {displayDate(intro.introduced_at)}</span></div>
+      {intro.existing_customer_flag ? <CustomerDisputeBadge t={t}/> : <span className={`pill ${intro.status === "受付確認済" ? "pill-blue" : "pill-violet"}`}>{t(intro.status === "受付確認済" ? "received" : "introduced")}</span>}</div>
+    <div className="negotiation-status"><div><small>{t("status")}</small><b>{localeLabel(locale, intro.negotiation_status || "紹介済")}</b></div><div><small>{t("elapsed")}</small><b>{elapsed} {t("days")}</b></div><div><small>{t("last")}</small><b>{displayDate(intro.last_activity_at)}</b></div></div>
+    {intro.contract_id && <div className="contract-highlight"><div className="contract-icon"><Check size={15}/></div><div><b>{t("contract")} · ¥{Number(intro.contract_amount).toLocaleString()}</b><span>{displayDate(intro.contract_date)}</span></div></div>}
+    {state === "Disputed" && <div className="frozen-banner"><CircleAlert size={15}/><span>{t("entitlementFrozen")} · {t("frozen")}</span></div>}
     <button className="card-link" onClick={onOpen}>{t("review")} <ChevronRight size={14}/></button>
   </article>;
 }
@@ -1554,9 +1659,9 @@ function ConstructionCard({ household, project, data, t, role, api }) {
   const canConfirm = role === "manager" || role === "hq_finance" || role === "executive";
   const stateLabel = t(`construction_${project.confirmation_status}`);
   return <section className="panel construction-panel"><div className="panel-head"><div><div className="eyebrow">{t("projectMilestone")}</div><h2>{household.representative_name} · {project.partner_name}</h2>
-    <small>{stateLabel} · {t("due")}: {project.confirmation_due_date || "—"}</small></div><StateBadge state={project.confirmed_start_date ? "Confirmed" : "PendingConfirmation"} t={t}/></div>
-    <div className="milestone-line"><div className="milestone done"><div><Check size={15}/></div><span>{t("contract")}</span><b>{project.contract_date}</b></div><div className="milestone done"><div><Check size={15}/></div><span>{t("startPlanned")}</span><b>{project.planned_start_date}</b></div>
-      <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{project.actual_start_date || "—"}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{project.confirmed_start_date || "未確認"}</b></div></div>
+    <small>{stateLabel} · {t("due")}: {displayDate(project.confirmation_due_date)}</small></div><StateBadge state={project.confirmed_start_date ? "Confirmed" : "PendingConfirmation"} t={t}/></div>
+    <div className="milestone-line"><div className="milestone done"><div><Check size={15}/></div><span>{t("contract")}</span><b>{displayDate(project.contract_date)}</b></div><div className="milestone done"><div><Check size={15}/></div><span>{t("startPlanned")}</span><b>{displayDate(project.planned_start_date)}</b></div>
+      <div className="milestone done"><div><Check size={15}/></div><span>{t("actualStart")}</span><b>{displayDate(project.actual_start_date)}</b></div><div className={`milestone ${project.confirmed_start_date ? "done" : "pending"}`}><div>{project.confirmed_start_date ? <Check size={15}/> : "4"}</div><span>{t("confirmStart")}</span><b>{displayDate(project.confirmed_start_date)}</b></div></div>
     {!project.confirmed_start_date && canConfirm ? <div className="confirm-row"><label className="field-label">{t("confirmationEvidence")}<input value={evidence} onChange={(e) => setEvidence(e.target.value)} placeholder="現場写真・担当者確認など"/></label>
       <button className="primary-btn" disabled={!evidence.trim() || !project.actual_start_date} onClick={() => api(`/api/construction/${project.project_id}/confirm`, "POST", { confirmed_start_date: todayJst(), evidence })}><Check size={15}/>{t("confirm")}</button></div>
       : !project.confirmed_start_date ? <div className="inline-notice"><ShieldCheck size={16}/>{t("roleFinance")} または {t("roleManager")} ロールで着工確認ができます。</div>
@@ -1596,16 +1701,27 @@ function EntitlementActions({ entitlement, t, role, api }) {
   if (entitlement.state === "Invoiced") return <button className="mini-action" onClick={() => api(`/api/entitlements/${entitlement.id}/action`, "POST", { action: "paid" })}>{t("paid")} <ChevronRight size={13}/></button>;
   return <span className="muted">—</span>;
 }
-function Management({ data, management, t, role, onReminder, onException }) {
+function Management({ locale, data, management, t, role, onReminder, onException }) {
   const [metric, setMetric] = useState("introductions");
   const [period, setPeriod] = useState("90d");
   const [trendData, setTrendData] = useState(null);
+  const [trendError, setTrendError] = useState(false);
   const [focusedReminder, setFocusedReminder] = useState(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportError, setReportError] = useState("");
   useEffect(() => {
-    fetch(`${API_BASE}/api/dashboard/trends?metric=${metric}&period=${period}`, { credentials: "include" })
-      .then(async (response) => { if (response.ok) setTrendData(await response.json()); });
+    const controller = new AbortController();
+    setTrendError(false);
+    fetch(API_BASE + "/api/dashboard/trends?metric=" + metric + "&period=" + period, {
+      credentials: "include", signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Trend request failed");
+      const result = await response.json();
+      if (!controller.signal.aborted) setTrendData(result);
+    }).catch(() => {
+      if (!controller.signal.aborted) setTrendError(true);
+    });
+    return () => controller.abort();
   }, [metric, period, role]);
   const stores = management?.stores || [];
   const funnel = management?.funnel || [];
@@ -1640,27 +1756,27 @@ function Management({ data, management, t, role, onReminder, onException }) {
       setReportError(t("reportFailed"));
     } finally { setReportBusy(false); }
   }
-  return <><PageTitle eyebrow={t("businessIntelligence")} title={t("management")} sub={t("managementSub")}/>
-    <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeComparison")}</div><h2>{t("storeCompare")}</h2></div></div>
+  return <div className="admin-page management-page"><PageTitle eyebrow={t("businessIntelligence")} title={t("management")} sub={t("managementSub")}/>
+    <div className="management-grid management-primary"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("storeComparison")}</div><h2>{t("storeCompare")}</h2></div></div>
       <div className="store-bars">{stores.map((store) => <div className="store-bar-row store-comparison-row" key={store.id}>
         <span>{store.name}</span><div className="bar-track"><i style={{ width: `${store.households / max * 100}%` }}/></div>
         <b>{store.households}</b><small>{store.tenure_months}{t("months")} · {store.case_volume_band} {t("caseVolume")}</small>
       </div>)}</div><div className="chart-footnote">{t("sampleSize")} · {t("households")} · {t("demoWarning")}</div></section>
       <section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("businessTrend")}</div><h2>{t("trendEntry")}</h2></div></div>
         <div className="trend-controls"><select value={metric} onChange={(event) => setMetric(event.target.value)}>
-          {["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option value={key} key={key}>{localeLabel(document.documentElement.lang, key)}</option>)}
+          {["inquiries", "visits", "introductions", "contracts", "construction"].map((key) => <option value={key} key={key}>{localeLabel(locale, key)}</option>)}
         </select><select value={period} onChange={(event) => setPeriod(event.target.value)}>
           {["7d", "30d", "90d", "180d", "365d"].map((value) => <option key={value}>{value}</option>)}
         </select></div>
-        <div className="trend-bars">{(trendData?.current || []).map((point, index) => <div key={`${point.date || point.start}-${index}`}
-          title={`${point.date || point.start}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
-        <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · 前期間 {trendData?.previous_total ?? 0}</span></div>
+        {trendError ? <p className="config-error" role="alert">{t("trendLoadFailed")}</p> : trendData && !trendData.current?.length ? <div className="empty-state">{t("trendNoData")}</div> : trendData && <><div className="trend-bars">{(trendData?.current || []).map((point, index) => <div key={`${point.date || point.start}-${index}`}
+          title={`${displayDate(point.date || point.start)}: ${point.value}`}><i style={{ height: `${Math.max(3, Math.min(100, point.value * 12))}%` }}/></div>)}</div>
+        <div className="trend-summary"><strong>{trendData?.current_total ?? 0}</strong><span>{t("period")} {period} · {t("previousPeriod")} {trendData?.previous_total ?? 0}</span></div></>}
       </section></div>
     {funnel.length > 0 && <section className="panel management-funnel"><div className="panel-head"><div>
       <div className="eyebrow">{t("last90Days")}</div><h2>{t("acquisitionFunnel")}</h2></div>
-      <span className="muted">{document.documentElement.lang === "zh" ? "参考值・世带数" : "参考値・世帯数"}</span></div>
+      <span className="muted">{t("funnelReference")}</span></div>
       <div className="management-funnel-list">{funnel.map((item, index) => <div className="management-funnel-row" key={item.stage}>
-        <span>{String(index + 1).padStart(2, "0")} · {localeLabel(document.documentElement.lang, item.stage)}</span>
+        <span>{String(index + 1).padStart(2, "0")} · {localeLabel(locale, item.stage)}</span>
         <div className="funnel-track"><i style={{ width: `${Math.min(100, item.count / Math.max(...funnel.map((entry) => entry.count), 1) * 100)}%` }}/></div>
         <b>{item.count}</b>
       </div>)}</div>
@@ -1671,7 +1787,7 @@ function Management({ data, management, t, role, onReminder, onException }) {
         <h3>{t(`exception_${card.key}`)}<strong>{card.count}</strong></h3>
         {card.items.map((item) => <button key={`${card.key}-${item.record_id}`}
           onClick={() => onException(card, item)}>
-          <span>{item.representative_name}</span><small>{item.title || item.due_at || t("exceptionOpenRecord")}</small>
+          <span>{item.representative_name}</span><small>{item.title || (item.due_at ? displayDate(item.due_at) : t("exceptionOpenRecord"))}</small>
           <ChevronRight size={13}/>
         </button>)}
         {!card.items.length && <p className="muted">{t("noRows")}</p>}
@@ -1701,23 +1817,23 @@ function Management({ data, management, t, role, onReminder, onException }) {
           setFocusedReminder({ key: reminder.key, item });
           onReminder(reminder, item);
         }}>
-          <span>{item.representative_name}</span><small>{item.due_at || "—"}</small><ChevronRight size={14}/></button>)}
+          <span>{item.representative_name}</span><small>{displayDate(item.due_at)}</small><ChevronRight size={14}/></button>)}
         {!reminder.items.length && <p className="muted">{t("noRows")}</p>}
       </article>)}</div>
       {focusedReminder && <div className="inline-notice" aria-live="polite">
         <b>{t("selectedDeadline")} · {t(`reminder_${focusedReminder.key}`)}</b>
-        <span>{t("deadlineRecord")}: {focusedReminder.item.representative_name} · {focusedReminder.item.due_at || "—"} · #{focusedReminder.item.id}</span>
+        <span>{t("deadlineRecord")}: {focusedReminder.item.representative_name} · {displayDate(focusedReminder.item.due_at)} · #{focusedReminder.item.id}</span>
       </div>}
     </section>
     <div className="management-grid"><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("marketingAttribution")}</div><h2>{t("attribution")}</h2></div></div>
       <div className="table-scroll"><table><thead><tr><th>{t("firstTouch")}</th><th>{t("touch")}</th><th>{t("households")}</th><th>{t("contract")}</th></tr></thead>
         <tbody>{management.attribution.map((row) => <tr key={row.channel}><td>{row.channel}</td><td>{row.touches}</td><td>{row.households}</td><td>{row.contracts}</td></tr>)}</tbody></table></div>
     </section><section className="panel analytics-panel"><div className="panel-head"><div><div className="eyebrow">{t("cohortConversion")}</div><h2>{t("cohort")}</h2></div>
-      <span className="muted">{document.documentElement.lang === "zh" ? "正式 Cohort 转化率・同一世带追踪" : "正式 Cohort 転換率・同一世帯追跡"}</span></div>
-      <div className="table-scroll"><table><thead><tr><th>{t("cohort")}</th><th>{document.documentElement.lang === "zh" ? "反响→预约" : "反響→予約"}</th><th>{document.documentElement.lang === "zh" ? "预约→介绍" : "予約→紹介"}</th><th>{document.documentElement.lang === "zh" ? "介绍→签约" : "紹介→契約"}</th></tr></thead>
+      <span className="muted">{t("cohortReference")}</span></div>
+      <div className="table-scroll"><table><thead><tr><th>{t("cohort")}</th><th>{t("inquiryToReservation")}</th><th>{t("reservationToIntroduction")}</th><th>{t("introductionToContract")}</th></tr></thead>
         <tbody>{management.cohorts.map((row) => {
           const rateLabel = (value) => value?.rate == null ? "—" : `${(value.rate * 100).toFixed(1)}% (${value.numerator}/${value.denominator})`;
-          return <tr key={row.cohort}><td>{row.cohort}</td><td>{rateLabel(row.inquiry_to_reservation)}</td>
+          return <tr key={row.cohort}><td>{displayDate(row.cohort)}</td><td>{rateLabel(row.inquiry_to_reservation)}</td>
             <td>{rateLabel(row.reservation_to_introduction)}</td><td>{rateLabel(row.introduction_to_contract)}</td></tr>;
         })}</tbody></table></div>
     </section></div>
@@ -1728,9 +1844,9 @@ function Management({ data, management, t, role, onReminder, onException }) {
     </section></>}
     <section className="panel governance-panel"><div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("audit")}</h2></div><span className="pill pill-green"><ShieldCheck size={13}/>{t("audit")}</span></div>
       <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th><th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead><tbody>
-        {data.audit_logs.map((row) => <tr key={row.id}><td>{row.at}</td><td>{row.user_name || "—"}</td><td><span className="audit-action">{row.action}</span></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
+        {data.audit_logs.map((row) => <tr key={row.id}><td>{displayDate(row.at)}</td><td>{row.user_name || "—"}</td><td><span className="audit-action">{row.action}</span></td><td>{row.target_type} #{row.target_id}</td><td>{row.detail}</td></tr>)}
       </tbody></table>{!data.audit_logs.length && <div className="empty-state">{t("noRows")}</div>}</div></section>
-  </>;
+  </div>;
 }
 function AuditTrailPanel({ t, userId, locale }) {
   const [items, setItems] = useState([]);
@@ -1768,8 +1884,8 @@ function AuditTrailPanel({ t, userId, locale }) {
     {error && <p className="config-error" role="alert">{error}</p>}
     <div className="table-scroll"><table><thead><tr><th>{t("dateLabel")}</th><th>{t("userLabel")}</th>
       <th>{t("actionLabel")}</th><th>{t("targetLabel")}</th><th>{t("detailLabel")}</th></tr></thead>
-      <tbody>{items.map((item) => <tr key={item.id}><td>{item.event_at}</td>
-        <td>{ROLE_LABEL[locale][item.actor_role] || item.actor_role} #{item.actor_id ?? "—"}</td><td>{item.action}</td>
+      <tbody>{items.map((item) => <tr key={item.id}><td>{displayDate(item.event_at)}</td>
+        <td>{roleLabel(locale, item.actor_role)} #{item.actor_id ?? "—"}</td><td>{item.action}</td>
         <td>{item.object_type} #{item.object_id_text || item.object_id || "—"}</td>
         <td><button className="text-button" onClick={() => showDetails(item.id)}>{t("detailLabel")}</button></td>
       </tr>)}</tbody></table>
@@ -1887,9 +2003,9 @@ function ExpensePanel({ data, t, role, accountRole, locale }) {
       <th>{t("recordedProof")}</th><th>{t("actionLabel")}</th></tr></thead>
       <tbody>{items.map((item) => <tr key={item.id}><td>{item.applicant_name}</td><td>{categoryLabel(item.category)}</td>
         <td>¥{Number(item.amount).toLocaleString()}</td><td>¥{Number(item.tax_amount || 0).toLocaleString()} · {item.tax_category}</td>
-        <td>{item.expense_date?.toString().slice(0, 10)}<br/>{t("appliedAt")}: {item.applied_at?.toString().slice(0, 10) || "—"}</td>
+        <td>{displayDate(item.expense_date)}<br/>{t("appliedAt")}: {displayDate(item.applied_at)}</td>
         <td>{t(`expenseStatus${item.status}`)}{item.rejection_reason && <small className="text-danger"><br/>{item.rejection_reason}</small>}</td>
-        <td>{item.accounting_integration_id || item.recorded_reference || "—"}{item.recorded_confirmed_at && <small><br/>{item.recorded_confirmed_at.toString().slice(0, 10)}</small>}</td>
+        <td>{item.accounting_integration_id || item.recorded_reference || "—"}{item.recorded_confirmed_at && <small><br/>{displayDate(item.recorded_confirmed_at)}</small>}</td>
         <td className="expense-actions">
           {item.receipt_filename && <a href={`${API_BASE}/api/expenses/${item.id}/receipt`} target="_blank" rel="noreferrer">{t("receipt")}</a>}
           {item.applicant_id === data.user.id && ["DRAFT", "REJECTED"].includes(item.status) && <>
@@ -2086,11 +2202,11 @@ function ImportResultTable({ rows, t, importReason }) {
       <td>{t(row.status === "READY" ? "previewReady" : `importStatus${row.status}`)}</td><td>{importReason(row.reason)}</td>
     </tr>)}</tbody></table></div>;
 }
-function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferences, onSavePreferences }) {
-  return <><PageTitle eyebrow={t("systemPreferences")} title={t("settings")} sub={t("settingsSub")}/>
-    <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{ROLE_LABEL[locale][role]}。{t("roleDescription")}</p>
-      <div className="setting-roles">{data.roles.map((r) => <span className={`role-chip ${r.id === role ? "current" : ""}`} key={r.id}>{ROLE_LABEL[locale][r.id]} {r.id === role && <Check size={13}/>}</span>)}</div></div></section>
-      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>{t("languageDescription")}</p><span className="locale-pill">日本語 · 中文</span></div></section>
+function SettingsPage({ data, t, role, locale, onLocaleChange, onReset, onConfigSaved, preferences, onSavePreferences }) {
+  return <div className="admin-page settings-page"><PageTitle eyebrow={t("systemPreferences")} title={t("settings")} sub={t("settingsSub")}/>
+    <div className="settings-grid"><section className="panel setting-card"><div className="setting-icon"><Users size={19}/></div><div><h2>{t("role")}</h2><p>{t("currentRole")}：{roleLabel(locale, role)}。{t("roleDescription")}</p>
+      <div className="setting-roles">{data.roles.map((r) => <span className={`role-chip ${r.id === role ? "current" : ""}`} key={r.id}>{roleLabel(locale, r.id)} {r.id === role && <Check size={13}/>}</span>)}</div></div></section>
+      <section className="panel setting-card"><div className="setting-icon"><Languages size={19}/></div><div><h2>{t("language")}</h2><p>{t("languageDescription")}</p><select className="settings-locale" aria-label={t("language")} value={locale} onChange={(event) => onLocaleChange(event.target.value)}><option value="ja">日本語</option><option value="zh">中文</option></select></div></section>
       <section className="panel setting-card"><div className="setting-icon"><ShieldCheck size={19}/></div><div><h2>{t("consent")}</h2><p>{t("consentDescription")}</p><span className="pill pill-green">{t("l1Protected")}</span></div></section>
       <section className="panel setting-card danger-setting"><div className="setting-icon danger"><Settings size={19}/></div><div><h2>{t("reset")}</h2><p>{t("resetDescription")}</p><button className="danger-btn" disabled={role !== "hq_finance"} onClick={onReset}>{t("reset")}</button>{role !== "hq_finance" && <small>{t("financeRoleOnly")}</small>}</div></section>
     </div>
@@ -2106,7 +2222,7 @@ function SettingsPage({ data, t, role, locale, onReset, onConfigSaved, preferenc
         <p className="config-permission">{t("configPermission")}</p>}
       <p className="config-note">{t("slaPending")} {t("accountingNote")}</p>
     </section>
-  </>;
+  </div>;
 }
 
 function MonthClosePanel({ accountRole, userId, t }) {
@@ -2204,7 +2320,7 @@ function MonthClosePanel({ accountRole, userId, t }) {
     <div className="month-close-layout">
       <div className="month-close-history"><h3>{t("monthClose")}</h3>
         {items.length ? items.map((item) => <button key={item.id} className={`month-close-item ${active?.id === item.id ? "selected" : ""}`}
-          onClick={() => showSnapshot(item)}><span>{item.period} · v{item.snapshot_version}</span>
+          onClick={() => showSnapshot(item)}><span>{displayDate(item.period)} · v{item.snapshot_version}</span>
           <b>{statusLabels[item.status] || item.status}</b></button>) :
           <p className="empty-state">{t("monthCloseEmpty")}</p>}
       </div>
@@ -2263,7 +2379,7 @@ function DataCorrectionPanel({ accountRole, t, locale }) {
       <button className="mini-action" disabled={busy !== ""} onClick={() => load().catch((loadError) => setError(loadError.message || t("error")))}>{t("opsRefresh")}</button></div>
     {error && <p className="config-error" role="alert">{error}</p>}
     {items.length ? items.map((item) => <article className="correction-card" key={item.id}>
-      <div><b>{item.household_code} · {item.representative_name}</b><span>{item.requester_name} · {new Date(item.requested_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</span></div>
+      <div><b>{item.household_code} · {item.representative_name}</b><span>{item.requester_name} · {displayDate(item.requested_at)}</span></div>
       <div className="correction-values"><strong>{fieldLabels[item.field_name] || item.field_name}</strong>
         <span>{item.before_value || "—"} → {item.requested_value}</span><small>{item.reason}</small></div>
       <label>{t("correctionReason")}<input value={notes[item.id] || ""} maxLength={500}
@@ -2307,7 +2423,7 @@ function OperationsPanel({ accountRole, locale, t }) {
     <div className="panel-head"><div><div className="eyebrow">{t("governance")}</div><h2>{t("dataOps")}</h2></div>
       <button className="mini-action" disabled={busy} onClick={refresh}>{busy ? "…" : t("opsRefresh")}</button></div>
     {error && <p className="config-error" role="alert">{error}</p>}
-    {status && <><p className="config-note">{t("opsRefreshTime")}: {new Date(status.generated_at).toLocaleString(locale === "zh" ? "zh-CN" : "ja-JP")}</p>
+    {status && <><p className="config-note">{t("opsRefreshTime")}: {displayDate(status.generated_at)}</p>
       <div className="ops-status-grid">{cards.map(([label, value]) => <div key={label}>
         <span>{label}</span><b className={value === t("opsDegraded") || value === "DEGRADED" ? "ops-degraded" : ""}>{value}</b>
       </div>)}</div></>}
@@ -2388,22 +2504,21 @@ function SystemConfigPanel({ role, locale, t, onSaved }) {
     </div>)}</div>
   </>;
 }
-function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
+function HouseholdModal({ locale, household: h, t, role, onClose, onActivity, api }) {
   const [stage, setStage] = useState(h.stage_events.at(-1)?.to_stage || "新規予約");
   const [disputeIntro, setDisputeIntro] = useState(null);
-  const locale = document.documentElement.lang;
   const currentStage = h.stage_events.at(-1)?.to_stage;
   const hasStageTimestamps = h.stage_events.some((event) => event.changed_at);
   const stageHistory = hasStageTimestamps ? [...h.stage_events].sort((a, b) => String(a.changed_at || "").localeCompare(String(b.changed_at || ""))) : h.stage_events;
-  return <Modal onClose={onClose} wide><div className="modal-heading household-modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><div className="household-name-stage"><h2>{h.representative_name}</h2><span className={stageTagClass(currentStage)}>{currentStage}</span></div><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
-    <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={h.stage_events.at(-1)?.to_stage}/></div>
+  return <Modal onClose={onClose} wide><div className="modal-heading household-modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><div className="household-name-stage"><h2>{h.representative_name}</h2><span className={stageTagClass(currentStage)}>{localeLabel(locale, currentStage)}</span></div><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+    <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={localeLabel(locale, currentStage)}/></div>
     <div className="household-modal-grid"><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("people")}</h3><span className="count-badge">{h.persons.length}</span></div>
       {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{p.relation} · {p.phone}</span></div></div>)}</section>
-      <section className="modal-section"><div className="section-title"><h3>{t("firstTouch")} / {t("latestTouch")}</h3></div><div className="touch-compare">{[["first", h.first_touch], ["last", h.latest_touch]].map(([key, touch]) => <div className="touch-card" key={key}><small>{t(key)}</small><b>{touch?.channel || "—"}</b><span>{touch?.touch_at || "—"}</span><em>{touch?.capture_method || "—"}</em></div>)}</div></section>
-      <section className="modal-section"><div className="section-title"><h3>{t("stages")}</h3><div className="inline-stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{h.stage_events.length ? h.stage_events.map((e, i) => <option key={`${e.id}-${i}`} value={e.to_stage}>{e.to_stage}</option>) : ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"].map((s) => <option key={s}>{s}</option>)}</select><button className="mini-action" onClick={() => api(`/api/households/${h.id}/stage`, "POST", { to_stage: stage })}>{t("record")}</button></div></div>
-        <div className="timeline">{stageHistory.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{e.to_stage}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
-      <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{c.scope} · {c.purpose}</b><span>同意: {c.granted_at} {c.revoked_at && ` · 取消: ${c.revoked_at}`}</span></div></div>)}
-        {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{d.scope} → {d.disclosed_to}</b><span>共有: {d.disclosed_at}</span></div></div>)}
+      <section className="modal-section"><div className="section-title"><h3>{t("firstTouch")} / {t("latestTouch")}</h3></div><div className="touch-compare">{[["first", h.first_touch], ["last", h.latest_touch]].map(([key, touch]) => <div className="touch-card" key={key}><small>{t(key)}</small><b>{touch?.channel || "—"}</b><span>{displayDate(touch?.touch_at)}</span><em>{touch?.capture_method || "—"}</em></div>)}</div></section>
+      <section className="modal-section"><div className="section-title"><h3>{t("stages")}</h3><div className="inline-stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{h.stage_events.length ? h.stage_events.map((e, i) => <option key={`${e.id}-${i}`} value={e.to_stage}>{localeLabel(locale, e.to_stage)}</option>) : ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"].map((s) => <option key={s} value={s}>{localeLabel(locale, s)}</option>)}</select><button className="mini-action" onClick={() => api(`/api/households/${h.id}/stage`, "POST", { to_stage: stage })}>{t("record")}</button></div></div>
+        <div className="timeline">{stageHistory.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{localeLabel(locale, e.to_stage)}</b><span>{displayDate(e.changed_at)} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
+      <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{c.scope} · {c.purpose}</b><span>{t("consent")} {displayDate(c.granted_at)} {c.revoked_at && ` · ${t("consentRevokedAt")} ${displayDate(c.revoked_at)}`}</span></div></div>)}
+        {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{d.scope} → {d.disclosed_to}</b><span>{t("disclosedAt")} {displayDate(d.disclosed_at)}</span></div></div>)}
         <div className="privacy-lock"><ShieldCheck size={15}/>L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。</div>
         {["advisor", "manager", "hq_finance", "executive"].includes(role) &&
           <DisclosureForm household={h} t={t} api={api}/>}
@@ -2412,17 +2527,17 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
       </section>
     </div><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("negotiations")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("quickActivity")}</button></div>
       {h.introductions.map((intro) => <div className="intro-detail-card" key={intro.id}>
-        <div className="negotiation-mini"><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {intro.introduced_at}</span><div className="nego-progress">{intro.status} / {intro.negotiation_status || "—"}</div>
-          {intro.contract_id && <small>契約 ¥{Number(intro.contract_amount).toLocaleString()} · 着工 {intro.actual_start_date || "未定"} · 確認 {intro.confirmed_start_date || "未確認"}</small>}</div>
-          {intro.existing_customer_flag ? <StateBadge state="Disputed" t={t}/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>既存顧客・争議</button>}</div>
+        <div className="negotiation-mini"><div className="partner-icon"><Building2 size={16}/></div><div className="nego-mini-main"><b>{intro.partner_name}</b><span>{intro.staff_name} · {displayDate(intro.introduced_at)}</span><div className="nego-progress">{intro.status === "受付確認済" ? t("received") : localeLabel(locale, intro.status)} / {localeLabel(locale, intro.negotiation_status) || "—"}</div>
+          {intro.contract_id && <small>{t("contract")} ¥{Number(intro.contract_amount).toLocaleString()} · {t("actualStart")} {displayDate(intro.actual_start_date)} · {t("confirmStart")} {displayDate(intro.confirmed_start_date)}</small>}</div>
+          {intro.existing_customer_flag ? <CustomerDisputeBadge t={t}/> : <button className="text-button compact-link" onClick={() => setDisputeIntro(intro.id)}>{t("customerDisputeAction")}</button>}</div>
         <ReferralDocumentPanel introductionId={intro.id} t={t} api={api}/>
       </div>)}
       {!h.introductions.length && <div className="empty-state">{t("noRows")}</div>}
       {disputeIntro && <DisputeForm introId={disputeIntro} t={t} api={api} onCancel={() => setDisputeIntro(null)}/>}
       </section>
       <section className="modal-section"><div className="section-title"><h3>{t("activitiesHistory")}</h3><button className="mini-action" onClick={onActivity}><Plus size={13}/>{t("addActivity")}</button></div>
-        {h.activities.slice(0, 6).map((a) => <div className="activity-row" key={a.id}><div className="activity-dot"><Activity size={13}/></div><div><b>{a.type} · {a.user_name}</b><span>{a.acted_at}</span><p>{a.body}</p>{a.next_action && <small>{t("nextAction")}: {a.next_action} · {a.next_action_due}</small>}</div></div>)}</section>
-      <section className="modal-section touch-list"><div className="section-title"><h3>Touch history</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{touch.touch_at}</span><b>{touch.channel}</b><small>{touch.campaign_id || "—"} · {touch.capture_method}</small></div>)}</section>
+        {h.activities.slice(0, 6).map((a) => <div className="activity-row" key={a.id}><div className="activity-dot"><Activity size={13}/></div><div><b>{a.type} · {a.user_name}</b><span>{displayDate(a.acted_at)}</span><p>{a.body}</p>{a.next_action && <small>{t("nextAction")}: {a.next_action} · {displayDate(a.next_action_due)}</small>}</div></div>)}</section>
+      <section className="modal-section touch-list"><div className="section-title"><h3>{t("touchHistory")}</h3></div>{h.touches.map((touch) => <div key={touch.id}><span>{displayDate(touch.touch_at)}</span><b>{touch.channel}</b><small>{touch.campaign_id || "—"} · {touch.capture_method}</small></div>)}</section>
     </div></div>
   </Modal>;
 }
@@ -2506,7 +2621,7 @@ function ReferralDocumentPanel({ introductionId, t, api }) {
     </div>
     {consentLoaded && <div className="referral-consent-row">
       {consent?.active
-        ? <span>{t("referralConsentActive")} · {consentMethodLabel[consent.consent_method] || consent.consent_method} · {consent.expires_at}</span>
+        ? <span>{t("referralConsentActive")} · {consentMethodLabel[consent.consent_method] || consent.consent_method} · {displayDate(consent.expires_at)}</span>
         : <span>{t("referralConsentRequired")}</span>}
       {!consent?.active && <button className="text-button compact-link" onClick={() => setConsentFormOpen((value) => !value)}>{t("recordReferralConsent")}</button>}
     </div>}
@@ -2526,7 +2641,7 @@ function ReferralDocumentPanel({ introductionId, t, api }) {
     {error && <small role="alert" className="referral-error">{error}</small>}
     {!documents.length && !generations.length && <small>{t("referralNoDocuments")}</small>}
     {documents.map((document) => <div className="referral-document-row" key={document.id}>
-      <span><b>{document.document_number}</b><small>{t("referralExpires")}: {document.expires_at}</small>
+      <span><b>{document.document_number}</b><small>{t("referralExpires")}: {displayDate(document.expires_at)}</small>
         {document.availability_reason && <small>{
           document.availability === "EXPIRED" ? t("referralExpired") :
             document.availability === "CONSENT_INACTIVE" ? t("referralConsentRevoked") : t("referralUnavailable")

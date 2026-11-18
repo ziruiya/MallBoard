@@ -340,3 +340,119 @@
   .collaboration-workspace,.bulletin-post,.negotiation-queue-row{min-width:0}
 }
 @media(max-width:760px){.calendar-desktop{display:none}.calendar-mobile{display:grid;gap:10px}}
+.admin-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.admin-page > .panel,
+.admin-page .management-grid > .panel,
+.admin-page .settings-grid > .panel {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #e1e8ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-page .management-primary > .panel {
+  border-top: 3px solid #3979C6;
+}
+
+.admin-page .primary-btn {
+  background: #3979C6;
+}
+
+.admin-page .exception-card h3 strong,
+.admin-page .reminder-card h3 span {
+  background: #FFF1CE;
+  color: #694d16;
+}
+
+.admin-page .exception-card button:focus-visible,
+.admin-page .reminder-card button:focus-visible {
+  outline: 2px solid #3979C6;
+  outline-offset: -2px;
+}
+
+.admin-page .table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.management-page :is(.operations-panel, .analytics-panel) :is(th, td):not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-page :is(.chart-footnote, .trend-summary span, .config-note) {
+  color: #56697e;
+}
+
+.account-reset-panel {
+  padding: 16px;
+}
+
+.account-reset-form .reset-token-field {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.admin-page .config-permission,
+.summary-original {
+  background: #edf0f3;
+  color: #465970;
+}
+
+.summary-original,
+.account-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: .78rem;
+}
+
+.summary-original {
+  margin-inline-end: 8px;
+}
+
+.account-status {
+  white-space: nowrap;
+}
+
+.account-status.neutral { background: #edf0f3; color: #465970; }
+.account-status.pending { background: #FFF1CE; color: #694d16; }
+.account-status.success { background: #DFF3E6; color: #225b3c; }
+.account-status.danger,
+.customer-dispute-badge,
+.partner-card .frozen-banner { background: #FCE8E8; color: #842e38; }
+
+.settings-locale {
+  min-height: 38px;
+  padding: 5px 10px;
+  border: 1px solid #c7d3df;
+  border-radius: 8px;
+  background: #fff;
+  color: #273b53;
+}
+
+@media (max-width: 680px) {
+  .admin-page :is(.management-grid, .settings-grid, .exception-card-grid, .reminder-grid) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-page .table-scroll table {
+    min-width: max-content;
+  }
+
+  .admin-page .account-reset-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-page .account-reset-form :is(label, select, input) {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
