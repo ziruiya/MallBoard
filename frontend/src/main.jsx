@@ -108,7 +108,7 @@ const COPY = {
     businessValidityName: "紹介有効期間が接近", businessValidityDescription: "紹介の有効期間が30日以内に迫っている世帯を表示しています。",
     businessDisputedName: "帰属争議あり", businessDisputedDescription: "帰属争議中の紹介がある世帯を表示しています。",
     businessGenericName: "業務条件", businessGenericDescription: "業務条件で絞り込み中です。",
-    clearBusinessFilter: "条件を解除", targetHouseholds: "対象世帯", targetTasks: "対象タスク",
+    clearBusinessFilter: "条件を解除", businessTerminalExcludedNote: "完了・見送りの世帯に紐づくタスク {count} 件は対象外です。", targetHouseholds: "対象世帯", targetTasks: "対象タスク",
     nextActionUnset: "未設定", noMatchingTasks: "対象タスクはありません", noMatchingHouseholds: "条件に一致する世帯はありません", noHouseholds: "世帯がありません", viewHousehold: "世帯詳細を見る →",
     noRows: "表示するデータがありません。",
     first: "初回", last: "最新", person: "ご家族", budget: "ご予算", area: "希望エリア",
@@ -345,7 +345,7 @@ const COPY = {
     businessValidityName: "介绍有效期临近", businessValidityDescription: "显示介绍有效期将在30天内到期的家庭。",
     businessDisputedName: "存在归属争议", businessDisputedDescription: "显示存在归属争议中介绍的家庭。",
     businessGenericName: "业务条件", businessGenericDescription: "正在按业务条件筛选。",
-    clearBusinessFilter: "解除条件", targetHouseholds: "目标家庭", targetTasks: "目标任务",
+    clearBusinessFilter: "解除条件", businessTerminalExcludedNote: "关联到已完结/搁置家庭的任务 {count} 件不在显示范围内。", targetHouseholds: "目标家庭", targetTasks: "目标任务",
     nextActionUnset: "未设置", noMatchingTasks: "没有符合条件的任务", noMatchingHouseholds: "没有符合条件的家庭", noHouseholds: "没有家庭", viewHousehold: "查看家庭详情 →",
     noRows: "暂无数据。", first: "首次", last: "最近", person: "家庭成员", budget: "预算",
     area: "意向区域", land: "土地", history: "阶段记录", activitiesHistory: "活动记录",
@@ -889,6 +889,11 @@ function App() {
   }
 
   const matchedTasks = useMemo(() => matchBusinessTasks(businessFilter, tasks), [businessFilter, tasks]);
+  const terminalExcludedTaskCount = useMemo(() => {
+    if (!isTaskBusinessFilter(businessFilter)) return 0;
+    const householdStages = new Map((data?.households || []).map((household) => [household.id, household.stage_events.at(-1)?.to_stage]));
+    return matchedTasks.filter((task) => TERMINAL_STAGES.includes(householdStages.get(task.household_id))).length;
+  }, [businessFilter, matchedTasks, data]);
   const filtered = useMemo(() => {
     let rows = data?.households || [];
     if (query.trim()) {
@@ -955,7 +960,7 @@ function App() {
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} terminalExcludedTaskCount={terminalExcludedTaskCount} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
       {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
       {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
@@ -1372,7 +1377,7 @@ function HouseholdTable({ items, t, onOpen, emptyMessage }) {
       <span className="record-card-action">{task?.next_action || t("nextActionUnset")}</span><span className={`record-card-due ${dueClass(task?.next_action_due)}`}>{task?.next_action_due ? String(task.next_action_due).slice(0, 10) : "—"}</span>
       <span className="record-card-link">{t("viewHousehold")}</span></button>;})}{!items.length && <div className="empty-state">{emptyMessage}</div>}</div></>;
 }
-function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, onClearBusinessFilter }) {
+function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, terminalExcludedTaskCount, onClearBusinessFilter }) {
   const [storeId, setStoreId] = useState("all");
   const [stage, setStage] = useState("all");
   const rows = items.filter((household) => (storeId === "all" || household.store_id === Number(storeId))
@@ -1389,7 +1394,7 @@ function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, on
         <option value="all">{t("allStores")}</option>{stores.map((store) => <option value={store.id} key={store.id}>{store.name}</option>)}</select></label>
         <label className="filter-select">{t("filterStage")}<select value={stage} onChange={(event) => setStage(event.target.value)}>
           <option value="all">{t("all")}</option>{STAGES.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
-      {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span></div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
+      {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span>{taskFilter && terminalExcludedTaskCount > 0 && <span className="business-filter-note">{t("businessTerminalExcludedNote").replace("{count}", terminalExcludedTaskCount)}</span>}</div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
       <HouseholdTable items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
 }
 function Introductions({ items, t, onOpen, onAdd }) {

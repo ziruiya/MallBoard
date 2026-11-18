@@ -249,6 +249,7 @@
 .household-table-desktop{display:block}.household-cards{display:none}
 .business-filter-banner{display:flex;align-items:center;gap:18px;margin:0 0 10px;padding:12px 14px;border:1px solid #e7ebf1;border-radius:8px;background:#f8faff;color:#536178}
 .business-filter-copy{display:grid;gap:4px;flex:1;min-width:0}.business-filter-copy>b{font-size:11px;color:#344157}.business-filter-copy>span{font-size:10px;line-height:1.5;color:#7d899b}
+.business-filter-copy>.business-filter-note{color:#98a2b3}
 .business-filter-counts{display:flex;gap:14px;flex-shrink:0}.business-filter-counts>span{display:grid;gap:2px;font-size:9px;color:#8994a5}.business-filter-counts b{font-size:15px;color:#405272}
 .business-filter-clear{min-height:34px;padding:0 11px;border:1px solid #dce3ee;border-radius:6px;background:#fff;color:#536fe5;font-size:10px;white-space:nowrap;cursor:pointer}
 .household-name-stage{display:flex;align-items:center;gap:9px;flex-wrap:wrap}.household-name-stage h2{font-weight:650;letter-spacing:-.2px}.household-modal-heading p{margin-top:4px}
