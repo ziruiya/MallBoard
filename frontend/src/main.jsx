@@ -98,7 +98,19 @@ const COPY = {
     slaPending: "SLA日数はデモ用の暫定値です。正式値は会社確認後に設定してください。",
     role: "デモロール", language: "言語", reset: "デモデータをリセット",
     resetConfirm: "デモデータを初期状態に戻します。よろしいですか？",
-    resetDone: "デモデータを初期状態に戻しました。", noRows: "表示するデータがありません。",
+    resetDone: "デモデータを初期状態に戻しました。",
+    businessTasksOverdueName: "期限超過タスク", businessTasksOverdueDescription: "本人の未完了タスクのうち、期限を過ぎているタスクがある世帯を表示しています。",
+    businessTasksTodayName: "今日の対応タスク", businessTasksTodayDescription: "期限が本日以前の未完了タスクがある世帯を表示しています。",
+    businessTasksCriticalName: "重要・期限超過タスク", businessTasksCriticalDescription: "優先度が高く、期限を過ぎているタスクがある世帯を表示しています。",
+    businessTasksPartnerName: "パートナー回答待ちタスク", businessTasksPartnerDescription: "パートナーからの回答待ちで、期限を過ぎているタスクがある世帯を表示しています。",
+    businessAppointmentsName: "本日の予定タスク", businessAppointmentsDescription: "本日に予定されている来店・面談タスクがある世帯を表示しています。",
+    businessUnassignedName: "担当未割当", businessUnassignedDescription: "担当者が割り当てられていない世帯を表示しています。",
+    businessValidityName: "紹介有効期間が接近", businessValidityDescription: "紹介の有効期間が30日以内に迫っている世帯を表示しています。",
+    businessDisputedName: "帰属争議あり", businessDisputedDescription: "帰属争議中の紹介がある世帯を表示しています。",
+    businessGenericName: "業務条件", businessGenericDescription: "業務条件で絞り込み中です。",
+    clearBusinessFilter: "条件を解除", targetHouseholds: "対象世帯", targetTasks: "対象タスク",
+    nextActionUnset: "未設定", noMatchingTasks: "対象タスクはありません", noMatchingHouseholds: "条件に一致する世帯はありません", noHouseholds: "世帯がありません", viewHousehold: "世帯詳細を見る →",
+    noRows: "表示するデータがありません。",
     first: "初回", last: "最新", person: "ご家族", budget: "ご予算", area: "希望エリア",
     land: "土地", history: "ステージ履歴", activitiesHistory: "活動履歴",
     introduction: "紹介先", negotiations: "並行商談", people: "担当者", show: "詳細",
@@ -324,6 +336,17 @@ const COPY = {
     slaPending: "SLA 天数为演示暂定值。正式数值待公司确认后配置。",
     role: "演示角色", language: "语言", reset: "重置演示数据",
     resetConfirm: "将演示数据恢复到初始状态，确定吗？", resetDone: "演示数据已恢复初始状态。",
+    businessTasksOverdueName: "超期任务", businessTasksOverdueDescription: "显示本人未完成任务中存在已超期任务的家庭。",
+    businessTasksTodayName: "今日处理任务", businessTasksTodayDescription: "显示存在截止日期为今天或更早的未完成任务的家庭。",
+    businessTasksCriticalName: "重要・超期任务", businessTasksCriticalDescription: "显示存在优先级高且已超期任务的家庭。",
+    businessTasksPartnerName: "等待合作方回复的任务", businessTasksPartnerDescription: "显示存在等待合作方回复且已超期任务的家庭。",
+    businessAppointmentsName: "今日预约任务", businessAppointmentsDescription: "显示存在安排在今天的到店或面谈任务的家庭。",
+    businessUnassignedName: "未分配负责人", businessUnassignedDescription: "显示尚未分配负责人的家庭。",
+    businessValidityName: "介绍有效期临近", businessValidityDescription: "显示介绍有效期将在30天内到期的家庭。",
+    businessDisputedName: "存在归属争议", businessDisputedDescription: "显示存在归属争议中介绍的家庭。",
+    businessGenericName: "业务条件", businessGenericDescription: "正在按业务条件筛选。",
+    clearBusinessFilter: "解除条件", targetHouseholds: "目标家庭", targetTasks: "目标任务",
+    nextActionUnset: "未设置", noMatchingTasks: "没有符合条件的任务", noMatchingHouseholds: "没有符合条件的家庭", noHouseholds: "没有家庭", viewHousehold: "查看家庭详情 →",
     noRows: "暂无数据。", first: "首次", last: "最近", person: "家庭成员", budget: "预算",
     area: "意向区域", land: "土地", history: "阶段记录", activitiesHistory: "活动记录",
     introduction: "介绍对象", negotiations: "并行洽谈", people: "负责人", show: "查看详情",
@@ -542,6 +565,34 @@ const NAV = [
   ["management", Building2, "management"], ["settings", Settings, "settings"],
 ];
 const STAGES = ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"];
+const TERMINAL_STAGES = ["完了・見送り", "完了", "見送り"];
+function matchBusinessTasks(businessFilter, tasks) {
+  if (!(businessFilter.startsWith("tasks:") || businessFilter.startsWith("appointments:"))) return [];
+  const taskFilter = businessFilter.split(":")[1];
+  return tasks.filter((task) => {
+    if (taskFilter === "overdue") return task.days_overdue > 0;
+    if (taskFilter === "today_followups") return String(task.due_at).slice(0, 10) <= todayJst();
+    if (taskFilter === "critical") return task.priority === "high" && task.days_overdue > 0;
+    if (taskFilter === "partner_feedback") return task.task_type === "partner_feedback" && task.days_overdue > 0;
+    return task.task_type === "appointment" && String(task.due_at).slice(0, 10) === todayJst();
+  });
+}
+function isTaskBusinessFilter(value) { return value.startsWith("tasks:") || value.startsWith("appointments:"); }
+function stageTagClass(stage) {
+  const groups = { "stage-blue": ["新規予約", "初回相談済"], "stage-purple": ["FP診断済", "紹介済", "訪問・商談中"], "stage-amber": ["契約", "着工"], "stage-gray": ["完了・見送り"] };
+  return `stage-tag ${Object.entries(groups).find(([, values]) => values.includes(stage))?.[0] || ""}`.trim();
+}
+function businessFilterKeys(value) {
+  if (value === "tasks:overdue") return ["businessTasksOverdueName", "businessTasksOverdueDescription"];
+  if (value === "tasks:today_followups") return ["businessTasksTodayName", "businessTasksTodayDescription"];
+  if (value === "tasks:critical") return ["businessTasksCriticalName", "businessTasksCriticalDescription"];
+  if (value === "tasks:partner_feedback") return ["businessTasksPartnerName", "businessTasksPartnerDescription"];
+  if (value.startsWith("appointments:")) return ["businessAppointmentsName", "businessAppointmentsDescription"];
+  if (value === "unassigned") return ["businessUnassignedName", "businessUnassignedDescription"];
+  if (value === "validity:due") return ["businessValidityName", "businessValidityDescription"];
+  if (value === "disputed") return ["businessDisputedName", "businessDisputedDescription"];
+  return ["businessGenericName", "businessGenericDescription"];
+}
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function App() {
@@ -837,6 +888,7 @@ function App() {
     }
   }
 
+  const matchedTasks = useMemo(() => matchBusinessTasks(businessFilter, tasks), [businessFilter, tasks]);
   const filtered = useMemo(() => {
     let rows = data?.households || [];
     if (query.trim()) {
@@ -850,21 +902,12 @@ function App() {
         && item.valid_until.toString().slice(0, 10) <= limit));
     }
     if (businessFilter === "disputed") rows = rows.filter((h) => h.introductions.some((item) => item.status === "帰属争議中" || item.entitlement_state === "Disputed"));
-    if (businessFilter.startsWith("tasks:") || businessFilter.startsWith("appointments:")) {
-      const taskFilter = businessFilter.split(":")[1];
-      const relevantIds = new Set(tasks.filter((task) => {
-        if (taskFilter === "overdue") return task.days_overdue > 0;
-        if (taskFilter === "today_followups") return task.task_type === "followup"
-          && task.due_at.toString().slice(0, 10) === todayJst();
-        if (taskFilter === "critical") return task.priority === "high" && task.days_overdue > 0;
-        if (taskFilter === "partner_feedback") return task.task_type === "partner_feedback" && task.days_overdue > 0;
-        return task.task_type === "appointment"
-          && task.due_at.toString().slice(0, 10) === todayJst();
-      }).map((task) => task.household_id).filter(Boolean));
-      rows = rows.filter((h) => relevantIds.has(h.id));
+    if (isTaskBusinessFilter(businessFilter)) {
+      const relevantIds = new Set(matchedTasks.map((task) => task.household_id).filter(Boolean));
+      rows = rows.filter((h) => relevantIds.has(h.id) && !TERMINAL_STAGES.includes(h.stage_events.at(-1)?.to_stage));
     }
     return rows;
-  }, [data, query, searchMatches, businessFilter, tasks]);
+  }, [data, query, searchMatches, businessFilter, matchedTasks]);
   const searchHouseholds = searchResultIds.map((id) => data?.households?.find((household) => household.id === id)).filter(Boolean).slice(0, 5);
   function handleSearchKeyDown(event) {
     if (event.key === "Escape") {
@@ -912,7 +955,7 @@ function App() {
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} trend={trend} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
-      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
+      {page === "households" && <Households items={filtered} stores={data.stores} t={t} onOpen={openHousehold} businessFilter={businessFilter} matchedTasks={matchedTasks} onClearBusinessFilter={() => setBusinessFilter("")}/>}{page === "introductions" && <Introductions items={filtered} t={t} onOpen={openHousehold} onAdd={(household)=>{setSelected(household);setModal("introduction");}}/>}{page === "revenue" && <Revenue data={data} t={t} role={role} api={api} onOpen={openHousehold} filter={businessFilter}/>}
       {page === "team" && <section><PageTitle eyebrow={t("collaboration")} title={t("collaboration")}/><div className="trend-controls">{[["calendar","schedule"],["bulletin","bulletin"],["queue","negotiationQueue"]].map(([view,label])=><button className="secondary-btn" key={view} onClick={()=>setWorkspaceView(view)}>{t(label)}</button>)}</div><CollaborationWorkspace view={workspaceView==="home"?"calendar":workspaceView} data={data} locale={locale} role={role} t={t} api={api} onBack={()=>setWorkspaceView("home")} onTask={()=>{}} onHousehold={openHousehold}/></section>}
       {page === "management" && <Management data={data} management={management} trend={trend} t={t} role={role} onReminder={(item)=>{setBusinessFilter(item.filter);setPage(item.target_page);}} onException={(card,record)=>{setBusinessFilter(card.filter);setPage(card.target_page);const target=data.households?.find((household)=>household.id===record.household_id);if(target)openHousehold(target);}}/>}
       {page === "settings" && <SettingsPage data={data} t={t} role={role} locale={locale} onReset={async()=>{if(window.confirm(t("resetConfirm"))){await api("/api/reset");setToast(t("resetDone"));}}} onConfigSaved={()=>{load().catch(()=>setToast("API connection failed"));setToast(t("configSaved"));}} preferences={preferences} onSavePreferences={(next)=>api("/api/preferences","PUT",next)}/>}
@@ -1314,26 +1357,40 @@ function StageFunnel({ items, t }) {
       <div className="funnel-track"><i style={{ width: `${items.length ? Math.max(4, count / items.length * 100) : 0}%` }}/></div><b>{count}</b></div>;
   })}</div>;
 }
-function HouseholdTable({ items, t, onOpen }) {
-  return <div className="table-scroll"><table><thead><tr><th>{t("household")}</th><th>{t("stage")}</th><th>{t("nextAction")}</th><th>{t("due")}</th><th/></tr></thead>
-    <tbody>{items.map((h) => { const task = h.activities.find((a) => a.next_action); return <tr key={h.id} onClick={() => onOpen(h)} className="click-row">
+function HouseholdTable({ items, t, onOpen, emptyMessage }) {
+  const today = todayJst();
+  const nextActionFor = (h) => h.activities.find((a) => a.next_action);
+  const dueClass = (value) => { if (!value) return ""; const day = String(value).slice(0, 10); return day < today ? "text-danger" : day === today ? "due-today" : ""; };
+  const stageFor = (h) => h.stage_events.at(-1)?.to_stage;
+  return <><div className="table-scroll household-table-desktop"><table><thead><tr><th>{t("household")}</th><th>{t("stage")}</th><th>{t("nextAction")}</th><th>{t("due")}</th><th/></tr></thead>
+    <tbody>{items.map((h) => { const task = nextActionFor(h); return <tr key={h.id} onClick={() => onOpen(h)} className="click-row">
       <td><div className="customer-cell"><div className="customer-avatar">{h.representative_name.slice(0, 1)}</div><div><b>{h.representative_name}</b><span>{h.area_pref}</span></div></div></td>
-        <td><span className="stage-tag">{h.stage_events.at(-1)?.to_stage}</span></td><td>{task?.next_action || "—"}</td><td className={task?.next_action_due < todayJst() ? "text-danger" : ""}>{task?.next_action_due || "—"}</td>
-      <td><ChevronRight size={15} className="muted"/></td></tr>;})}</tbody></table>
-    {!items.length && <div className="empty-state">{t("noRows")}</div>}</div>;
+      <td><span className={stageTagClass(stageFor(h))}>{stageFor(h)}</span></td><td>{task?.next_action || t("nextActionUnset")}</td><td className={dueClass(task?.next_action_due)}>{task?.next_action_due ? String(task.next_action_due).slice(0, 10) : "—"}</td>
+      <td><ChevronRight size={15} className="muted"/></td></tr>;})}</tbody></table>{!items.length && <div className="empty-state">{emptyMessage}</div>}</div>
+    <div className="household-cards">{items.map((h) => { const task = nextActionFor(h); return <button className="household-record-card" key={h.id} onClick={() => onOpen(h)}>
+      <span className="record-card-head"><b>{h.representative_name}</b><span className={stageTagClass(stageFor(h))}>{stageFor(h)}</span></span><span className="record-card-area">{h.area_pref}</span>
+      <span className="record-card-action">{task?.next_action || t("nextActionUnset")}</span><span className={`record-card-due ${dueClass(task?.next_action_due)}`}>{task?.next_action_due ? String(task.next_action_due).slice(0, 10) : "—"}</span>
+      <span className="record-card-link">{t("viewHousehold")}</span></button>;})}{!items.length && <div className="empty-state">{emptyMessage}</div>}</div></>;
 }
-function Households({ items, stores, t, onOpen }) {
+function Households({ items, stores, t, onOpen, businessFilter, matchedTasks, onClearBusinessFilter }) {
   const [storeId, setStoreId] = useState("all");
   const [stage, setStage] = useState("all");
   const rows = items.filter((household) => (storeId === "all" || household.store_id === Number(storeId))
     && (stage === "all" || household.stage_events.at(-1)?.to_stage === stage));
+  const [nameKey, descriptionKey] = businessFilterKeys(businessFilter);
+  const taskFilter = isTaskBusinessFilter(businessFilter);
+  const scopedHouseholdIds = new Set(rows.map((household) => household.id));
+  const scopedTaskCount = matchedTasks.filter((task) => scopedHouseholdIds.has(task.household_id)).length;
+  const anyFilter = Boolean(businessFilter) || storeId !== "all" || stage !== "all";
+  const emptyMessage = taskFilter && matchedTasks.length === 0 ? t("noMatchingTasks") : anyFilter ? t("noMatchingHouseholds") : t("noHouseholds");
   return <><PageTitle eyebrow={t("customerRelationship")} title={t("households")} sub={t("householdsSub")}/>
     <section className="panel table-panel"><div className="panel-head"><div><h2>{t("households")} <span className="count-badge">{rows.length}</span></h2></div>
       <div className="table-tools"><label className="filter-select">{t("filterStore")}<select value={storeId} onChange={(event) => setStoreId(event.target.value)}>
         <option value="all">{t("allStores")}</option>{stores.map((store) => <option value={store.id} key={store.id}>{store.name}</option>)}</select></label>
         <label className="filter-select">{t("filterStage")}<select value={stage} onChange={(event) => setStage(event.target.value)}>
           <option value="all">{t("all")}</option>{STAGES.map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
-      <HouseholdTable items={rows} t={t} onOpen={onOpen}/></section></>;
+      {businessFilter && <div className="business-filter-banner"><div className="business-filter-copy"><b>{t(nameKey)}</b><span>{t(descriptionKey)}</span></div><div className="business-filter-counts"><span><b>{rows.length}</b>{t("targetHouseholds")}</span>{taskFilter && <span><b>{scopedTaskCount}</b>{t("targetTasks")}</span>}</div><button className="business-filter-clear" onClick={onClearBusinessFilter}>{t("clearBusinessFilter")}</button></div>}
+      <HouseholdTable items={rows} t={t} onOpen={onOpen} emptyMessage={emptyMessage}/></section></>;
 }
 function Introductions({ items, t, onOpen, onAdd }) {
   const [activeHousehold, setActiveHousehold] = useState(items[0]?.id || null);
@@ -2251,13 +2308,16 @@ function HouseholdModal({ household: h, t, role, onClose, onActivity, api }) {
   const [stage, setStage] = useState(h.stage_events.at(-1)?.to_stage || "新規予約");
   const [disputeIntro, setDisputeIntro] = useState(null);
   const locale = document.documentElement.lang;
-  return <Modal onClose={onClose} wide><div className="modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><h2>{h.representative_name}</h2><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
+  const currentStage = h.stage_events.at(-1)?.to_stage;
+  const hasStageTimestamps = h.stage_events.some((event) => event.changed_at);
+  const stageHistory = hasStageTimestamps ? [...h.stage_events].sort((a, b) => String(a.changed_at || "").localeCompare(String(b.changed_at || ""))) : h.stage_events;
+  return <Modal onClose={onClose} wide><div className="modal-heading household-modal-heading"><div><div className="eyebrow">{t("household360")} · #{String(h.id).padStart(4, "0")}</div><div className="household-name-stage"><h2>{h.representative_name}</h2><span className={stageTagClass(currentStage)}>{currentStage}</span></div><p>{h.store_name} · {h.advisor_name} · {h.area_pref}</p></div><button className="icon-btn" onClick={onClose}><X size={18}/></button></div>
     <div className="household-facts"><Fact label={t("budget")} value={h.budget_band}/><Fact label={t("area")} value={h.area_pref}/><Fact label={t("land")} value={h.land_status}/><Fact label={t("stage")} value={h.stage_events.at(-1)?.to_stage}/></div>
     <div className="household-modal-grid"><div className="modal-column"><section className="modal-section"><div className="section-title"><h3>{t("people")}</h3><span className="count-badge">{h.persons.length}</span></div>
       {h.persons.map((p) => <div className="person-row" key={p.id}><div className="customer-avatar">{p.name.slice(0, 1)}</div><div><b>{p.name}</b><span>{p.relation} · {p.phone}</span></div></div>)}</section>
       <section className="modal-section"><div className="section-title"><h3>{t("firstTouch")} / {t("latestTouch")}</h3></div><div className="touch-compare">{[["first", h.first_touch], ["last", h.latest_touch]].map(([key, touch]) => <div className="touch-card" key={key}><small>{t(key)}</small><b>{touch?.channel || "—"}</b><span>{touch?.touch_at || "—"}</span><em>{touch?.capture_method || "—"}</em></div>)}</div></section>
       <section className="modal-section"><div className="section-title"><h3>{t("stages")}</h3><div className="inline-stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{h.stage_events.length ? h.stage_events.map((e, i) => <option key={`${e.id}-${i}`} value={e.to_stage}>{e.to_stage}</option>) : ["新規予約", "初回相談済", "FP診断済", "紹介済", "訪問・商談中", "契約", "着工", "完了・見送り"].map((s) => <option key={s}>{s}</option>)}</select><button className="mini-action" onClick={() => api(`/api/households/${h.id}/stage`, "POST", { to_stage: stage })}>{t("record")}</button></div></div>
-        <div className="timeline">{h.stage_events.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{e.to_stage}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
+        <div className="timeline">{stageHistory.map((e) => <div className="timeline-row" key={e.id}><i/><div><b>{e.to_stage}</b><span>{e.changed_at} · {e.changed_by_name || ""}</span></div></div>)}</div></section>
       <section className="modal-section"><div className="section-title"><h3>{t("consent")}</h3></div>{h.consents.map((c) => <div className="consent-row" key={c.id}><ShieldCheck size={15}/><div><b>{c.scope} · {c.purpose}</b><span>同意: {c.granted_at} {c.revoked_at && ` · 取消: ${c.revoked_at}`}</span></div></div>)}
         {h.disclosures.map((d) => <div className="consent-row" key={d.id}><FileText size={15}/><div><b>{d.scope} → {d.disclosed_to}</b><span>共有: {d.disclosed_at}</span></div></div>)}
         <div className="privacy-lock"><ShieldCheck size={15}/>L1 原始診断データは非表示 · 閲覧操作は監査ログに記録されます。</div>
