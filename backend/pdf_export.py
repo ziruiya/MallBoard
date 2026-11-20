@@ -100,7 +100,7 @@ def build_pdf(headers, rows, resource, created_at, created_by, context=None):
   footer {{ margin-top: 5mm; color: #64748b; font-size: 7pt; }}
 </style></head>
 <body>
-  <h1>{html.escape(str((context or {}).get("title", "MallBoard データ出力 / 数据导出")))}</h1>
+  <h1>{html.escape(str((context or {}).get("title", "SumaiBoard データ出力 / 数据导出")))}</h1>
   <div class="meta">{html.escape(title)} · {len(rows)} 件 / 条 ·
     {html.escape(str(created_at))} · {html.escape(created_by)} · Template {PDF_TEMPLATE_VERSION}
   </div>

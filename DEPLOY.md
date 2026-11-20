@@ -1,4 +1,4 @@
-# MallBoard — Debian 12 + 宝塔部署手顺
+# SumaiBoard — Debian 12 + 宝塔部署手顺
 
 対象は Debian 12 の VPS と宝塔面板です。公開通信は宝塔の Nginx を通し、アプリは `127.0.0.1:8000` のみにバインドします。MySQL は Compose 内部ネットワークだけで使用し、データは named volume `mysql-data` に保存します。紹介状PDFは公開されない専用 named volume `referral-documents` に保存します。初回起動時にアプリがテーブル作成と架空のデモデータ投入を自動で行うため、手動の seed コマンドは不要です。
 
@@ -31,12 +31,12 @@ systemctl is-enabled docker
 
 ## 2. アプリをアップロードして展開
 
-交付物の ZIP/TAR を VPS にアップロードします。以下は TAR.GZ の例です。ZIP の場合は `unzip` を使い、リポジトリのルート（`Dockerfile` と `docker-compose.yml` がある階層）を `/opt/mallboard` に展開してください。
+交付物の ZIP/TAR を VPS にアップロードします。以下は TAR.GZ の例です。ZIP の場合は `unzip` を使い、リポジトリのルート（`Dockerfile` と `docker-compose.yml` がある階層）を `/opt/sumaiboard` に展開してください。
 
 ```bash
-sudo mkdir -p /opt/mallboard
-sudo tar -xzf MallBoard-delivery.tar.gz -C /opt/mallboard --strip-components=1
-cd /opt/mallboard
+sudo mkdir -p /opt/sumaiboard
+sudo tar -xzf SumaiBoard-delivery.tar.gz -C /opt/sumaiboard --strip-components=1
+cd /opt/sumaiboard
 ls -la
 ```
 
@@ -45,7 +45,7 @@ ls -la
 ## 3. `.env` を設定
 
 ```bash
-cd /opt/mallboard
+cd /opt/sumaiboard
 cp .env.example .env
 nano .env
 chmod 600 .env
@@ -62,7 +62,7 @@ stat -c '%a %n' .env
 ## 4. Compose でビルド・起動
 
 ```bash
-cd /opt/mallboard
+cd /opt/sumaiboard
 sudo docker compose up -d --build
 sudo docker compose ps
 curl -fsS http://127.0.0.1:8000/api/health
@@ -110,7 +110,7 @@ SSH 再接続後:
 
 ```bash
 sudo systemctl is-active docker
-cd /opt/mallboard
+cd /opt/sumaiboard
 sudo docker compose ps
 curl -fsS https://demo.example.com/api/health
 sudo docker volume ls | grep -E 'mysql-data|referral-documents'

@@ -55,7 +55,7 @@ const COPY = {
     introSelectHousehold: "世帯を選択してください", introNoIntroductions: "紹介はまだありません",
     searchTruncated: "検索結果が多いため、一部のみ表示しています。条件を絞り込んでください。",
     searchCount: (count, truncated) => truncated ? `${count}件を表示中` : `${count}件の顧客が見つかりました`,
-    product: "MallBoard", subtitle: "住宅相談ビジネス・業務基盤", today: "今日の業務",
+    product: "SumaiBoard", subtitle: "住宅相談ビジネス・業務基盤", today: "今日の業務",
     households: "顧客・世帯", introductions: "紹介・商談", revenue: "着工・報酬",
     management: "経営・管理", settings: "設定", search: "顧客・会社を検索…",
     todayTitle: "おはようございます、", todaySub: "今日の業務状況を確認しましょう。",
@@ -113,7 +113,7 @@ const COPY = {
     partnerQuality: "住宅会社別・報酬処理品質", attribution: "流入経路分析",
     dashboardPrefs: "ホーム画面の表示設定", notificationPrefs: "通知設定",
     inApp: "アプリ内通知", emailNotice: "メール通知", savePreferences: "設定を保存",
-    accountingNote: "本番では会計システムから請求・入金状態を受信します。MallBoard は請求書発行・入金消込を行いません。",
+    accountingNote: "本番では会計システムから請求・入金状態を受信します。SumaiBoard は請求書発行・入金消込を行いません。",
     plannedFee: "着工予定報酬", feeReview: "報酬条件確認中", approvedFee: "報酬承認済額",
     invoiceAmount: "請求額", paidAmount: "入金額", confirmedRevenue: "確定売上",
     referenceAmount: "争議中参考金額", frozenAmount: "凍結金額", approve: "承認",
@@ -213,7 +213,7 @@ const COPY = {
     resetDescription: "世帯・紹介・着工・報酬を含むデモデータを初期状態に戻します。",
     financeRoleOnly: "本社・経理ロールで実行できます。",
     workspace: "ワークスペース", demoEnvironment: "デモ環境",
-    loginTitle: "MallBoard にログイン", loginSubtitle: "登録済みアカウントでサインインしてください。",
+    loginTitle: "SumaiBoard にログイン", loginSubtitle: "登録済みアカウントでサインインしてください。",
     demoLogin: "デモアカウントでワンクリックログイン", employeeCode: "社員番号", password: "パスワード",
     signIn: "ログイン", signOut: "ログアウト", account: "アカウント",
     accounts: "アカウント管理", accountStatus: "アカウント状態", lastLogin: "最終ログイン",
@@ -353,7 +353,7 @@ const COPY = {
     searchTruncated: "搜索结果较多，仅显示部分结果。请缩小搜索条件。",
     searchCount: (count, truncated) => truncated ? `显示前 ${count} 位` : `找到 ${count} 位客户`,
     systemManagement: "\u7cfb\u7edf\u7ba1\u7406", descHouseholds: "\u987e\u5ba2\u3001\u5bb6\u5ead\u5217\u8868\u3001\u8be6\u60c5\u4e0e\u5386\u53f2", descIntroductions: "\u4ecb\u7ecd\u4e0e\u5546\u8c08\u8fdb\u5ea6\u7ba1\u7406", descRevenue: "\u5f00\u5de5\u786e\u8ba4\u4e0e\u62a5\u916c\u5904\u7406\u60c5\u51b5", descTeam: "\u5168\u5458\u65e5\u7a0b\u3001\u516c\u544a\u677f\u3001\u5546\u8c08\u961f\u5217", descManagement: "\u7ecf\u8425\u6307\u6807\u4e0e\u95e8\u5e97\u8fd0\u8425\u60c5\u51b5", descSettings: "\u663e\u793a\u3001\u901a\u77e5\u4e0e\u4e1a\u52a1\u8bbe\u7f6e", descAccounts: "\u8d26\u53f7\u4e0e\u6743\u9650\u7ba1\u7406",
-    product: "MallBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
+    product: "SumaiBoard", subtitle: "住宅咨询业务管理平台", today: "今日工作",
     households: "客户家庭", introductions: "介绍与洽谈", revenue: "开工与报酬",
     management: "经营管理", settings: "设置", search: "搜索客户或公司…",
     todayTitle: "早上好，", todaySub: "查看今天的业务进展。",
@@ -409,7 +409,7 @@ const COPY = {
     partnerQuality: "按住宅公司查看报酬处理质量", attribution: "来源渠道分析",
     dashboardPrefs: "首页显示设置", notificationPrefs: "通知设置",
     inApp: "应用内通知", emailNotice: "邮件通知", savePreferences: "保存设置",
-    accountingNote: "生产版由会计系统回传请款和入金状态。MallBoard 不开发票、不做入金核销。",
+    accountingNote: "生产版由会计系统回传请款和入金状态。SumaiBoard 不开发票、不做入金核销。",
     plannedFee: "预计开工报酬", feeReview: "报酬条件确认中", approvedFee: "已审批报酬金额",
     invoiceAmount: "请款金额", paidAmount: "入金金额", confirmedRevenue: "已确认收入",
     referenceAmount: "争议参考金额", frozenAmount: "冻结金额", approve: "审批",
@@ -507,7 +507,7 @@ const COPY = {
     resetDescription: "将家庭、介绍、开工和报酬等演示数据恢复到初始状态。",
     financeRoleOnly: "请切换到总部·财务角色执行。",
     workspace: "工作区", demoEnvironment: "演示环境",
-    loginTitle: "登录 MallBoard", loginSubtitle: "请使用已配置的账号登录。",
+    loginTitle: "登录 SumaiBoard", loginSubtitle: "请使用已配置的账号登录。",
     demoLogin: "演示账号一键登录", employeeCode: "员工编号", password: "密码",
     signIn: "登录", signOut: "退出登录", account: "账号",
     accounts: "账号管理", accountStatus: "账号状态", lastLogin: "最近登录",
@@ -773,7 +773,7 @@ function businessFilterKeys(value) {
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 function App() {
-  const [locale, setLocale] = useState(localStorage.getItem("mallboard-locale") || "ja");
+  const [locale, setLocale] = useState(localStorage.getItem("sumaiboard-locale") || "ja");
   const [role, setRole] = useState("advisor");
   const [page, setPage] = useState("dashboard");
   const [workspaceView, setWorkspaceView] = useState("home");
@@ -877,7 +877,7 @@ function App() {
     return result;
   }
   useEffect(() => {
-    localStorage.setItem("mallboard-locale", locale);
+    localStorage.setItem("sumaiboard-locale", locale);
     document.documentElement.lang = locale;
   }, [locale]);
   useLayoutEffect(() => {
@@ -1150,7 +1150,7 @@ function App() {
     : data.account_role === "administrator" ? [...NAV, ["accounts", Users, "accounts"]] : NAV;
 
   return <div className="app-shell">
-    <header className="app-bar"><button className="app-brand" onClick={() => { setWorkspaceView("home"); setPage(data.account_role === "hr" ? "accounts" : "dashboard"); }}><span className="brand-mark"><Home size={20}/></span><span><b>MallBoard</b><small>{t("subtitle")}</small></span></button>
+    <header className="app-bar"><button className="app-brand" onClick={() => { setWorkspaceView("home"); setPage(data.account_role === "hr" ? "accounts" : "dashboard"); }}><span className="brand-mark"><Home size={20}/></span><span><b>SumaiBoard</b><small>{t("subtitle")}</small></span></button>
       <div className="top-actions">
         {data.account_role !== "hr" && (!searchExpanded
           ? <button type="button" className="search-launch" ref={searchLaunchRef} aria-expanded={false}
@@ -1226,7 +1226,7 @@ function App() {
           unreadCount={notificationUnreadCount} locale={locale} t={t} onOpen={openNotification}
           onRead={(item) => updateNotification(item, "read")} onArchive={(item) => updateNotification(item, "archive")}/>}</div>
       <div className="account-menu-wrap" ref={accountMenuRef}><button type="button" className="account-menu-button" aria-label={t("account")} aria-expanded={accountMenuOpen} onClick={() => setAccountMenuOpen((v)=>!v)}><span className="avatar">{role === "hq_finance" ? "\u7d4c" : role === "manager" ? "\u5e97" : "\u4f50"}</span><span className="role-meta"><b>{data.user?.name || "\u2014"}</b><small>{roleLabel(locale, data.account_role || role)}</small></span><ChevronDown size={16}/></button>{accountMenuOpen && <div className="account-menu-panel"><div className="account-menu-identity"><b>{data.user?.name || "\u2014"}</b><span>{roleLabel(locale, data.account_role || role)}</span></div>{demoAvailable && <div className="select-wrap"><Users size={15}/><select aria-label={t("account")} value={data.user.id} onChange={(event) => login("/api/auth/demo-login", { account_id: Number(event.target.value) })}>{demoAccounts.map((option) => <option value={option.id} key={option.id}>{option.display_name} · {roleLabel(locale, option.role)}{option.store_id ? ` \u00b7 ${option.store_id}` : ""}</option>)}</select><ChevronDown size={13}/></div>}<button className="language-btn" onClick={() => setLocale(locale === "ja" ? "zh" : "ja")} title={t("language")}><Languages size={16}/>{locale === "ja" ? "\u4e2d\u6587" : "\u65e5\u672c\u8a9e"}</button><button className="account-signout" onClick={logout}><LogOut size={16}/>{t("signOut")}</button></div>}</div></div>
-    </header><main className="page-main"><div className="page-content">{!data ? <div className="loading"><div className="spinner"/>Loading MallBoard\u2026</div> : <>
+    </header><main className="page-main"><div className="page-content">{!data ? <div className="loading"><div className="spinner"/>Loading SumaiBoard\u2026</div> : <>
       {page === "accounts" && ["hr","administrator"].includes(data.account_role) && <AccountsPage accounts={data.accounts || []} locale={locale} t={t} api={api}/>}
       {page === "change-password" && <PasswordChangePage forced api={api} t={t} onChanged={() => setPage(data.account_role === "hr" ? "accounts" : "dashboard")}/>}
       {page === "dashboard" && <><Dashboard data={data} summary={summary} tasks={tasks} preferences={preferences} t={t} role={role} locale={locale} workspaceView={workspaceView} onWorkspaceView={setWorkspaceView} api={api} onHousehold={openHousehold} onActivity={() => setModal("activity")} onNavigate={(nextPage) => { setWorkspaceView("home"); setPage(nextPage); }} onReport={(body) => api("/api/report","PUT",{manual_note:body})} onCounter={(counter) => { setBusinessFilter(counter.filter); setPage(counter.target_page); }} onTask={(task) => { const h=data.households.find((item)=>item.id===task.household_id); if(h) openHousehold(h); else { setBusinessFilter(task.task_type==="dispute"?"disputed":"construction:pending"); setPage(task.related_type==="introduction"?"introductions":"revenue"); } }}/>{workspaceView === "home" && <ModuleEntries navItems={navItems} accountRole={data.account_role} t={t} onNavigate={(id)=>{setWorkspaceView("home");setPage(id);}}/>}</>}
@@ -1302,7 +1302,7 @@ function LoginPage({ locale, setLocale, t, accounts, demoAvailable, error, busy,
   return <main className="login-shell">
     <section className="login-card">
       <div className="brand-mark"><Home size={21}/></div>
-      <p className="eyebrow">MallBoard</p><h1>{t("loginTitle")}</h1><p>{t("loginSubtitle")}</p>
+      <p className="eyebrow">SumaiBoard</p><h1>{t("loginTitle")}</h1><p>{t("loginSubtitle")}</p>
       {demoAvailable && <form onSubmit={(event) => {
         event.preventDefault();
         if (accountId) onLogin("/api/auth/demo-login", { account_id: Number(accountId) });
@@ -2031,7 +2031,7 @@ function Management({ locale, data, t, role, onReminder, onException }) {
       else {
         const link = document.createElement("a");
         link.href = reportUrl;
-        link.download = `mallboard_${reportType}.pdf`;
+        link.download = `sumaiboard_${reportType}.pdf`;
         link.click();
       }
       setTimeout(() => URL.revokeObjectURL(reportUrl), 60000);

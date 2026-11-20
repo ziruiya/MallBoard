@@ -4,7 +4,7 @@
 
 **已按用户批准采用 WeasyPrint。**PDF 用于 Settings 中的数据列表导出，以及 Introduction 详情中的住宅介绍状；不提供发票或账单打印功能。
 
-推荐理由：MallBoard 已有 FastAPI 单容器与静态前端，业务文书可用服务端 HTML 模板描述，再由 WeasyPrint 转为 PDF。相比直接逐坐标绘制，分页表格和日中双语布局更容易维护。
+推荐理由：SumaiBoard 已有 FastAPI 单容器与静态前端，业务文书可用服务端 HTML 模板描述，再由 WeasyPrint 转为 PDF。相比直接逐坐标绘制，分页表格和日中双语布局更容易维护。
 
 ## 候选比较
 

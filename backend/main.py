@@ -43,8 +43,8 @@ REFERRAL_STORAGE_DIR = Path(os.getenv(
     "REFERRAL_STORAGE_DIR", "/app/private_storage/referral-documents"
 ))
 
-app = FastAPI(title="MallBoard", version="0.1.0")
-LOGGER = logging.getLogger("mallboard")
+app = FastAPI(title="SumaiBoard", version="0.1.0")
+LOGGER = logging.getLogger("sumaiboard")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1770,11 +1770,11 @@ def demo_receipt_pdf():
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 360 200] "
         b"/Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
         b"<< /Length 108 >>\nstream\nBT /F1 12 Tf 25 150 Td "
-        b"(MallBoard DEMO receipt) Tj 0 -25 Td "
+        b"(SumaiBoard DEMO receipt) Tj 0 -25 Td "
         b"(FICTIONAL - NOT AN ACCOUNTING RECORD) Tj ET\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
-    content = bytearray(b"%PDF-1.4\n% Fictional MallBoard demo receipt\n")
+    content = bytearray(b"%PDF-1.4\n% Fictional SumaiBoard demo receipt\n")
     offsets = [0]
     for index, item in enumerate(objects, 1):
         offsets.append(len(content))
@@ -3091,7 +3091,7 @@ def create_management_report(payload: ManagementReportInput,
         )
     return Response(
         content=content, media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="mallboard_{report_type}_{now:%Y%m%d}.pdf"',
+        headers={"Content-Disposition": f'inline; filename="sumaiboard_{report_type}_{now:%Y%m%d}.pdf"',
                  "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"},
     )
 
@@ -5317,7 +5317,7 @@ def create_export_job(payload: ExportJobInput, actor: CurrentActor = Depends(req
             content = build_csv(headers, rows)
         if len(content) > max_bytes:
             raise HTTPException(413, "出力ファイルが設定サイズ上限を超えています")
-        filename = f"mallboard_{payload.resource}_{now:%Y%m%d%H%M%S}.{payload.format}"
+        filename = f"sumaiboard_{payload.resource}_{now:%Y%m%d%H%M%S}.{payload.format}"
         expires_at = now + timedelta(hours=expiry_hours)
         content_hash = hashlib.sha256(content).hexdigest()
         db.execute(
